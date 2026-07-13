@@ -1,0 +1,24 @@
+name: Bug report
+description: Report incorrect or unsafe Bob behavior
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the command, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Minimal manifest or reproduction
+      description: Remove secrets and private paths before posting.
+  - type: input
+    id: version
+    attributes:
+      label: Bob version
+      placeholder: bob version
+    validations:
+      required: true

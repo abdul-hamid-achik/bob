@@ -1,0 +1,81 @@
+version: "3"
+
+vars:
+  BINARY_NAME: bob
+  BUILD_DIR: ./bin
+  MODULE: github.com/abdul-hamid-achik/bob
+  MAIN: ./cmd/bob
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo none
+  BUILD_TIME:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  LDFLAGS: >-
+    -s -w
+    -X {{.MODULE}}/internal/version.Version={{.VERSION}}
+    -X {{.MODULE}}/internal/version.Commit={{.COMMIT}}
+    -X {{.MODULE}}/internal/version.Date={{.BUILD_TIME}}
+
+env:
+  CGO_ENABLED: "0"
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds: [task --list]
+    silent: true
+
+  fmt:
+    desc: Format Go source
+    cmds: [gofmt -s -w .]
+
+  lint:
+    desc: Lint Go source
+    cmds:
+      - |
+        if golangci-lint version 2>/dev/null | grep -qE 'version v?2\.'; then
+          golangci-lint run ./...
+        else
+          go vet ./...
+          test -z "$(gofmt -l .)" || (gofmt -l .; exit 1)
+        fi
+
+  test:
+    desc: Run unit tests
+    cmds: [go test ./...]
+
+  race:
+    desc: Run unit tests with the race detector
+    env:
+      CGO_ENABLED: "1"
+    cmds: [go test -race ./...]
+
+  check:
+    desc: Format, lint, and test
+    aliases: [ci, verify]
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+
+  build:
+    desc: Build ./bin/bob
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.MAIN}}
+
+  install:
+    desc: Install bob to GOPATH/bin
+    cmds:
+      - go install -ldflags "{{.LDFLAGS}}" {{.MAIN}}
+
+  specs:
+    desc: Run terminal behavior specs
+    deps: [build]
+    cmds:
+      - glyph run specs/glyphrun/*.yml --format md --progress auto
+
+  clean:
+    desc: Remove local build output
+    cmds:
+      - rm -rf {{.BUILD_DIR}} dist coverage.out coverage.html

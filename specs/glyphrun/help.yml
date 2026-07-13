@@ -1,0 +1,37 @@
+version: 1
+name: bob_help
+intent: |
+    bob --help lists the repository lifecycle so people and agents can discover
+    the plan-before-mutation workflow.
+target:
+    cmd:
+        - ./bin/bob
+        - --help
+    cwd: .
+terminal:
+    cols: 100
+    rows: 40
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 5000
+    - snapshot: help
+outcomes:
+    - id: lists_plan
+      description: help lists the read-only plan command
+      verify:
+        screen:
+            contains: plan
+    - id: lists_apply
+      description: help lists the explicit apply command
+      verify:
+        screen:
+            contains: apply
+    - id: states_product
+      description: help identifies Bob as a deterministic repository factory
+      verify:
+        screen:
+            contains: deterministic repository factory
+contractHash: sha256:68fa94f2b1ef68ca9914f33acc30ce190f4fa89bcccfec3f024c3eae62d2d076

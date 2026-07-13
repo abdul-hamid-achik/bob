@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a recipe, capability, or workflow improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What repository-building problem should Bob solve?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed contract
+      description: Show the manifest or command shape if possible.
+  - type: textarea
+    id: safety
+    attributes:
+      label: Ownership and safety
+      description: Which files would Bob own, observe, or refuse to change?

@@ -1,0 +1,10 @@
+/bin/
+/dist/
+/coverage.out
+/coverage.html
+/.glyphrun/
+/.bob-tmp-*
+/.bob.apply.lock
+.DS_Store
+*.swp
+*.tmp

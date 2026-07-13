@@ -1,0 +1,47 @@
+version: 2
+
+project_name: bob
+
+builds:
+  - id: bob
+    main: ./cmd/bob
+    binary: bob
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/abdul-hamid-achik/bob/internal/version.Version={{.Version}}
+      - -X github.com/abdul-hamid-achik/bob/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/abdul-hamid-achik/bob/internal/version.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md, LICENSE, CHANGELOG.md]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^ci:", "^chore:"]
+
+homebrew_casks:
+  - name: bob
+    binaries: [bob]
+    repository:
+      owner: abdul-hamid-achik
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/abdul-hamid-achik/bob
+    description: Deterministic repository factory for agent-native developer tools
+    skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
+
+release:
+  github:
+    owner: abdul-hamid-achik
+    name: bob
+  draft: false
+  prerelease: auto
