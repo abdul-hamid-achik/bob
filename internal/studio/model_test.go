@@ -27,7 +27,7 @@ func (f fakeSource) Load(ctx context.Context, workspace string) (Snapshot, error
 func fixtureSnapshot() Snapshot {
 	plan := engine.PlanResult{
 		SchemaVersion: engine.PlanSchemaVersion,
-		Recipe:        engine.LockRecipe{ID: "go-agent-tool", Version: engine.RecipeVersion},
+		Recipe:        engine.LockRecipe{ID: "go-agent-tool", Version: 3}, // matches the fixture's go-agent-tool recipe version
 		ConflictCount: 1,
 		LockChanged:   true,
 		Actions: []engine.Action{

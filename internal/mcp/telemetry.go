@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
+	"github.com/abdul-hamid-achik/bob/internal/recipe"
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 )
 
@@ -33,7 +33,19 @@ func (s *Server) recordOperation(ctx context.Context, operation telemetry.Operat
 	_ = s.recorder.Record(ctx, event)
 }
 
-func currentRecipeVersion() int { return engine.RecipeVersion }
+// currentRecipeVersion reports the go-agent-tool recipe version. Callers only
+// set the recipe flag when the manifest's recipe is actually go-agent-tool
+// (telemetry.Recipe is a closed enum that does not yet represent other
+// recipes), so recipe.Version is looked up for that fixed id rather than a
+// manifest that may not be in hand at the telemetry call site.
+func currentRecipeVersion() int {
+	version, err := recipe.Version(string(telemetry.RecipeGoAgentTool))
+	if err != nil {
+		// go-agent-tool is always a known recipe id; this is unreachable.
+		return 0
+	}
+	return version
+}
 
 func reasonFromToolCode(code string) telemetry.Reason {
 	switch code {

@@ -9,9 +9,23 @@ import (
 	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	bobpaths "github.com/abdul-hamid-achik/bob/internal/paths"
+	"github.com/abdul-hamid-achik/bob/internal/recipe"
 	"github.com/abdul-hamid-achik/bob/internal/settings"
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 )
+
+// goAgentToolTelemetryVersion reports the go-agent-tool recipe version.
+// telemetry.Recipe is a closed enum that does not yet represent other
+// recipes, so callers only set the recipe flag when the manifest's recipe is
+// actually go-agent-tool; recipe.Version is looked up for that fixed id.
+func goAgentToolTelemetryVersion() int {
+	version, err := recipe.Version("go-agent-tool")
+	if err != nil {
+		// go-agent-tool is always a known recipe id; this is unreachable.
+		return 0
+	}
+	return version
+}
 
 type commandMetrics struct {
 	workspace string
@@ -53,7 +67,7 @@ func recordCLI(ctx context.Context, deps Dependencies, args []string, duration t
 		event.Actions = deps.metrics.actions
 		if deps.metrics.recipe {
 			event.Recipe = telemetry.RecipeGoAgentTool
-			event.RecipeVersion = engine.RecipeVersion
+			event.RecipeVersion = goAgentToolTelemetryVersion()
 		}
 		if deps.Telemetry != nil && deps.metrics.workspace != "" {
 			if workspaceID, err := deps.Telemetry.WorkspaceID(deps.metrics.workspace); err == nil {
@@ -130,7 +144,7 @@ func capturePlanMetrics(opts *options, workspace string, plan engine.PlanResult)
 		return
 	}
 	opts.metrics.workspace = workspace
-	opts.metrics.recipe = true
+	opts.metrics.recipe = plan.Recipe.ID == "go-agent-tool"
 	opts.metrics.actions = telemetry.ActionCounts{}
 	for _, action := range plan.Actions {
 		switch action.Kind {

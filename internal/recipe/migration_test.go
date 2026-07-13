@@ -66,8 +66,9 @@ func TestPublishedRecipeV2PreservesEveryPublishedV1ManagedPath(t *testing.T) {
 
 func TestRecipeV3UpgradeRetainsV2PathsAndRaisesGoSecurityPatch(t *testing.T) {
 	t.Parallel()
-	if engine.RecipeVersion != 3 {
-		t.Fatalf("recipe version = %d, want 3", engine.RecipeVersion)
+	goAgentToolVersion, err := recipe.Version("go-agent-tool")
+	if err != nil || goAgentToolVersion != 3 {
+		t.Fatalf("recipe version = %d, %v, want 3", goAgentToolVersion, err)
 	}
 	v2, v2LockData := loadPublishedLock(t, 2)
 	v2Files := publishedFiles(v2)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
@@ -468,6 +469,11 @@ func TestIdenticalUnmanagedFileWithDifferentModeConflicts(t *testing.T) {
 	}
 }
 
+// TestPlanRejectsSymlinksNonRegularFilesAndEscapes proves that a symlink or
+// non-regular file at a destination (or a symlinked path component) is a
+// per-path ActionConflict that Plan reports without aborting, while apply
+// still refuses to write anything. Path escapes and reserved-path artifacts
+// remain hard Plan failures: those are recipe bugs, not workspace states.
 func TestPlanRejectsSymlinksNonRegularFilesAndEscapes(t *testing.T) {
 	t.Parallel()
 	t.Run("destination symlink", func(t *testing.T) {
@@ -479,9 +485,20 @@ func TestPlanRejectsSymlinksNonRegularFilesAndEscapes(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(root, "linked.txt")); err != nil {
 			t.Fatal(err)
 		}
-		_, err := Plan(root, testManifest(), []recipe.Artifact{artifact("linked.txt", "inside")})
-		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
-			t.Fatalf("symlink error = %v", err)
+		artifacts := []recipe.Artifact{artifact("linked.txt", "inside")}
+		plan, err := Plan(root, testManifest(), artifacts)
+		if err != nil {
+			t.Fatalf("plan should not hard-fail on a destination symlink: %v", err)
+		}
+		if !plan.HasConflicts() || plan.Actions[0].Kind != ActionConflict || plan.Actions[0].Code != CodeSymlink || !strings.Contains(plan.Actions[0].Reason, "symlink") {
+			t.Fatalf("destination symlink action = %#v", plan.Actions[0])
+		}
+		if _, err := Apply(root, testManifest(), artifacts); !errors.Is(err, ErrPlanConflicts) {
+			t.Fatalf("apply should refuse a symlinked destination: %v", err)
+		}
+		data, readErr := os.ReadFile(outside)
+		if readErr != nil || string(data) != "outside" {
+			t.Fatalf("symlink target was touched: %q, %v", data, readErr)
 		}
 	})
 	t.Run("symlink parent", func(t *testing.T) {
@@ -490,12 +507,22 @@ func TestPlanRejectsSymlinksNonRegularFilesAndEscapes(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
 			t.Fatal(err)
 		}
-		_, err := Plan(root, testManifest(), []recipe.Artifact{artifact("linked/file.txt", "inside")})
-		if err == nil || !strings.Contains(err.Error(), "symlink") {
-			t.Fatalf("parent symlink error = %v", err)
+		artifacts := []recipe.Artifact{artifact("linked/file.txt", "inside")}
+		plan, err := Plan(root, testManifest(), artifacts)
+		if err != nil {
+			t.Fatalf("plan should not hard-fail on a symlinked parent: %v", err)
+		}
+		if !plan.HasConflicts() || plan.Actions[0].Kind != ActionConflict || plan.Actions[0].Code != CodeSymlink || !strings.Contains(plan.Actions[0].Reason, "symlink") {
+			t.Fatalf("symlinked parent action = %#v", plan.Actions[0])
 		}
 		if _, statErr := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(statErr, os.ErrNotExist) {
 			t.Fatalf("outside path was touched: %v", statErr)
+		}
+		if _, err := Apply(root, testManifest(), artifacts); !errors.Is(err, ErrPlanConflicts) {
+			t.Fatalf("apply should refuse a symlinked parent: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("outside path was touched after apply: %v", statErr)
 		}
 	})
 	t.Run("directory destination", func(t *testing.T) {
@@ -503,9 +530,20 @@ func TestPlanRejectsSymlinksNonRegularFilesAndEscapes(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(root, "file.txt"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		_, err := Plan(root, testManifest(), []recipe.Artifact{artifact("file.txt", "inside")})
-		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
-			t.Fatalf("directory error = %v", err)
+		artifacts := []recipe.Artifact{artifact("file.txt", "inside")}
+		plan, err := Plan(root, testManifest(), artifacts)
+		if err != nil {
+			t.Fatalf("plan should not hard-fail on a directory destination: %v", err)
+		}
+		if !plan.HasConflicts() || plan.Actions[0].Kind != ActionConflict || plan.Actions[0].Code != CodeSpecialFile {
+			t.Fatalf("directory destination action = %#v", plan.Actions[0])
+		}
+		if _, err := Apply(root, testManifest(), artifacts); !errors.Is(err, ErrPlanConflicts) {
+			t.Fatalf("apply should refuse a directory destination: %v", err)
+		}
+		info, statErr := os.Stat(filepath.Join(root, "file.txt"))
+		if statErr != nil || !info.IsDir() {
+			t.Fatalf("directory destination was replaced: %v, %v", info, statErr)
 		}
 	})
 	for _, unsafe := range []string{"../escape", "/absolute", ".git/config", manifest.Filename, manifest.Filename + "/child", LockFilename, LockFilename + "/child", ApplyLockFilename} {
@@ -516,6 +554,70 @@ func TestPlanRejectsSymlinksNonRegularFilesAndEscapes(t *testing.T) {
 				t.Fatalf("unsafe path %q was accepted", unsafe)
 			}
 		})
+	}
+}
+
+// TestPlanConflictsOnFifoDestination covers a destination that exists as a
+// special file that is neither a symlink nor a directory. Skips if the
+// platform running the test cannot create a FIFO.
+func TestPlanConflictsOnFifoDestination(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	fifoPath := filepath.Join(root, "pipe.txt")
+	if err := syscall.Mkfifo(fifoPath, 0o644); err != nil {
+		t.Skipf("mkfifo unavailable on this platform: %v", err)
+	}
+	artifacts := []recipe.Artifact{artifact("pipe.txt", "inside")}
+	plan, err := Plan(root, testManifest(), artifacts)
+	if err != nil {
+		t.Fatalf("plan should not hard-fail on a fifo destination: %v", err)
+	}
+	if !plan.HasConflicts() || plan.Actions[0].Kind != ActionConflict || plan.Actions[0].Code != CodeSpecialFile || !strings.Contains(plan.Actions[0].Reason, "not a regular file") {
+		t.Fatalf("fifo destination action = %#v", plan.Actions[0])
+	}
+	if _, err := Apply(root, testManifest(), artifacts); !errors.Is(err, ErrPlanConflicts) {
+		t.Fatalf("apply should refuse a fifo destination: %v", err)
+	}
+}
+
+// TestActionsCarryCodeAndCurrentPreview proves that every plan action has a
+// closed-vocabulary Code matching its Kind, and that CurrentPreview is
+// populated exactly for conflict/update actions on an existing regular file.
+func TestActionsCarryCodeAndCurrentPreview(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if _, err := Apply(root, testManifest(), []recipe.Artifact{
+		artifact("stable.txt", "stable\n"),
+		artifact("retire.txt", "retire\n"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "stable.txt"), []byte("human edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	next := []recipe.Artifact{
+		artifact("create.txt", "created\n"),
+		artifact("stable.txt", "stable v2\n"),
+	}
+	plan, err := Plan(root, testManifest(), next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := make(map[string]Action, len(plan.Actions))
+	for _, action := range plan.Actions {
+		byPath[action.Path] = action
+	}
+	create := byPath["create.txt"]
+	if create.Kind != ActionCreate || create.Code != CodeMissing || create.CurrentPreview != "" {
+		t.Fatalf("create action = %#v", create)
+	}
+	conflict := byPath["stable.txt"]
+	if conflict.Kind != ActionConflict || conflict.Code != CodeManagedHashMismatch || conflict.CurrentPreview != "human edit\n" {
+		t.Fatalf("conflict action = %#v", conflict)
+	}
+	retired := byPath["retire.txt"]
+	if retired.Kind != ActionConflict || retired.Code != CodeRetiredOwned || retired.CurrentPreview != "retire\n" {
+		t.Fatalf("retired action = %#v", retired)
 	}
 }
 
@@ -531,6 +633,111 @@ func TestPlanRejectsSymlinkLock(t *testing.T) {
 	}
 	if _, err := Plan(root, testManifest(), nil); err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("symlink lock error = %v", err)
+	}
+}
+
+func filesTestManifest(content string) manifest.Manifest {
+	return manifest.Manifest{
+		SchemaVersion: manifest.SchemaVersion,
+		Recipe:        manifest.RecipeFiles,
+		Product:       manifest.Product{Name: "demo-app", Description: "A demo app"},
+		Vars:          map[string]string{"greeting": "hello"},
+		Files: []manifest.FileDecl{
+			{Path: "greeting.txt", Content: content},
+			{Path: "scripts/run.sh", Mode: "0755", Content: "#!/usr/bin/env bash\necho ${vars.greeting}\n"},
+		},
+	}
+}
+
+func TestFilesRecipeFullLifecycleConverges(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m := filesTestManifest("${vars.greeting}, world\n")
+	artifacts, err := recipe.Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := Plan(root, m, artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.HasConflicts() || plan.Recipe.ID != "files" || plan.Recipe.Version != recipe.FilesRecipeVersion {
+		t.Fatalf("create plan = %#v", plan)
+	}
+	for _, action := range plan.Actions {
+		if action.Kind != ActionCreate {
+			t.Fatalf("fresh files action = %#v, want create", action)
+		}
+	}
+
+	if _, err := Apply(root, m, artifacts); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Recipe.ID != "files" || lock.Recipe.Version != 1 {
+		t.Fatalf("lock recipe = %#v, want files@1", lock.Recipe)
+	}
+	info, err := os.Stat(filepath.Join(root, "scripts", "run.sh"))
+	if err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("script mode = %v, %v, want 0755", info, err)
+	}
+
+	converged, err := Plan(root, m, artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if converged.HasConflicts() || converged.LockChanged {
+		t.Fatalf("converged plan = %#v", converged)
+	}
+	for _, action := range converged.Actions {
+		if action.Kind != ActionUnchanged {
+			t.Fatalf("converged action = %#v, want unchanged", action)
+		}
+	}
+
+	updatedManifest := filesTestManifest("${vars.greeting}, updated world\n")
+	updatedArtifacts, err := recipe.Render(updatedManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatePlan, err := Plan(root, updatedManifest, updatedArtifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatePlan.HasConflicts() {
+		t.Fatalf("update plan has conflicts: %#v", updatePlan)
+	}
+	actions := make(map[string]ActionKind, len(updatePlan.Actions))
+	for _, action := range updatePlan.Actions {
+		actions[action.Path] = action.Kind
+	}
+	if actions["greeting.txt"] != ActionUpdate {
+		t.Fatalf("expected greeting.txt update, got %#v", actions)
+	}
+
+	if _, err := Apply(root, updatedManifest, updatedArtifacts); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "greeting.txt"))
+	if err != nil || string(data) != "hello, updated world\n" {
+		t.Fatalf("updated content = %q, %v", data, err)
+	}
+
+	final, err := Plan(root, updatedManifest, updatedArtifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.HasConflicts() || final.LockChanged {
+		t.Fatalf("final converged plan = %#v", final)
+	}
+	for _, action := range final.Actions {
+		if action.Kind != ActionUnchanged {
+			t.Fatalf("final action = %#v, want unchanged", action)
+		}
 	}
 }
 

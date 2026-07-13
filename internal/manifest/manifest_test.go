@@ -88,6 +88,121 @@ func TestValidateRejectsMalformedModuleSegments(t *testing.T) {
 	}
 }
 
+func filesManifest() Manifest {
+	return Manifest{
+		SchemaVersion: SchemaVersion,
+		Recipe:        RecipeFiles,
+		Product:       Product{Name: "demo-app", Description: "A demo app"},
+		Files: []FileDecl{
+			{Path: "a.txt", Content: "hello"},
+		},
+	}
+}
+
+func TestValidateFilesRecipeAcceptsMinimalManifest(t *testing.T) {
+	t.Parallel()
+	if err := filesManifest().Validate(); err != nil {
+		t.Fatalf("expected minimal files manifest to validate, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeRequiresAtLeastOneFile(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Files = nil
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "files must declare at least one file") {
+		t.Fatalf("expected missing-files error, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeRejectsBadVarsKey(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Vars = map[string]string{"Bad-Key": "x"}
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), `vars key "Bad-Key"`) {
+		t.Fatalf("expected bad vars key error, got %v", err)
+	}
+}
+
+func TestValidateGoAgentToolRejectsVarsAndFiles(t *testing.T) {
+	t.Parallel()
+	m := Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	m.Vars = map[string]string{"x": "y"}
+	m.Files = []FileDecl{{Path: "a.txt", Content: "x"}}
+	err := m.Validate()
+	if err == nil {
+		t.Fatal("expected go-agent-tool manifest with vars/files to fail validation")
+	}
+	if !strings.Contains(err.Error(), "vars is only supported by recipe files") {
+		t.Fatalf("expected vars rejection, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "files is only supported by recipe files") {
+		t.Fatalf("expected files rejection, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeRejectsRuntimeAndOtherGoAgentToolSections(t *testing.T) {
+	t.Parallel()
+	// A copied-over go-agent-tool manifest switched to recipe: files must
+	// fail loudly, naming every unused section, rather than silently
+	// ignoring the fields.
+	m := Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	m.Recipe = RecipeFiles
+	m.Files = []FileDecl{{Path: "a.txt", Content: "hello"}}
+	err := m.Validate()
+	if err == nil {
+		t.Fatal("expected copied-over go-agent-tool manifest to fail under recipe files")
+	}
+	for _, want := range []string{
+		"runtime is not used by recipe files",
+		"surfaces is not used by recipe files",
+		"integrations is not used by recipe files",
+		"distribution is not used by recipe files",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected error to contain %q, got %v", want, err)
+		}
+	}
+}
+
+func TestValidateFilesRecipeRejectsLicenseOverSixtyFourChars(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Product.License = strings.Repeat("x", 65)
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "product.license") {
+		t.Fatalf("expected license-length error, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeRejectsInvalidFileMode(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Files[0].Mode = "4755"
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), `mode must be an octal permission string like "0644"`) {
+		t.Fatalf("expected invalid mode error, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeRejectsDuplicateCanonicalPaths(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Files = append(m.Files, FileDecl{Path: "./a.txt", Content: "again"})
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate path") {
+		t.Fatalf("expected duplicate path error, got %v", err)
+	}
+}
+
+func TestValidateFilesRecipeAllowsOptionalModuleVisibilityAndLicense(t *testing.T) {
+	t.Parallel()
+	m := filesManifest()
+	m.Product.Module = "github.com/acme/tool"
+	m.Product.Visibility = "public"
+	m.Product.License = "MIT"
+	if err := m.Validate(); err != nil {
+		t.Fatalf("expected optional product fields to validate, got %v", err)
+	}
+}
+
 func TestWriteRefusesExistingManifest(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), Filename)

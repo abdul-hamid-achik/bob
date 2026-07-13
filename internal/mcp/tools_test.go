@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,6 +47,9 @@ func TestPlanFilteringDigestCheckAndReadOnlyContract(t *testing.T) {
 	}
 	if len(expanded.Actions) != 1 || !expanded.Truncation.Truncated || expanded.Truncation.OmittedActions == 0 {
 		t.Fatalf("max_actions projection was not explicit: %#v", expanded.Truncation)
+	}
+	if expanded.Actions[0].Code == "" {
+		t.Fatalf("plan action omitted its machine-readable code: %#v", expanded.Actions[0])
 	}
 
 	result, err = session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_check", Arguments: map[string]any{}})
@@ -238,5 +242,77 @@ func TestRecipeDescribeIsTypedAndClosedWorld(t *testing.T) {
 	assertSnapshotEqual(t, before, fileSnapshot(t, root))
 	if runner.calls() != 0 {
 		t.Fatalf("recipe description invoked subprocess runner %d time(s)", runner.calls())
+	}
+}
+
+func filesMCPWorkspace(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	m := manifest.Manifest{
+		SchemaVersion: manifest.SchemaVersion,
+		Recipe:        manifest.RecipeFiles,
+		Product:       manifest.Product{Name: "demo-app", Description: "A demo app"},
+		Files:         []manifest.FileDecl{{Path: "a.txt", Content: "hello\n"}},
+	}
+	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), m, false); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
+}
+
+func TestFilesRecipeWorkspacePlanCheckValidateAndDescribe(t *testing.T) {
+	t.Parallel()
+	root := filesMCPWorkspace(t)
+	before := fileSnapshot(t, root)
+	runner := &offlineRunner{}
+	session := connect(t, root, runner)
+
+	planResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_plan", Arguments: map[string]any{"include_unchanged": true}})
+	if err != nil || planResult.IsError {
+		t.Fatalf("plan: result=%#v err=%v", planResult, err)
+	}
+	var plan PlanOutput
+	decodeStructured(t, planResult, &plan)
+	if plan.Clean || len(plan.Actions) != 1 || plan.Actions[0].Kind != "create" {
+		t.Fatalf("unexpected files-recipe plan: %#v", plan)
+	}
+
+	checkResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_check", Arguments: map[string]any{}})
+	if err != nil || checkResult.IsError {
+		t.Fatalf("check: result=%#v err=%v", checkResult, err)
+	}
+	var check CheckOutput
+	decodeStructured(t, checkResult, &check)
+	if check.Clean {
+		t.Fatalf("unapplied files-recipe workspace reported clean: %#v", check)
+	}
+
+	validateResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_validate_manifest", Arguments: map[string]any{"workspace": "."}})
+	if err != nil || validateResult.IsError {
+		t.Fatalf("validate: result=%#v err=%v", validateResult, err)
+	}
+	var validate ValidateManifestOutput
+	decodeStructured(t, validateResult, &validate)
+	if validate.Recipe == nil || validate.Recipe.ID != "files" || validate.Recipe.Version != 1 {
+		t.Fatalf("files manifest reported wrong recipe stamp: %#v", validate.Recipe)
+	}
+
+	describeResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_recipe_describe", Arguments: map[string]any{"recipe": "files"}})
+	if err != nil || describeResult.IsError {
+		t.Fatalf("describe files: result=%#v err=%v", describeResult, err)
+	}
+	var describe RecipeDescribeOutput
+	decodeStructured(t, describeResult, &describe)
+	if describe.Recipe == nil || describe.Recipe.ID != "files" || describe.Recipe.Version != 1 {
+		t.Fatalf("unexpected files recipe description: %#v", describe)
+	}
+
+	assertSnapshotEqual(t, before, fileSnapshot(t, root))
+	if runner.calls() != 0 {
+		t.Fatalf("files-recipe workspace tools invoked subprocess runner %d time(s)", runner.calls())
 	}
 }

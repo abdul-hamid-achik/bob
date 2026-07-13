@@ -102,7 +102,7 @@ func TestPlanReturnsCompactActionsAndStructuredFailure(t *testing.T) {
 		t.Fatalf("unexpected default action projection: %#v", output.Truncation)
 	}
 	for _, action := range output.Actions {
-		if action.Path == "" || action.DesiredMode == "" {
+		if action.Path == "" || action.DesiredMode == "" || action.Code == "" {
 			t.Fatalf("incomplete compact action: %#v", action)
 		}
 	}

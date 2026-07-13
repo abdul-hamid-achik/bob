@@ -1,0 +1,28 @@
+schema_version: 1
+recipe: files
+product:
+  name: static-site
+  description: A tiny static site served by a shell script
+vars:
+  site_name: static-site
+  port: "8080"
+files:
+  - path: index.html
+    content: |
+      <!doctype html>
+      <html>
+        <head><title>${vars.site_name}</title></head>
+        <body><h1>${vars.site_name}</h1></body>
+      </html>
+  - path: README.md
+    content: |
+      # ${vars.site_name}
+
+      Serve this site locally with `./serve.sh`.
+  - path: serve.sh
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      echo "serving ${vars.site_name} on :${vars.port}"
+      python3 -m http.server "${vars.port}"

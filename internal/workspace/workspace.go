@@ -34,7 +34,7 @@ func Resolve(path string, mustExist bool) (string, error) {
 		return "", err
 	}
 	if mustExist {
-		return "", err
+		return "", fmt.Errorf("workspace %s does not exist: %w", abs, err)
 	}
 
 	ancestor := abs

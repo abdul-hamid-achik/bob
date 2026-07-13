@@ -8,28 +8,56 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/abdul-hamid-achik/bob/internal/strsim"
 )
 
 const (
 	Filename      = "bob.yaml"
 	SchemaVersion = 1
 	maxBytes      = 1 << 20
+
+	// RecipeGoAgentTool scaffolds a public-ready Go and Cobra CLI.
+	RecipeGoAgentTool = "go-agent-tool"
+	// RecipeFiles declares an arbitrary file tree inline.
+	RecipeFiles = "files"
 )
 
-var projectNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+var (
+	projectNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	varKeyPattern      = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	fileModePattern    = regexp.MustCompile(`^[0-7]{3,4}$`)
+)
+
+// recipeIDs is the closed set of recipe identifiers Validate accepts. Keep in
+// sync with recipe.IDs(); manifest cannot import recipe (recipe imports
+// manifest), so this list is the schema-side source of truth for the id set.
+var recipeIDs = []string{RecipeFiles, RecipeGoAgentTool}
 
 // Manifest is the human-owned declaration of a repository Bob can construct.
 type Manifest struct {
-	SchemaVersion int          `json:"schema_version" yaml:"schema_version"`
-	Recipe        string       `json:"recipe" yaml:"recipe"`
-	Product       Product      `json:"product" yaml:"product"`
-	Runtime       Runtime      `json:"runtime" yaml:"runtime"`
-	Surfaces      Surfaces     `json:"surfaces" yaml:"surfaces"`
-	Integrations  Integrations `json:"integrations" yaml:"integrations"`
-	Distribution  Distribution `json:"distribution" yaml:"distribution"`
+	SchemaVersion int               `json:"schema_version" yaml:"schema_version"`
+	Recipe        string            `json:"recipe" yaml:"recipe"`
+	Product       Product           `json:"product" yaml:"product"`
+	Runtime       Runtime           `json:"runtime" yaml:"runtime"`
+	Surfaces      Surfaces          `json:"surfaces" yaml:"surfaces"`
+	Integrations  Integrations      `json:"integrations" yaml:"integrations"`
+	Distribution  Distribution      `json:"distribution" yaml:"distribution"`
+	Vars          map[string]string `json:"vars,omitempty" yaml:"vars,omitempty"`
+	Files         []FileDecl        `json:"files,omitempty" yaml:"files,omitempty"`
+}
+
+// FileDecl is one file the files recipe materializes verbatim, subject only
+// to the ${vars.*} substitution pass.
+type FileDecl struct {
+	Path    string `json:"path" yaml:"path"`
+	Mode    string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Content string `json:"content" yaml:"content"`
 }
 
 type Product struct {
@@ -74,7 +102,7 @@ func Default(name, module, description string) Manifest {
 	}
 	return Manifest{
 		SchemaVersion: SchemaVersion,
-		Recipe:        "go-agent-tool",
+		Recipe:        RecipeGoAgentTool,
 		Product: Product{
 			Name:        name,
 			Module:      module,
@@ -100,42 +128,84 @@ func Default(name, module, description string) Manifest {
 	}
 }
 
+// describeValue renders the offending value for a validation problem string.
+// Empty values are named explicitly rather than rendered as `""`, since a
+// bare pair of quotes reads as noise to a weak model scanning error text.
+func describeValue(value string) string {
+	if value == "" {
+		return "empty"
+	}
+	return fmt.Sprintf("%q", value)
+}
+
+// suggestionSuffix appends a did-you-mean hint when value is within edit
+// distance 2 of one of allowed. It returns "" when no candidate is close
+// enough, so call sites can append unconditionally.
+func suggestionSuffix(value string, allowed []string) string {
+	if suggestion, ok := strsim.Closest(value, allowed, 2); ok {
+		return fmt.Sprintf("; did you mean %q?", suggestion)
+	}
+	return ""
+}
+
 func (m Manifest) Validate() error {
 	var problems []string
 	if m.SchemaVersion != SchemaVersion {
-		problems = append(problems, fmt.Sprintf("schema_version must be %d", SchemaVersion))
+		problems = append(problems, fmt.Sprintf("schema_version must be %d (got %d)", SchemaVersion, m.SchemaVersion))
 	}
-	if m.Recipe != "go-agent-tool" {
-		problems = append(problems, "recipe must be go-agent-tool")
+	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeFiles {
+		problems = append(problems, fmt.Sprintf("recipe must be one of %s (got %s)%s", strings.Join(recipeIDs, ", "), describeValue(m.Recipe), suggestionSuffix(m.Recipe, recipeIDs)))
 	}
 	if !projectNamePattern.MatchString(m.Product.Name) {
-		problems = append(problems, "product.name must start with a letter and contain only lowercase letters, digits, and hyphens")
+		problems = append(problems, fmt.Sprintf("product.name must start with a letter and contain only lowercase letters, digits, and hyphens (got %s)", describeValue(m.Product.Name)))
 	}
+	if strings.TrimSpace(m.Product.Description) == "" {
+		problems = append(problems, "product.description is required")
+	}
+
+	switch m.Recipe {
+	case RecipeFiles:
+		problems = append(problems, m.validateFilesRecipe()...)
+	case RecipeGoAgentTool:
+		problems = append(problems, m.validateGoAgentToolRecipe()...)
+	default:
+		// An unrecognized recipe is already reported above; there is no
+		// per-recipe schema to check further.
+	}
+
+	if len(problems) > 0 {
+		return errors.New(strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+// validateGoAgentToolRecipe implements every go-agent-tool validation rule.
+// Error strings are load-bearing: keep their leading constraint text stable;
+// the trailing "(got ...)" and "; did you mean ...?" suffixes are additive.
+func (m Manifest) validateGoAgentToolRecipe() []string {
+	var problems []string
 	if strings.TrimSpace(m.Product.Module) == "" || strings.ContainsAny(m.Product.Module, " \t\r\n") {
 		problems = append(problems, "product.module must be a non-empty Go module path without whitespace")
 	} else if invalid := unsupportedModuleRune(m.Product.Module); invalid != 0 {
 		problems = append(problems, fmt.Sprintf("product.module contains unsupported character %q", invalid))
 	} else if strings.HasPrefix(m.Product.Module, "/") || strings.HasSuffix(m.Product.Module, "/") || strings.Contains(m.Product.Module, "//") {
-		problems = append(problems, "product.module must contain non-empty slash-separated path segments")
+		problems = append(problems, fmt.Sprintf("product.module must contain non-empty slash-separated path segments (got %s)", describeValue(m.Product.Module)))
 	} else {
 		for _, segment := range strings.Split(m.Product.Module, "/") {
 			if segment == "." || segment == ".." {
-				problems = append(problems, "product.module cannot contain . or .. path segments")
+				problems = append(problems, fmt.Sprintf("product.module cannot contain . or .. path segments (got %s)", describeValue(m.Product.Module)))
 				break
 			}
 		}
 	}
-	if strings.TrimSpace(m.Product.Description) == "" {
-		problems = append(problems, "product.description is required")
-	}
 	if m.Product.Visibility != "public" && m.Product.Visibility != "private" {
-		problems = append(problems, "product.visibility must be public or private")
+		problems = append(problems, fmt.Sprintf("product.visibility must be public or private (got %s)%s", describeValue(m.Product.Visibility), suggestionSuffix(m.Product.Visibility, []string{"public", "private"})))
 	}
 	if m.Product.License != "MIT" {
-		problems = append(problems, "product.license must be MIT in schema version 1")
+		problems = append(problems, fmt.Sprintf("product.license must be MIT in schema version 1 (got %s)", describeValue(m.Product.License)))
 	}
 	if m.Runtime.Language != "go" || m.Runtime.Kind != "cli" {
-		problems = append(problems, "go-agent-tool requires runtime.language=go and runtime.kind=cli")
+		problems = append(problems, fmt.Sprintf("go-agent-tool requires runtime.language=go and runtime.kind=cli (got language=%s, kind=%s)", describeValue(m.Runtime.Language), describeValue(m.Runtime.Kind)))
 	}
 	if !m.Surfaces.CLI {
 		problems = append(problems, "go-agent-tool requires surfaces.cli=true")
@@ -152,7 +222,7 @@ func (m Manifest) Validate() error {
 				return
 			}
 		}
-		problems = append(problems, fmt.Sprintf("%s must be one of %s", field, strings.Join(allowed, ", ")))
+		problems = append(problems, fmt.Sprintf("%s must be one of %s (got %s)%s", field, strings.Join(allowed, ", "), describeValue(value), suggestionSuffix(value, allowed)))
 	}
 	validateChoice("integrations.code_structure", m.Integrations.CodeStructure, "none", "codemap")
 	validateChoice("integrations.semantic_search", m.Integrations.SemanticSearch, "none", "vecgrep")
@@ -167,10 +237,107 @@ func (m Manifest) Validate() error {
 	if m.Distribution.Homebrew && m.Product.Visibility != "public" {
 		problems = append(problems, "distribution.homebrew requires product.visibility=public")
 	}
-	if len(problems) > 0 {
-		return errors.New(strings.Join(problems, "; "))
+	if len(m.Vars) > 0 {
+		problems = append(problems, "vars is only supported by recipe files")
 	}
-	return nil
+	if len(m.Files) > 0 {
+		problems = append(problems, "files is only supported by recipe files")
+	}
+	return problems
+}
+
+// validateFilesRecipe implements every files-recipe validation rule. The
+// files recipe declares an inline file tree; it does not use the
+// go-agent-tool product, runtime, surfaces, integrations, or distribution
+// fields, so those must stay zero-valued.
+func (m Manifest) validateFilesRecipe() []string {
+	var problems []string
+	if trimmedModule := strings.TrimSpace(m.Product.Module); trimmedModule != "" {
+		if strings.ContainsAny(m.Product.Module, " \t\r\n") {
+			problems = append(problems, "product.module must be a non-empty Go module path without whitespace")
+		} else if invalid := unsupportedModuleRune(m.Product.Module); invalid != 0 {
+			problems = append(problems, fmt.Sprintf("product.module contains unsupported character %q", invalid))
+		} else if strings.HasPrefix(m.Product.Module, "/") || strings.HasSuffix(m.Product.Module, "/") || strings.Contains(m.Product.Module, "//") {
+			problems = append(problems, fmt.Sprintf("product.module must contain non-empty slash-separated path segments (got %s)", describeValue(m.Product.Module)))
+		} else {
+			for _, segment := range strings.Split(m.Product.Module, "/") {
+				if segment == "." || segment == ".." {
+					problems = append(problems, fmt.Sprintf("product.module cannot contain . or .. path segments (got %s)", describeValue(m.Product.Module)))
+					break
+				}
+			}
+		}
+	}
+	if m.Product.Visibility != "" && m.Product.Visibility != "public" && m.Product.Visibility != "private" {
+		problems = append(problems, fmt.Sprintf("product.visibility must be public or private (got %s)%s", describeValue(m.Product.Visibility), suggestionSuffix(m.Product.Visibility, []string{"public", "private"})))
+	}
+	if m.Product.License != "" {
+		if strings.TrimSpace(m.Product.License) == "" || len(m.Product.License) > 64 {
+			problems = append(problems, fmt.Sprintf("product.license must be a non-empty, non-whitespace string of at most 64 characters (got %s)", describeValue(m.Product.License)))
+		}
+	}
+	if m.Runtime != (Runtime{}) {
+		problems = append(problems, "runtime is not used by recipe files")
+	}
+	if m.Surfaces != (Surfaces{}) {
+		problems = append(problems, "surfaces is not used by recipe files")
+	}
+	if m.Integrations != (Integrations{}) {
+		problems = append(problems, "integrations is not used by recipe files")
+	}
+	if m.Distribution != (Distribution{}) {
+		problems = append(problems, "distribution is not used by recipe files")
+	}
+
+	varKeys := make([]string, 0, len(m.Vars))
+	for key := range m.Vars {
+		varKeys = append(varKeys, key)
+	}
+	sort.Strings(varKeys)
+	for _, key := range varKeys {
+		if !varKeyPattern.MatchString(key) {
+			problems = append(problems, fmt.Sprintf("vars key %q must start with a lowercase letter and contain only lowercase letters, digits, and underscores", key))
+		}
+	}
+
+	if len(m.Files) == 0 {
+		problems = append(problems, "files must declare at least one file")
+	}
+	seenPaths := make(map[string]struct{}, len(m.Files))
+	for i, decl := range m.Files {
+		if strings.TrimSpace(decl.Path) == "" {
+			problems = append(problems, fmt.Sprintf("files[%d].path must not be empty", i))
+			continue
+		}
+		if _, err := ParseFileMode(decl.Mode); err != nil {
+			problems = append(problems, fmt.Sprintf("files[%d] (%s): %s (got %s)", i, decl.Path, err, describeValue(decl.Mode)))
+		}
+		canonical := filepath.ToSlash(filepath.Clean(decl.Path))
+		if _, exists := seenPaths[canonical]; exists {
+			problems = append(problems, fmt.Sprintf("files declares duplicate path %q", canonical))
+			continue
+		}
+		seenPaths[canonical] = struct{}{}
+	}
+	return problems
+}
+
+// ParseFileMode parses a files-recipe mode string. An empty string yields the
+// default 0o644. A non-empty string must be a 3-4 digit octal permission
+// string with no bits outside 0o777 (setuid, setgid, and sticky are
+// rejected).
+func ParseFileMode(mode string) (os.FileMode, error) {
+	if mode == "" {
+		return 0o644, nil
+	}
+	if !fileModePattern.MatchString(mode) {
+		return 0, errors.New(`mode must be an octal permission string like "0644"`)
+	}
+	value, err := strconv.ParseUint(mode, 8, 32)
+	if err != nil || value & ^uint64(0o777) != 0 {
+		return 0, errors.New(`mode must be an octal permission string like "0644"`)
+	}
+	return os.FileMode(value), nil
 }
 
 func unsupportedModuleRune(modulePath string) rune {
@@ -196,6 +363,9 @@ func LoadFile(path string) (Manifest, error) {
 	var m Manifest
 	info, err := os.Lstat(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return m, fmt.Errorf("no %s found in %s; run: bob init --module <module> --write to create one: %w", Filename, filepath.Dir(path), os.ErrNotExist)
+		}
 		return m, fmt.Errorf("read manifest: %w", err)
 	}
 	if !info.Mode().IsRegular() {

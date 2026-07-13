@@ -72,6 +72,7 @@ type InspectOutput struct {
 type PlanAction struct {
 	Path          string `json:"path"`
 	Kind          string `json:"kind"`
+	Code          string `json:"code,omitempty"`
 	CurrentSHA256 string `json:"current_sha256,omitempty"`
 	DesiredSHA256 string `json:"desired_sha256,omitempty"`
 	LockedSHA256  string `json:"locked_sha256,omitempty"`
@@ -238,7 +239,7 @@ func (s *Server) handlePlan(ctx context.Context, _ *sdkmcp.CallToolRequest, in P
 		reason = reasonFromToolCode(code)
 		return s.planFailure(root, code, err, in.IncludeUnchanged, maxActions)
 	}
-	recipeSelected = true
+	recipeSelected = plan.Recipe.ID == currentRecipeID
 	out := s.projectPlan(root, plan, in.IncludeUnchanged, maxActions)
 	recordedCounts = out.Counts
 	outcome, reason = telemetry.OutcomeOK, ""
@@ -268,7 +269,7 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 		reason = reasonFromToolCode(code)
 		return s.checkFailure(root, code, err)
 	}
-	recipeSelected = true
+	recipeSelected = plan.Recipe.ID == currentRecipeID
 	counts, clean, warnings, nextActions := summarizePlan(root, plan)
 	recordedCounts = counts
 	outcome, reason = telemetry.OutcomeOK, ""
@@ -329,10 +330,15 @@ func (s *Server) handleValidateManifest(ctx context.Context, _ *sdkmcp.CallToolR
 		return s.manifestFailure(source, root, "manifest_invalid", err)
 	}
 	recipeSelected = m.Recipe == currentRecipeID
+	recipeVersion, err := recipe.Version(m.Recipe)
+	if err != nil {
+		reason = telemetry.ReasonInvalidManifest
+		return s.manifestFailure(source, root, "recipe_invalid", err)
+	}
 	out := &ValidateManifestOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Source: source, Workspace: root,
 		Authority: s.authority.info(root), ManifestSchemaVersion: manifest.SchemaVersion,
-		Recipe: &RecipeRef{ID: m.Recipe, Version: engine.RecipeVersion}, Manifest: &m,
+		Recipe: &RecipeRef{ID: m.Recipe, Version: recipeVersion}, Manifest: &m,
 		Warnings: []string{},
 	}
 	outcome, reason = telemetry.OutcomeOK, ""
@@ -350,33 +356,45 @@ func (s *Server) handleRecipeDescribe(ctx context.Context, _ *sdkmcp.CallToolReq
 	if id == "" {
 		id = currentRecipeID
 	}
-	if id != currentRecipeID {
+	version, err := recipe.Version(id)
+	if err != nil {
 		out := &RecipeDescribeOutput{
 			SchemaVersion: toolSchemaVersion, OK: false,
 			Error: &ErrorInfo{Code: "recipe_unknown", Message: fmt.Sprintf("unknown recipe %q", id)},
 		}
 		return &sdkmcp.CallToolResult{IsError: true}, out, nil
 	}
-	recipeSelected = true
+	recipeSelected = id == currentRecipeID
 	out := &RecipeDescribeOutput{
 		SchemaVersion: toolSchemaVersion, OK: true,
-		Recipe: &RecipeDescription{
-			ID: currentRecipeID, Version: engine.RecipeVersion, ManifestSchemaVersion: manifest.SchemaVersion,
-			Description: "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",
-			Surfaces:    []string{"cli", "json"},
-			SupportedChoices: []RecipeChoice{
-				{Field: "integrations.code_structure", Values: []string{"none", "codemap"}},
-				{Field: "integrations.semantic_search", Values: []string{"none", "vecgrep"}},
-				{Field: "integrations.terminal_verification", Values: []string{"none", "glyphrun"}},
-				{Field: "integrations.browser_verification", Values: []string{"none", "cairntrace"}},
-				{Field: "integrations.secrets", Values: []string{"none", "tinyvault"}},
-				{Field: "integrations.artifacts", Values: []string{"none", "fcheap"}},
-				{Field: "distribution.docs", Values: []string{"none", "markdown"}},
-			},
-		},
+		Recipe: recipeDescription(id, version),
 	}
 	outcome, reason = telemetry.OutcomeOK, ""
 	return &sdkmcp.CallToolResult{}, out, nil
+}
+
+func recipeDescription(id string, version int) *RecipeDescription {
+	if id == "files" {
+		return &RecipeDescription{
+			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+			Description: "Declares an arbitrary file tree inline in bob.yaml; Bob materializes it with the same plan/apply ownership and path safety as every other recipe. Substitution is a single ${vars.<key>} literal-replacement pass, not a template language; an undeclared reference is a render-time error. Bob owns file ownership and convergence, not the meaning of file content over time.",
+			Surfaces:    []string{"cli", "json"},
+		}
+	}
+	return &RecipeDescription{
+		ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+		Description: "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",
+		Surfaces:    []string{"cli", "json"},
+		SupportedChoices: []RecipeChoice{
+			{Field: "integrations.code_structure", Values: []string{"none", "codemap"}},
+			{Field: "integrations.semantic_search", Values: []string{"none", "vecgrep"}},
+			{Field: "integrations.terminal_verification", Values: []string{"none", "glyphrun"}},
+			{Field: "integrations.browser_verification", Values: []string{"none", "cairntrace"}},
+			{Field: "integrations.secrets", Values: []string{"none", "tinyvault"}},
+			{Field: "integrations.artifacts", Values: []string{"none", "fcheap"}},
+			{Field: "distribution.docs", Values: []string{"none", "markdown"}},
+		},
+	}
 }
 
 func (s *Server) handleStats(ctx context.Context, _ *sdkmcp.CallToolRequest, in StatsInput) (*sdkmcp.CallToolResult, *StatsOutput, error) {
@@ -461,7 +479,7 @@ func normalizeMaxActions(value int) (int, error) {
 
 func projectAction(action engine.Action) PlanAction {
 	projected := PlanAction{
-		Path: action.Path, Kind: string(action.Kind), CurrentSHA256: action.CurrentSHA256,
+		Path: action.Path, Kind: string(action.Kind), Code: action.Code, CurrentSHA256: action.CurrentSHA256,
 		DesiredSHA256: action.DesiredSHA256, LockedSHA256: action.LockedSHA256,
 		DesiredMode: fmt.Sprintf("%04o", action.DesiredMode.Perm()), Reason: action.Reason,
 	}

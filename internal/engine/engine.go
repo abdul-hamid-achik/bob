@@ -19,9 +19,15 @@ import (
 const (
 	// PlanSchemaVersion independently versions the structured plan projection.
 	PlanSchemaVersion = 1
-	// RecipeVersion is the current built-in recipe contract. Locks
-	// from older positive versions are safe upgrade inputs because they record
-	// exact content hashes for every previously managed whole file.
+	// RecipeVersion is the go-agent-tool recipe contract version, kept as a
+	// deprecated compatibility alias for callers that referenced it before
+	// Bob supported more than one recipe. recipe.Version(id) is the source
+	// of truth for every recipe's current contract version, including
+	// go-agent-tool's. Locks from older positive versions are safe upgrade
+	// inputs because they record exact content hashes for every previously
+	// managed whole file.
+	//
+	// Deprecated: use recipe.Version("go-agent-tool") instead.
 	RecipeVersion = 3
 )
 
@@ -39,15 +45,37 @@ const (
 // ErrPlanConflicts reports an apply that was refused before any mutation.
 var ErrPlanConflicts = errors.New("plan contains conflicts")
 
+// Action codes are a closed, stable vocabulary for the machine-readable cause
+// of an action, safe for programmatic branching. Reason strings remain the
+// human-readable explanation and are never changed by adding a code.
+const (
+	// Conflict codes.
+	CodeUnmanagedDiffers     = "unmanaged_differs"
+	CodeManagedHashMismatch  = "managed_hash_mismatch"
+	CodeManagedMissing       = "managed_missing"
+	CodeUnmanagedModeDiffers = "unmanaged_mode_differs"
+	CodeRetiredOwned         = "retired_owned"
+	CodeSymlink              = "symlink"
+	CodeSpecialFile          = "special_file"
+	// Non-conflict codes.
+	CodeMissing          = "missing"
+	CodeModeDrift        = "mode_drift"
+	CodeContentUpdate    = "content_update"
+	CodeInSync           = "in_sync"
+	CodeIdenticalContent = "identical_content"
+)
+
 // Action describes the complete, deterministic decision for one artifact.
 // Hashes are lowercase hexadecimal SHA-256 values. CurrentSHA256 is empty when
 // the destination does not exist.
 type Action struct {
 	Path           string      `json:"path" yaml:"path"`
 	Kind           ActionKind  `json:"kind" yaml:"kind"`
+	Code           string      `json:"code,omitempty" yaml:"code,omitempty"`
 	CurrentSHA256  string      `json:"current_sha256,omitempty" yaml:"current_sha256,omitempty"`
 	DesiredSHA256  string      `json:"desired_sha256" yaml:"desired_sha256"`
 	DesiredPreview string      `json:"desired_preview,omitempty" yaml:"desired_preview,omitempty"`
+	CurrentPreview string      `json:"current_preview,omitempty" yaml:"current_preview,omitempty"`
 	LockedSHA256   string      `json:"locked_sha256,omitempty" yaml:"locked_sha256,omitempty"`
 	CurrentMode    fs.FileMode `json:"current_mode,omitempty" yaml:"current_mode,omitempty"`
 	DesiredMode    fs.FileMode `json:"desired_mode" yaml:"desired_mode"`
@@ -95,6 +123,10 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 	if err := m.Validate(); err != nil {
 		return result, fmt.Errorf("plan: validate manifest: %w", err)
 	}
+	recipeVersion, err := recipe.Version(m.Recipe)
+	if err != nil {
+		return result, fmt.Errorf("plan: %w", err)
+	}
 	canonicalRoot, err := validateRoot(root)
 	if err != nil {
 		return result, fmt.Errorf("plan: %w", err)
@@ -111,8 +143,8 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 	if lockExists && lock.Recipe.ID != m.Recipe {
 		return result, fmt.Errorf("plan: lock recipe %s@%d does not match %s", lock.Recipe.ID, lock.Recipe.Version, m.Recipe)
 	}
-	if lockExists && lock.Recipe.Version > RecipeVersion {
-		return result, fmt.Errorf("plan: lock recipe %s@%d is newer than supported %s@%d", lock.Recipe.ID, lock.Recipe.Version, m.Recipe, RecipeVersion)
+	if lockExists && lock.Recipe.Version > recipeVersion {
+		return result, fmt.Errorf("plan: lock recipe %s@%d is newer than supported %s@%d", lock.Recipe.ID, lock.Recipe.Version, m.Recipe, recipeVersion)
 	}
 
 	locked := make(map[string]LockEntry, len(lock.Files))
@@ -125,9 +157,9 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 	}
 	result = PlanResult{
 		SchemaVersion: PlanSchemaVersion,
-		Recipe:        LockRecipe{ID: m.Recipe, Version: RecipeVersion},
+		Recipe:        LockRecipe{ID: m.Recipe, Version: recipeVersion},
 		Actions:       make([]Action, 0, len(desired)),
-		DesiredLock:   desiredLock(m, desired),
+		DesiredLock:   desiredLock(m, recipeVersion, desired),
 		lockExists:    lockExists,
 	}
 	if lockExists {
@@ -150,15 +182,23 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 		if !observation.exists {
 			continue
 		}
-		result.Actions = append(result.Actions, Action{
+		action := Action{
 			Path:           entry.Path,
 			Kind:           ActionConflict,
-			CurrentSHA256:  observation.hash,
 			LockedSHA256:   entry.SHA256,
 			CurrentMode:    observation.mode,
 			expectedExists: true,
-			Reason:         "bob.lock owns this file but the recipe no longer declares it; remove it manually before applying the lock update",
-		})
+		}
+		if observation.conflictCode != "" {
+			action.Code = observation.conflictCode
+			action.Reason = observation.conflictReason
+		} else {
+			action.Code = CodeRetiredOwned
+			action.CurrentSHA256 = observation.hash
+			action.Reason = "bob.lock owns this file but the recipe no longer declares it; remove it manually before applying the lock update"
+			action.CurrentPreview = readCurrentPreview(filepath.Join(canonicalRoot, filepath.FromSlash(entry.Path)))
+		}
+		result.Actions = append(result.Actions, action)
 		result.ConflictCount++
 	}
 
@@ -183,30 +223,43 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 		switch {
 		case !observation.exists && managed:
 			action.Kind = ActionConflict
+			action.Code = CodeManagedMissing
 			action.Reason = "managed file is missing; its recorded content cannot be proven unchanged"
 		case !observation.exists:
 			action.Kind = ActionCreate
+			action.Code = CodeMissing
 			action.Reason = "destination does not exist"
+		case observation.conflictCode != "":
+			action.Kind = ActionConflict
+			action.Code = observation.conflictCode
+			action.Reason = observation.conflictReason
 		case managed && observation.hash == artifact.hash && observation.mode == artifact.mode:
 			action.Kind = ActionUnchanged
+			action.Code = CodeInSync
 			action.Reason = "managed file already matches the desired content and mode"
 		case managed && observation.hash == artifact.hash:
 			action.Kind = ActionUpdate
+			action.Code = CodeModeDrift
 			action.Reason = "managed content matches but its file mode drifted"
 		case managed && observation.hash != entry.SHA256:
 			action.Kind = ActionConflict
+			action.Code = CodeManagedHashMismatch
 			action.Reason = "managed file differs from the hash recorded in bob.lock"
 		case managed:
 			action.Kind = ActionUpdate
+			action.Code = CodeContentUpdate
 			action.Reason = "managed file still matches bob.lock and may be updated safely"
 		case observation.hash == artifact.hash && observation.mode != artifact.mode:
 			action.Kind = ActionConflict
+			action.Code = CodeUnmanagedModeDiffers
 			action.Reason = "unmanaged file has identical content but a different mode"
 		case observation.hash == artifact.hash:
 			action.Kind = ActionAdopt
+			action.Code = CodeIdenticalContent
 			action.Reason = "unmanaged file has identical content and can be adopted"
 		default:
 			action.Kind = ActionConflict
+			action.Code = CodeUnmanagedDiffers
 			action.Reason = "unmanaged file differs from the desired content"
 		}
 		if action.Kind == ActionConflict {
@@ -214,6 +267,12 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 		}
 		if action.Kind == ActionUnchanged || action.Kind == ActionAdopt {
 			action.DesiredPreview = ""
+		}
+		// The current-content preview is bounded and read only when an agent
+		// actually needs to compare desired vs. current bytes; symlink and
+		// special-file conflicts never read through the destination.
+		if observation.exists && observation.conflictCode == "" && (action.Kind == ActionConflict || action.Kind == ActionUpdate) {
+			action.CurrentPreview = readCurrentPreview(filepath.Join(canonicalRoot, filepath.FromSlash(artifact.path)))
 		}
 		result.Actions = append(result.Actions, action)
 	}
@@ -363,10 +422,10 @@ func normalizeArtifacts(root string, artifacts []recipe.Artifact) ([]desiredArti
 	return normalized, nil
 }
 
-func desiredLock(m manifest.Manifest, artifacts []desiredArtifact) LockFile {
+func desiredLock(m manifest.Manifest, recipeVersion int, artifacts []desiredArtifact) LockFile {
 	lock := LockFile{
 		SchemaVersion: LockSchemaVersion,
-		Recipe:        LockRecipe{ID: m.Recipe, Version: RecipeVersion},
+		Recipe:        LockRecipe{ID: m.Recipe, Version: recipeVersion},
 		Files:         make([]LockEntry, 0, len(artifacts)),
 	}
 	for _, artifact := range artifacts {

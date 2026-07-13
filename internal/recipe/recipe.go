@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
+	"github.com/abdul-hamid-achik/bob/internal/strsim"
 )
 
 // Artifact is one deterministic file produced by a recipe.
@@ -17,15 +18,54 @@ type Artifact struct {
 	Content []byte      `json:"-"`
 }
 
+// goAgentToolRecipeVersion is the current go-agent-tool recipe contract
+// version. engine.RecipeVersion mirrors this value as a deprecated
+// compatibility alias; recipe.Version is the source of truth.
+const goAgentToolRecipeVersion = 3
+
+// Version returns the current contract version for a built-in recipe id.
+func Version(recipeID string) (int, error) {
+	switch recipeID {
+	case "go-agent-tool":
+		return goAgentToolRecipeVersion, nil
+	case "files":
+		return FilesRecipeVersion, nil
+	default:
+		return 0, fmt.Errorf("unsupported recipe %q%s", recipeID, didYouMeanRecipe(recipeID))
+	}
+}
+
+// IDs returns the sorted set of built-in recipe identifiers.
+func IDs() []string {
+	return []string{"files", "go-agent-tool"}
+}
+
+// didYouMeanRecipe returns a ready-to-append "; did you mean ...?" suffix
+// when id is a close typo of a known recipe id, or "" otherwise. It keeps
+// unsupported-recipe errors self-recoverable for a weak model without an
+// extra round trip to `bob recipe list`.
+func didYouMeanRecipe(id string) string {
+	if suggestion, ok := strsim.Closest(id, IDs(), 2); ok {
+		return fmt.Sprintf("; did you mean %q?", suggestion)
+	}
+	return ""
+}
+
 // Render compiles a manifest into the complete set of Bob-owned artifacts.
 func Render(m manifest.Manifest) ([]Artifact, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}
-	if m.Recipe != "go-agent-tool" {
-		return nil, fmt.Errorf("unsupported recipe %q", m.Recipe)
+	var artifacts []Artifact
+	var err error
+	switch m.Recipe {
+	case "go-agent-tool":
+		artifacts, err = renderGoAgentTool(m)
+	case "files":
+		artifacts, err = renderFiles(m)
+	default:
+		return nil, fmt.Errorf("unsupported recipe %q%s", m.Recipe, didYouMeanRecipe(m.Recipe))
 	}
-	artifacts, err := renderGoAgentTool(m)
 	if err != nil {
 		return nil, err
 	}

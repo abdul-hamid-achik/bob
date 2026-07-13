@@ -16,6 +16,7 @@ import (
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
+	"github.com/abdul-hamid-achik/bob/internal/strsim"
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 	"github.com/abdul-hamid-achik/bob/internal/version"
 	"github.com/spf13/cobra"
@@ -35,6 +36,17 @@ type Dependencies struct {
 type options struct {
 	json    bool
 	metrics *commandMetrics
+}
+
+// trackWorkspace records the workspace path an in-flight command resolved,
+// independent of telemetry action counts, so a later failure can thread the
+// path into next_actions guidance even when the command never reaches a
+// successful plan (for example, a missing manifest).
+func (o *options) trackWorkspace(path string) {
+	if o == nil || o.metrics == nil {
+		return
+	}
+	o.metrics.workspace = path
 }
 
 func Execute() error {
@@ -62,17 +74,24 @@ func execute(args []string, deps Dependencies) error {
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	recordCLI(cmd.Context(), deps, args, time.Since(started), err)
-	if err == nil || !jsonRequested(args) || mcpRequested(args) {
-		return err
+	if err == nil {
+		return nil
 	}
 	var reported reportedError
 	if errors.As(err, &reported) {
 		return err
 	}
+	workspace := deps.metrics.workspace
+	if !jsonRequested(args) || mcpRequested(args) {
+		printHumanFailure(deps.ErrOut, err, workspace)
+		return err
+	}
 	command := commandFromArgs(args)
+	code := classifyErrorCode(err)
+	next := nextActionsForFailure(err, workspace)
 	if emitErr := emitJSONStatus(deps.Out, false, command, map[string]any{
-		"error": map[string]string{"code": "command_failed", "message": err.Error()},
-	}, nil, nil); emitErr != nil {
+		"error": map[string]string{"code": code, "message": err.Error()},
+	}, nil, next); emitErr != nil {
 		return fmt.Errorf("%w; emit JSON error: %v", err, emitErr)
 	}
 	return err
@@ -118,6 +137,7 @@ func New(deps Dependencies) *cobra.Command {
 		newStatsCommand(opts, deps.Telemetry),
 		newStudioCommand(opts, deps.StudioRunner, deps.IntegrationRunner, deps.Telemetry),
 		newExplainCommand(opts),
+		newLearnCommand(opts),
 		newRecipeCommand(opts),
 		newVersionCommand(opts),
 	)
@@ -134,7 +154,7 @@ func newNewCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			if module == "" {
-				return errors.New("new: --module is required")
+				return classifyInvalidInput(errors.New("new: --module is required"))
 			}
 			if target == "" {
 				target = name
@@ -148,7 +168,7 @@ func newNewCommand(opts *options) *cobra.Command {
 			captureWorkspaceMetrics(opts, target, true)
 			artifacts, err := recipe.Render(m)
 			if err != nil {
-				return fmt.Errorf("new: %w", err)
+				return fmt.Errorf("new: %w", classifyInvalidInput(err))
 			}
 			paths := artifactPaths(artifacts)
 			if !write {
@@ -209,11 +229,11 @@ func newInitCommand(opts *options) *cobra.Command {
 				name = filepath.Base(absolute)
 			}
 			if module == "" {
-				return errors.New("init: --module is required")
+				return classifyInvalidInput(errors.New("init: --module is required"))
 			}
 			m := manifest.Default(name, module, description)
 			if err := m.Validate(); err != nil {
-				return fmt.Errorf("init: %w", err)
+				return fmt.Errorf("init: %w", classifyInvalidInput(err))
 			}
 			if !write {
 				if opts.json {
@@ -242,25 +262,31 @@ func newInitCommand(opts *options) *cobra.Command {
 }
 
 func newPlanCommand(opts *options) *cobra.Command {
-	var showContent bool
+	var showContent, conflictsOnly bool
 	cmd := &cobra.Command{
 		Use:   "plan [path]",
 		Short: "Compare the recipe with the repository without writing",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
+			opts.trackWorkspace(root)
 			plan, err := loadPlan(root)
 			if err != nil {
 				return fmt.Errorf("plan: %w", err)
 			}
 			capturePlanMetrics(opts, root, plan)
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "plan", plan, conflictWarnings(plan), planNextActions(plan))
+				data := any(plan)
+				if conflictsOnly {
+					data = filterConflictsOnly(plan, showContent)
+				}
+				return emitJSON(cmd.OutOrStdout(), "plan", data, conflictWarnings(plan), planNextActions(plan, root))
 			}
-			return printPlan(cmd.OutOrStdout(), plan, showContent)
+			return printPlan(cmd.OutOrStdout(), plan, showContent, conflictsOnly)
 		},
 	}
-	cmd.Flags().BoolVar(&showContent, "content", false, "show bounded desired-content previews for create and update actions")
+	cmd.Flags().BoolVar(&showContent, "content", false, "show bounded desired-content previews for create/update/conflict actions, plus current-content previews for conflicts")
+	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
 	return cmd
 }
 
@@ -271,24 +297,40 @@ func newApplyCommand(opts *options) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
-			captureWorkspaceMetrics(opts, root, true)
 			m, err := manifest.Load(root)
+			captureWorkspaceMetrics(opts, root, m.Recipe == "go-agent-tool")
 			if err != nil {
-				return fmt.Errorf("apply: %w", err)
+				return fmt.Errorf("apply: %w", classifyInvalidInput(err))
 			}
 			artifacts, err := recipe.Render(m)
 			if err != nil {
-				return fmt.Errorf("apply: %w", err)
+				return fmt.Errorf("apply: %w", classifyInvalidInput(err))
 			}
 			result, err := engine.Apply(root, m, artifacts)
 			if err != nil {
 				if errors.Is(err, engine.ErrPlanConflicts) {
-					return errors.New("apply: plan contains conflicts; run bob plan for details")
+					failure := newExitError(ExitConflicts, errors.New("apply: plan contains conflicts; run bob plan for details"))
+					conflicts := conflictSummaries(result.Plan.Actions)
+					if opts.json {
+						data := map[string]any{
+							"error":     map[string]string{"code": "conflicts", "message": failure.Error()},
+							"conflicts": conflicts,
+						}
+						next := nextActionsForFailure(failure, root)
+						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "apply", data, conflictWarnings(result.Plan), next); emitErr != nil {
+							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+						}
+						return reportedError{err: failure}
+					}
+					if printErr := printConflicts(cmd.OutOrStdout(), conflicts); printErr != nil {
+						return printErr
+					}
+					return failure
 				}
 				return fmt.Errorf("apply: %w", err)
 			}
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "apply", result, nil, []string{"review the repository diff", "run bob check"})
+				return emitJSON(cmd.OutOrStdout(), "apply", result, nil, []string{"review the repository diff", withWorkspaceArg("run bob check", root)})
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "applied: %d written, %d adopted, %d unchanged; lock written: %t\n", len(result.Written), len(result.Adopted), len(result.Unchanged), result.LockWritten)
 			return err
@@ -297,12 +339,14 @@ func newApplyCommand(opts *options) *cobra.Command {
 }
 
 func newCheckCommand(opts *options) *cobra.Command {
-	return &cobra.Command{
+	var conflictsOnly bool
+	cmd := &cobra.Command{
 		Use:   "check [path]",
 		Short: "Fail when managed repository state would change",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
+			opts.trackWorkspace(root)
 			plan, err := loadPlan(root)
 			if err != nil {
 				return fmt.Errorf("check: %w", err)
@@ -315,20 +359,35 @@ func newCheckCommand(opts *options) *cobra.Command {
 					break
 				}
 			}
-			data := map[string]any{"clean": clean, "plan": plan}
+			var failure error
+			if !clean {
+				code := ExitDrift
+				if plan.HasConflicts() {
+					code = ExitConflicts
+				}
+				failure = newExitError(code, errors.New("check: repository drift detected"))
+			}
+			reportPlan := any(plan)
+			if conflictsOnly {
+				reportPlan = filterConflictsOnly(plan, false)
+			}
+			data := map[string]any{"clean": clean, "plan": reportPlan}
 			if opts.json {
-				if err := emitJSONStatus(cmd.OutOrStdout(), clean, "check", data, conflictWarnings(plan), nil); err != nil {
+				var next []string
+				if failure != nil {
+					next = nextActionsForFailure(failure, root)
+				}
+				if err := emitJSONStatus(cmd.OutOrStdout(), clean, "check", data, conflictWarnings(plan), next); err != nil {
 					return err
 				}
 			} else if clean {
 				if _, err := fmt.Fprintln(cmd.OutOrStdout(), "clean: repository matches bob.yaml and bob.lock"); err != nil {
 					return err
 				}
-			} else if err := printPlan(cmd.OutOrStdout(), plan, false); err != nil {
+			} else if err := printPlan(cmd.OutOrStdout(), plan, false, conflictsOnly); err != nil {
 				return err
 			}
-			if !clean {
-				failure := errors.New("check: repository drift detected")
+			if failure != nil {
 				if opts.json {
 					return reportedError{err: failure}
 				}
@@ -337,6 +396,8 @@ func newCheckCommand(opts *options) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
+	return cmd
 }
 
 func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
@@ -346,10 +407,10 @@ func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
-			captureWorkspaceMetrics(opts, root, true)
 			m, err := manifest.Load(root)
+			captureWorkspaceMetrics(opts, root, m.Recipe == "go-agent-tool")
 			if err != nil {
-				return fmt.Errorf("doctor: %w", err)
+				return fmt.Errorf("doctor: %w", classifyInvalidInput(err))
 			}
 			result := doctor.Run(context.Background(), m, prober)
 			warnings := []string(nil)
@@ -357,7 +418,7 @@ func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
 				warnings = []string{"one or more optional tools are unavailable or failed their version probe"}
 			}
 			if opts.json {
-				if err := emitJSONStatus(cmd.OutOrStdout(), result.Ready, "doctor", result, warnings, nil); err != nil {
+				if err := emitJSONStatus(cmd.OutOrStdout(), result.Ready, "doctor", result, warnings, doctorNextActions(result)); err != nil {
 					return err
 				}
 			} else {
@@ -395,7 +456,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 		"product":        "deterministic repository factory and lifecycle reconciler",
 		"owns":           []string{"manifest validation", "recipe rendering", "repository plan", "generated-file ownership", "safe apply", "drift detection"},
 		"does_not_own":   []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
-		"recipe":         []string{"go-agent-tool"},
+		"recipe":         recipe.IDs(),
 	}
 	return &cobra.Command{
 		Use:   "explain",
@@ -403,7 +464,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "explain", data, nil, []string{"run bob recipe show go-agent-tool"})
+				return emitJSON(cmd.OutOrStdout(), "explain", data, nil, []string{"run bob recipe list"})
 			}
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Bob owns deterministic repository construction: manifest → plan → explicit apply → drift check.\nIt does not run models, schedule agents, manage secrets, or declare behavioral verification.")
 			return err
@@ -411,25 +472,187 @@ func newExplainCommand(opts *options) *cobra.Command {
 	}
 }
 
+func newLearnCommand(opts *options) *cobra.Command {
+	commands := []map[string]any{
+		{"name": "new", "purpose": "preview or create a new repository from the go-agent-tool recipe; --write authorizes creation", "mutates": true, "json": true},
+		{"name": "init", "purpose": "preview or write a Bob manifest in an existing repository; --write authorizes creation", "mutates": true, "json": true},
+		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
+		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
+		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
+		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
+		{"name": "inspect", "purpose": "summarize Bob state; --probe-integrations explicitly authorizes bounded specialist probes", "mutates": false, "json": true},
+		{"name": "config", "purpose": "inspect or initialize XDG user settings; init previews unless --write", "mutates": true, "json": true},
+		{"name": "stats", "purpose": "summarize privacy-bounded local usage aggregates", "mutates": false, "json": true},
+		{"name": "studio", "purpose": "interactive read-only repository and usage board; rejects --json", "mutates": false, "json": false},
+		{"name": "mcp", "purpose": "serve six repository-read-only MCP tools over stdio", "mutates": false, "json": false},
+		{"name": "explain", "purpose": "describe Bob's product contract and boundaries", "mutates": false, "json": true},
+		{"name": "learn", "purpose": "emit this onboarding brief for coding agents", "mutates": false, "json": true},
+		{"name": "recipe", "purpose": "inspect the embedded recipe catalog", "mutates": false, "json": true},
+		{"name": "version", "purpose": "print version and build metadata", "mutates": false, "json": true},
+	}
+	recipeIDs := recipe.IDs()
+	recipes := make([]map[string]any, 0, len(recipeIDs))
+	for _, id := range recipeIDs {
+		entry := recipeCatalogEntry(id)
+		recipes = append(recipes, map[string]any{"id": entry["id"], "version": entry["version"], "description": entry["description"]})
+	}
+	data := map[string]any{
+		"schema_version": 1,
+		"product":        "deterministic repository factory and lifecycle reconciler",
+		"summary":        "Bob compiles bob.yaml through a versioned recipe, compares desired artifacts with the working tree and bob.lock, and applies only changes whose ownership is proven.",
+		"lifecycle": []string{
+			"bob new|init previews by default; --write authorizes creation",
+			"bob plan compares desired state with the repository and lock without writing",
+			"bob apply writes only absent, identical, or previously managed files and refuses when any conflict exists",
+			"bob check exits non-zero in CI when generated infrastructure drifts",
+		},
+		"commands": commands,
+		"recipes":  recipes,
+		"json_envelope": map[string]any{
+			"flag":   "--json",
+			"fields": []string{"schema_version", "ok", "command", "data", "warnings", "next_actions"},
+			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
+		},
+		"invariants": []string{
+			"plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
+			"apply preflights the complete plan and writes nothing when any conflict exists",
+			"Bob never overwrites an unmanaged differing file",
+			"a managed file updates only when its current hash matches the prior lock",
+			"repeated apply converges to a no-op",
+		},
+		"exit_codes": map[string]string{
+			"0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
+			"1": "unclassified command failure",
+			"2": "apply refused a conflicted plan, or check found an ownership conflict",
+			"3": "check found drift with no ownership conflict",
+			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, or an unrecognized recipe id",
+		},
+		"error_codes": map[string]string{
+			"missing_manifest":  "no bob.yaml was found at the resolved workspace path",
+			"manifest_invalid":  "bob.yaml failed to parse or failed Validate; the message lists every problem",
+			"input_invalid":     "a flag, argument, or recipe id was invalid",
+			"conflicts":         "the plan contains one or more ownership conflicts; apply refused every write",
+			"workspace_invalid": "the workspace path could not be resolved safely",
+			"command_failed":    "an unclassified failure; read the message for detail",
+		},
+		"mcp": map[string]any{
+			"serve":     "bob mcp serve <workspace>",
+			"authority": "repository read-only; defaults to an exact startup workspace allowlist",
+			"tools":     []string{"bob_plan", "bob_check", "bob_inspect", "bob_stats", "bob_recipe_describe", "bob_validate_manifest"},
+		},
+		"boundaries": []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
+		"docs": map[string]any{
+			"site":      "https://bobcli.dev",
+			"agents":    "https://bobcli.dev/agents",
+			"reference": "https://bobcli.dev/reference/cli",
+		},
+	}
+	return &cobra.Command{
+		Use:   "learn",
+		Short: "Emit a one-shot onboarding brief for coding agents",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if opts.json {
+				return emitJSON(cmd.OutOrStdout(), "learn", data, nil, []string{"run bob doctor", "run bob plan <workspace> --json"})
+			}
+			var b strings.Builder
+			b.WriteString("Bob: deterministic repository factory and lifecycle reconciler.\n")
+			b.WriteString("Lifecycle: new|init (preview; --write creates) -> plan (read-only) -> apply (explicit, conflict-free only) -> check (CI drift gate).\n")
+			b.WriteString("Guarantees: plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
+			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")
+			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
+			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
+			b.WriteString("MCP: bob mcp serve <workspace> exposes six read-only tools (bob_plan, bob_check, bob_inspect, bob_stats, bob_recipe_describe, bob_validate_manifest).\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold) or files (declare any file tree inline; bob materializes it with plan/apply safety).\n")
+			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
+			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json\n")
+			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())
+			return err
+		},
+	}
+}
+
+const filesRecipeExampleManifest = `schema_version: 1
+recipe: files
+product:
+  name: my-app
+  description: A generated web service
+vars:
+  project_name: my-app
+  port: "8080"
+files:
+  - path: package.json
+    content: |
+      {"name": "${vars.project_name}"}
+  - path: scripts/run.sh
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      echo "listening on ${vars.port}"
+`
+
+func recipeCatalogEntry(id string) map[string]any {
+	version, err := recipe.Version(id)
+	if err != nil {
+		return nil
+	}
+	switch id {
+	case "files":
+		return map[string]any{
+			"id":          "files",
+			"version":     version,
+			"description": "declare any file tree inline; bob materializes it with plan/apply safety",
+			"surfaces":    []string{"cli", "json"},
+			"manifest_schema": map[string]any{
+				"vars":  `map[string]string; keys must match ^[a-z][a-z0-9_]*$; declared-but-unused vars are fine`,
+				"files": `list of {path, mode, content}; path must resolve inside the workspace; mode is an optional 3-4 digit octal permission string like "0644" (default "0644"; setuid, setgid, and sticky bits are rejected); content is written verbatim after substitution`,
+			},
+			"substitution": map[string]any{
+				"pattern":    `\$\{vars\.([a-z][a-z0-9_]*)\}`,
+				"rule":       "one literal-replacement regex pass, not a template language; text that does not match the pattern (including a shell's own ${FOO}) passes through untouched",
+				"unresolved": "a reference to an undeclared var is a render-time error; every unresolved reference across every file is collected, sorted, deduped, and reported in one error alongside its file path",
+			},
+			"path_safety": []string{
+				"paths cannot be absolute or escape the workspace",
+				"paths cannot target .git, bob.yaml, or bob.lock",
+				"duplicate paths, compared after the same canonicalization Bob uses for ownership, are rejected at validate time",
+			},
+			"ownership_note": "Bob owns file existence, mode, and byte-for-byte convergence for every declared path; it does not maintain file content over time. The person or agent editing bob.yaml owns what the content means and how it evolves.",
+			"example":        filesRecipeExampleManifest,
+		}
+	default:
+		return map[string]any{
+			"id":          "go-agent-tool",
+			"version":     version,
+			"description": "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",
+			"surfaces":    []string{"cli", "json"},
+		}
+	}
+}
+
 func newRecipeCommand(opts *options) *cobra.Command {
 	recipeCmd := &cobra.Command{Use: "recipe", Short: "Inspect the embedded recipe catalog"}
-	entry := map[string]any{
-		"id":          "go-agent-tool",
-		"version":     engine.RecipeVersion,
-		"description": "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",
-		"surfaces":    []string{"cli", "json"},
-	}
 	recipeCmd.AddCommand(
 		&cobra.Command{
 			Use:   "list",
 			Short: "List embedded recipes",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "recipe list", []any{entry}, nil, nil)
+				ids := recipe.IDs()
+				entries := make([]any, 0, len(ids))
+				for _, id := range ids {
+					entries = append(entries, recipeCatalogEntry(id))
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d  public-ready Go and Cobra CLI\n", engine.RecipeVersion)
-				return err
+				if opts.json {
+					return emitJSON(cmd.OutOrStdout(), "recipe list", entries, nil, nil)
+				}
+				for _, id := range ids {
+					entry := recipeCatalogEntry(id)
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s@%d  %s\n", entry["id"], entry["version"], entry["description"]); err != nil {
+						return err
+					}
+				}
+				return nil
 			},
 		},
 		&cobra.Command{
@@ -437,18 +660,44 @@ func newRecipeCommand(opts *options) *cobra.Command {
 			Short: "Show one embedded recipe",
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				if args[0] != "go-agent-tool" {
-					return fmt.Errorf("recipe show: unknown recipe %q", args[0])
+				entry := recipeCatalogEntry(args[0])
+				if entry == nil {
+					msg := fmt.Sprintf("recipe show: unknown recipe %q", args[0])
+					if suggestion, ok := strsim.Closest(args[0], recipe.IDs(), 2); ok {
+						msg += fmt.Sprintf("; did you mean %q?", suggestion)
+					}
+					return errors.New(msg)
 				}
 				if opts.json {
 					return emitJSON(cmd.OutOrStdout(), "recipe show", entry, nil, nil)
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.\n", engine.RecipeVersion)
+				if args[0] == "files" {
+					schema := entry["manifest_schema"].(map[string]any)
+					substitution := entry["substitution"].(map[string]any)
+					_, err := fmt.Fprintf(cmd.OutOrStdout(), "files@%d\n  %s\n\n  Manifest schema:\n    vars: %s\n    files: %s\n\n  Substitution:\n    pattern: %s\n    rule: %s\n    unresolved: %s\n\n  Path safety:\n    - %s\n\n  Ownership: %s\n\n  Example manifest:\n%s",
+						entry["version"], entry["description"],
+						schema["vars"], schema["files"],
+						substitution["pattern"], substitution["rule"], substitution["unresolved"],
+						strings.Join(entry["path_safety"].([]string), "\n    - "),
+						entry["ownership_note"],
+						indentLines(filesRecipeExampleManifest, "    "),
+					)
+					return err
+				}
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.\n", entry["version"])
 				return err
 			},
 		},
 	)
 	return recipeCmd
+}
+
+func indentLines(text, prefix string) string {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func newVersionCommand(opts *options) *cobra.Command {
@@ -477,35 +726,122 @@ func argumentPath(args []string) string {
 func loadPlan(root string) (engine.PlanResult, error) {
 	m, err := manifest.Load(root)
 	if err != nil {
-		return engine.PlanResult{}, err
+		return engine.PlanResult{}, classifyInvalidInput(err)
 	}
 	artifacts, err := recipe.Render(m)
 	if err != nil {
-		return engine.PlanResult{}, err
+		return engine.PlanResult{}, classifyInvalidInput(err)
 	}
 	return engine.Plan(root, m, artifacts)
 }
 
-func printPlan(w io.Writer, plan engine.PlanResult, showContent bool) error {
+func printPlan(w io.Writer, plan engine.PlanResult, showContent, conflictsOnly bool) error {
 	counts := map[engine.ActionKind]int{}
 	for _, action := range plan.Actions {
 		counts[action.Kind]++
+		if conflictsOnly && action.Kind != engine.ActionConflict {
+			continue
+		}
 		if _, err := fmt.Fprintf(w, "%-10s %s\n", action.Kind, action.Path); err != nil {
 			return err
 		}
-		if showContent && (action.Kind == engine.ActionCreate || action.Kind == engine.ActionUpdate) && action.DesiredPreview != "" {
+		if showContent && (action.Kind == engine.ActionCreate || action.Kind == engine.ActionUpdate || action.Kind == engine.ActionConflict) && action.DesiredPreview != "" {
 			if _, err := fmt.Fprintf(w, "--- desired preview ---\n%s\n--- end preview ---\n", action.DesiredPreview); err != nil {
 				return err
 			}
 		}
+		if showContent && action.Kind == engine.ActionConflict && action.CurrentPreview != "" {
+			if _, err := fmt.Fprintf(w, "--- current preview ---\n%s\n--- end preview ---\n", action.CurrentPreview); err != nil {
+				return err
+			}
+		}
 	}
-	if plan.LockChanged {
+	if plan.LockChanged && !conflictsOnly {
 		if _, err := fmt.Fprintln(w, "lock       bob.lock"); err != nil {
 			return err
 		}
 	}
 	_, err := fmt.Fprintf(w, "\n%d create, %d update, %d adopt, %d unchanged, %d conflict\n", counts[engine.ActionCreate], counts[engine.ActionUpdate], counts[engine.ActionAdopt], counts[engine.ActionUnchanged], counts[engine.ActionConflict])
 	return err
+}
+
+// filterConflictsOnly returns a copy of plan whose Actions are trimmed to
+// kind=conflict entries. includePreviews controls whether the surviving
+// entries keep their desired/current content previews; the --conflicts-only
+// flag is meant for compact output, so previews are stripped by default and
+// only kept when the caller also asked for --content.
+func filterConflictsOnly(plan engine.PlanResult, includePreviews bool) engine.PlanResult {
+	filtered := plan
+	actions := make([]engine.Action, 0, plan.ConflictCount)
+	for _, action := range plan.Actions {
+		if action.Kind != engine.ActionConflict {
+			continue
+		}
+		if !includePreviews {
+			action.DesiredPreview = ""
+			action.CurrentPreview = ""
+		}
+		actions = append(actions, action)
+	}
+	filtered.Actions = actions
+	return filtered
+}
+
+// conflictSummaries reduces a plan's actions to the compact {path, code,
+// reason} shape apply's own conflict envelope reports, so a caller does not
+// need a second `bob plan` round trip to see what blocked apply.
+func conflictSummaries(actions []engine.Action) []map[string]any {
+	conflicts := make([]map[string]any, 0)
+	for _, action := range actions {
+		if action.Kind != engine.ActionConflict {
+			continue
+		}
+		conflicts = append(conflicts, map[string]any{
+			"path":   action.Path,
+			"code":   action.Code,
+			"reason": action.Reason,
+		})
+	}
+	return conflicts
+}
+
+// printConflicts prints each conflicting path with its code and reason,
+// capped at 20 rows so a bounded agent harness never has to scroll past a
+// wall of conflicts to find its own next step.
+func printConflicts(w io.Writer, conflicts []map[string]any) error {
+	const limit = 20
+	shown := conflicts
+	remaining := 0
+	if len(conflicts) > limit {
+		shown = conflicts[:limit]
+		remaining = len(conflicts) - limit
+	}
+	for _, conflict := range shown {
+		if _, err := fmt.Fprintf(w, "conflict   %s  [%s] %s\n", conflict["path"], conflict["code"], conflict["reason"]); err != nil {
+			return err
+		}
+	}
+	if remaining > 0 {
+		if _, err := fmt.Fprintf(w, "...and %d more\n", remaining); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// doctorNextActions surfaces each unusable check's own note as a corrective
+// step. It returns an empty (non-nil) slice when every check is usable or no
+// unusable check carries a note, since Bob does not invent remediation text
+// it was not given.
+func doctorNextActions(result doctor.Result) []string {
+	next := make([]string, 0)
+	for _, check := range result.Checks {
+		if check.Usable || check.Note == "" {
+			continue
+		}
+		next = append(next, fmt.Sprintf("%s: %s", check.Name, check.Note))
+	}
+	return next
 }
 
 func conflictWarnings(plan engine.PlanResult) []string {
@@ -515,17 +851,17 @@ func conflictWarnings(plan engine.PlanResult) []string {
 	return []string{fmt.Sprintf("%d conflict(s) block apply", plan.ConflictCount)}
 }
 
-func planNextActions(plan engine.PlanResult) []string {
+func planNextActions(plan engine.PlanResult, workspace string) []string {
 	if plan.HasConflicts() {
-		return []string{"resolve unmanaged or modified-file conflicts", "rerun bob plan"}
+		return []string{"resolve unmanaged or modified-file conflicts", withWorkspaceArg("rerun bob plan", workspace)}
 	}
 	for _, action := range plan.Actions {
 		if action.Kind != engine.ActionUnchanged {
-			return []string{"review the plan", "run bob apply"}
+			return []string{"review the plan", withWorkspaceArg("run bob apply", workspace)}
 		}
 	}
 	if plan.LockChanged {
-		return []string{"review the lock update", "run bob apply"}
+		return []string{"review the lock update", withWorkspaceArg("run bob apply", workspace)}
 	}
 	return []string{"repository is converged"}
 }

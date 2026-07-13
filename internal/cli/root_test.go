@@ -128,6 +128,65 @@ func TestPlanJSONUsesVersionedEnvelope(t *testing.T) {
 	}
 }
 
+func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
+	t.Parallel()
+	stdout, _, err := executeForTest("learn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"deterministic repository factory", "plan", "apply", "https://bobcli.dev"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("learn text output missing %q:\n%s", want, stdout)
+		}
+	}
+	stdout, _, err = executeForTest("--json", "learn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		SchemaVersion int    `json:"schema_version"`
+		OK            bool   `json:"ok"`
+		Command       string `json:"command"`
+		Data          struct {
+			Lifecycle  []string `json:"lifecycle"`
+			Invariants []string `json:"invariants"`
+			Commands   []struct {
+				Name    string `json:"name"`
+				Mutates bool   `json:"mutates"`
+			} `json:"commands"`
+			MCP struct {
+				Tools []string `json:"tools"`
+			} `json:"mcp"`
+			ExitCodes  map[string]string `json:"exit_codes"`
+			ErrorCodes map[string]string `json:"error_codes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, stdout)
+	}
+	if got.SchemaVersion != 1 || !got.OK || got.Command != "learn" {
+		t.Fatalf("unexpected envelope: %#v", got)
+	}
+	if len(got.Data.Lifecycle) != 4 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 6 {
+		t.Fatalf("unexpected learn data: %#v", got.Data)
+	}
+	for _, command := range got.Data.Commands {
+		if command.Name == "learn" && command.Mutates {
+			t.Fatal("learn must describe itself as non-mutating")
+		}
+	}
+	for _, code := range []string{"0", "1", "2", "3", "4"} {
+		if _, ok := got.Data.ExitCodes[code]; !ok {
+			t.Fatalf("learn data.exit_codes missing %q: %#v", code, got.Data.ExitCodes)
+		}
+	}
+	for _, code := range []string{"missing_manifest", "manifest_invalid", "input_invalid", "conflicts", "workspace_invalid", "command_failed"} {
+		if _, ok := got.Data.ErrorCodes[code]; !ok {
+			t.Fatalf("learn data.error_codes missing %q: %#v", code, got.Data.ErrorCodes)
+		}
+	}
+}
+
 func TestCheckJSONReportsFailedOutcomeOnDrift(t *testing.T) {
 	t.Parallel()
 	target := filepath.Join(t.TempDir(), "acme")
@@ -155,7 +214,8 @@ func TestCheckJSONReportsFailedOutcomeOnDrift(t *testing.T) {
 func TestExecuteEmitsStructuredJSONForCommandError(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer
-	err := execute([]string{"--json", "plan", filepath.Join(t.TempDir(), "missing")}, Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}})
+	target := filepath.Join(t.TempDir(), "missing")
+	err := execute([]string{"--json", "plan", target}, Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}})
 	if err == nil {
 		t.Fatal("expected plan error")
 	}
@@ -164,15 +224,56 @@ func TestExecuteEmitsStructuredJSONForCommandError(t *testing.T) {
 		Command string `json:"command"`
 		Data    struct {
 			Error struct {
-				Code string `json:"code"`
+				Code    string `json:"code"`
+				Message string `json:"message"`
 			} `json:"error"`
 		} `json:"data"`
+		NextActions []string `json:"next_actions"`
 	}
 	if decodeErr := json.Unmarshal(stdout.Bytes(), &got); decodeErr != nil {
 		t.Fatalf("decode JSON: %v\n%s", decodeErr, stdout.String())
 	}
-	if got.OK || got.Command != "plan" || got.Data.Error.Code != "command_failed" {
+	if got.OK || got.Command != "plan" || got.Data.Error.Code != "missing_manifest" {
 		t.Fatalf("unexpected error envelope: %#v", got)
+	}
+	if len(got.NextActions) == 0 {
+		t.Fatalf("expected next_actions guidance for a missing manifest, got %#v", got)
+	}
+	foundInit := false
+	for _, action := range got.NextActions {
+		if strings.Contains(action, "bob init") {
+			foundInit = true
+		}
+	}
+	if !foundInit {
+		t.Fatalf("expected a bob init suggestion in next_actions, got %#v", got.NextActions)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("JSON-mode failure must not write extra stderr text, got %q", stderr.String())
+	}
+}
+
+// TestHumanFailurePrintsNextStepsAfterErrorLine proves that a non-JSON
+// invocation prints the same corrective guidance the JSON envelope carries,
+// as "next: ..." lines on stderr immediately after the "bob: ..." error line,
+// so a weak model that never passes --json can still self-recover.
+func TestHumanFailurePrintsNextStepsAfterErrorLine(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	target := filepath.Join(t.TempDir(), "missing")
+	err := execute([]string{"plan", target}, Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}})
+	if err == nil {
+		t.Fatal("expected plan error")
+	}
+	lines := strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected an error line followed by next steps, got %q", stderr.String())
+	}
+	if !strings.HasPrefix(lines[0], "bob: ") {
+		t.Fatalf("expected the error line first, got %q", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "next: ") {
+		t.Fatalf("expected a next: line after the error line, got %q", lines[1])
 	}
 }
 

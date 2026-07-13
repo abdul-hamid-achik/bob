@@ -10,14 +10,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
 
+// observation is a read-only snapshot of one destination path. conflictCode
+// and conflictReason are set instead of returning a hard error when the
+// destination (or a path component leading to it) is a symlink or another
+// non-regular file: those are workspace states Plan reports as per-path
+// conflicts, not reasons to abort the entire plan.
 type observation struct {
-	exists bool
-	hash   string
-	mode   fs.FileMode
+	exists         bool
+	hash           string
+	mode           fs.FileMode
+	conflictCode   string
+	conflictReason string
+}
+
+// pathConflict signals that an ancestor directory component of a destination
+// is a symlink or a non-directory, blocking safe traversal.
+type pathConflict struct {
+	code   string
+	reason string
 }
 
 func hashBytes(data []byte) string {
@@ -86,13 +101,24 @@ func destinationWithinRoot(root, relative string) error {
 	return nil
 }
 
+// inspectDestination observes one destination path without mutating it. A
+// symlink or non-regular file at the destination, or a symlinked or
+// non-directory ancestor component, is reported as a conflict observation
+// rather than a hard error: Plan turns these into per-path ActionConflict
+// actions instead of aborting. Genuinely unrecoverable conditions (an
+// unreadable ancestor, a destination that changes identity mid-read) still
+// return an error.
 func inspectDestination(root, relative string) (observation, error) {
 	if err := destinationWithinRoot(root, relative); err != nil {
 		return observation{}, err
 	}
 	destination := filepath.Join(root, filepath.FromSlash(relative))
-	if err := inspectPathComponents(root, destination); err != nil {
+	conflict, err := inspectPathComponents(root, destination)
+	if err != nil {
 		return observation{}, err
+	}
+	if conflict != nil {
+		return observation{exists: true, conflictCode: conflict.code, conflictReason: conflict.reason}, nil
 	}
 	info, err := os.Lstat(destination)
 	if errors.Is(err, os.ErrNotExist) {
@@ -101,8 +127,11 @@ func inspectDestination(root, relative string) (observation, error) {
 	if err != nil {
 		return observation{}, err
 	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return observation{exists: true, mode: info.Mode(), conflictCode: CodeSymlink, conflictReason: "destination is a symlink"}, nil
+	}
 	if !info.Mode().IsRegular() {
-		return observation{}, fmt.Errorf("destination is not a regular file")
+		return observation{exists: true, mode: info.Mode(), conflictCode: CodeSpecialFile, conflictReason: "destination is not a regular file"}, nil
 	}
 	file, err := os.Open(destination)
 	if err != nil {
@@ -127,12 +156,13 @@ func inspectDestination(root, relative string) (observation, error) {
 	}, nil
 }
 
-// inspectPathComponents rejects every existing symlink and non-directory
-// ancestor. The destination itself is inspected separately as a regular file.
-func inspectPathComponents(root, destination string) error {
+// inspectPathComponents flags every existing symlink and non-directory
+// ancestor as a conflict instead of erroring. The destination itself is
+// inspected separately.
+func inspectPathComponents(root, destination string) (*pathConflict, error) {
 	relative, err := filepath.Rel(root, destination)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	components := strings.Split(relative, string(os.PathSeparator))
 	current := root
@@ -140,19 +170,53 @@ func inspectPathComponents(root, destination string) error {
 		current = filepath.Join(current, component)
 		info, err := os.Lstat(current)
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return nil, nil
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if info.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("path component %s is a symlink", current)
+			return &pathConflict{code: CodeSymlink, reason: fmt.Sprintf("path component %s is a symlink", current)}, nil
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("path component %s is not a directory", current)
+			return &pathConflict{code: CodeSpecialFile, reason: fmt.Sprintf("path component %s is not a directory", current)}, nil
 		}
 	}
-	return nil
+	return nil, nil
+}
+
+// readCurrentPreview returns a bounded preview of a regular file's current
+// bytes, or "" when the path is missing, not a regular file, or unreadable.
+// It is called only for conflict/update actions on paths inspectDestination
+// already proved are regular files, so it never follows a symlink or opens a
+// special file; callers still guard on observation.conflictCode == "" as
+// defense in depth.
+func readCurrentPreview(destination string) string {
+	const limit = 2048
+	file, err := os.Open(destination)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return ""
+	}
+	if !utf8.Valid(data) {
+		return fmt.Sprintf("«binary content: %d bytes»", info.Size())
+	}
+	if int64(len(data)) <= limit {
+		return string(data)
+	}
+	end := limit
+	for end > 0 && !utf8.RuneStart(data[end]) {
+		end--
+	}
+	return string(data[:end]) + fmt.Sprintf("\n… preview truncated; %d total bytes", info.Size())
 }
 
 func ensureParentDirectories(root, relative string) error {
