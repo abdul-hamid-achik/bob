@@ -44,16 +44,27 @@ Bob owns the construction lifecycle instead:
 Bob does not run an LLM, infer application behavior, manage secrets, or declare a
 feature verified. Agent runtimes may drive Bob; evidence tools verify the result.
 
+## Install
+
+Install the release through the project tap:
+
+```bash
+brew tap abdul-hamid-achik/tap
+brew install --cask bob
+```
+
+Or install the current Go release directly:
+
+```bash
+go install github.com/abdul-hamid-achik/bob/cmd/bob@latest
+```
+
 ## Quick start
 
 Prerequisites: macOS or Linux and Go 1.26.5 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
 are optional and reported by `bob doctor` when selected.
 
 ```bash
-git clone https://github.com/abdul-hamid-achik/bob
-cd bob
-go install ./cmd/bob
-
 # Preview a new project. Nothing is written yet.
 bob new acme-tool \
   --module github.com/acme/acme-tool \

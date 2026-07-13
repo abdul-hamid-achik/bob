@@ -7,6 +7,8 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-12
+
 ### Added
 
 - Initial `go-agent-tool` repository recipe.
@@ -40,3 +42,6 @@ and the project uses semantic versioning after the first tagged release.
   templates, Dependabot, stronger CI, a security-patched Go baseline, and safe
   upgrades from older same-recipe locks.
 - Completed the Homebrew cask metadata and install guidance.
+
+[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.2.0

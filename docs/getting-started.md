@@ -1,6 +1,6 @@
 # Getting Started
 
-Build and use Bob from source in about five minutes.
+Install and use Bob in about five minutes.
 
 ## Prerequisites
 
@@ -9,7 +9,21 @@ Build and use Bob from source in about five minutes.
 - Git
 - Task is optional; direct Go commands work too
 
-Bob has no tagged release yet, so use a checkout-built binary:
+Install the release through the Homebrew tap:
+
+```bash
+brew tap abdul-hamid-achik/tap
+brew install --cask bob
+bob version
+```
+
+Alternatively, install with Go:
+
+```bash
+go install github.com/abdul-hamid-achik/bob/cmd/bob@latest
+```
+
+To build the current branch instead:
 
 ```bash
 git clone https://github.com/abdul-hamid-achik/bob

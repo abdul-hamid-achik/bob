@@ -51,8 +51,8 @@ bob.yaml + recipe + bob.lock + working tree
 | Monitor a workspace interactively | [Bob Studio](./studio.md) |
 | Connect Bob to an agent | [MCPHub & local-agent](./guides/mcphub-local-agent.md) |
 
-> Bob is early alpha. There is no tagged release yet. Build from a checkout,
-> review every plan, and inspect the resulting repository diff before publishing.
+> Bob is early alpha. Review every plan and inspect the resulting repository
+> diff before publishing.
 
 The normative product contract remains the root
 [`SPEC.md`](https://github.com/abdul-hamid-achik/bob/blob/main/SPEC.md). Release
