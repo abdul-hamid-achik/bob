@@ -1,7 +1,13 @@
+---
+description: How to build, test, lint, and ship Bob and its VitePress docs site from a fresh checkout.
+---
+
 # Development
 
 Bob is a Go 1.26.5 module with a small VitePress documentation site and optional
 Glyphrun terminal contract. Building the site requires Node.js 22 or newer.
+Nothing here mutates a real repository; that discipline applies to Bob's own
+build too.
 
 ## Setup
 
@@ -26,7 +32,8 @@ task ship            # complete local pre-release gate
 ```
 
 Use `task fmt` deliberately when you want to rewrite Go formatting. Verification
-never formats or tidies files in place.
+never formats or tidies files in place — it audits, it doesn't clean up after
+you.
 
 ## Documentation
 
@@ -41,9 +48,10 @@ expose them with `--host 0.0.0.0`; the publishable documentation artifact is
 the static output from `task docs-build`.
 
 User-facing guides and reference pages belong in `docs/`. Normative product
-behavior belongs in root `SPEC.md`; repository-visible design decisions belong
-in `docs/adr/`. Temporary notes, handoffs, and private filesystem details do not
-belong in the public repository.
+behavior lives on this site's reference pages — [Manifest](./reference/manifest.md)
+and [CLI](./reference/cli.md) — rather than a root `SPEC.md`; repository-visible
+design decisions belong in `docs/adr/`. Temporary notes, handoffs, and private
+filesystem details do not belong in the public repository.
 
 ## Live integration test
 

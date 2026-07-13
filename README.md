@@ -211,7 +211,6 @@ probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local
 - [ADR-0001: choose a repository factory](docs/adr/0001-repository-factory.md)
 - [ADR-0002: compact read-only MCP surface](docs/adr/0002-read-only-mcp.md)
 - [ADR-0003: local operator surfaces and rich MCP](docs/adr/0003-local-operator-surfaces.md)
-- [Specification](SPEC.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)

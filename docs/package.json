@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "vitepress": "2.0.0-alpha.18"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }

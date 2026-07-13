@@ -11,3 +11,5 @@
 .DS_Store
 *.swp
 *.tmp
+/docs/.vercel/
+/docs/.env.local

@@ -1,7 +1,8 @@
 # AGENTS.md
 
 This is the source of truth for people and coding agents working on Bob.
-`CLAUDE.md` defers here. Public product behavior is defined in `SPEC.md`; design
+`CLAUDE.md` defers here. Public product behavior is defined by the reference
+pages under `docs/reference/` (published at <https://bobcli.dev>); design
 decisions live in `docs/adr/`.
 
 ## Product boundary
@@ -38,8 +39,8 @@ Keep command handlers thin. Filesystem ownership and mutation rules belong in
 
 ## Invariants
 
-- `plan`, `check`, plain `inspect`, `stats`, `studio`, and `explain` do not
-  mutate repositories.
+- `plan`, `check`, plain `inspect`, `stats`, `studio`, `explain`, and `learn`
+  do not mutate repositories.
 - `inspect --probe-integrations` is explicit subprocess authority. It never
   initializes, indexes, resets, searches, or repairs a specialist tool.
 - The six MCP tools never mutate repositories or run specialist probes.
@@ -82,14 +83,22 @@ integration tests must isolate telemetry and state explicitly.
 
 ## Documentation discipline
 
+`docs/` is the published website. Every Markdown file in it (plus
+`docs/.vitepress/` and `docs/public/`) ships verbatim to <https://bobcli.dev>.
+Never place anything in `docs/` that is not intended for that site: no working
+notes, scratch files, plans, handoffs, TODO lists, or generated reports. If a
+file should not appear on bobcli.dev, it does not belong under `docs/`.
+
 User-facing tutorials, how-to guides, and reference pages belong in `docs/`.
-Normative product behavior belongs in root `SPEC.md`; architecture decisions
-belong in `docs/adr/`. `README.md` stays an orientation page rather than a
+Normative product behavior belongs in the reference pages under
+`docs/reference/`; architecture decisions belong in `docs/adr/`. `README.md` stays an orientation page rather than a
 second complete manual. Do not commit VitePress build output or dependencies.
+Coding agents should run `bob learn --json` (or read
+<https://bobcli.dev/agents>) before driving Bob.
 
 When a public contract changes, update the relevant README/docs page, the
-specification when normative behavior changes, the changelog, and any Glyphrun
-contract that proves the surface.
+reference pages when normative behavior changes, the changelog, and any
+Glyphrun contract that proves the surface.
 
 ## Public repository hygiene
 

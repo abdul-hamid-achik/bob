@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0e1116"/>
+  <!-- brick-built lowercase b: mutation orange stem, blueprint blue bowl -->
+  <rect x="16" y="10" width="10" height="44" rx="2" fill="#f25c1a"/>
+  <rect x="30" y="28" width="18" height="10" rx="2" fill="#6ca8ff"/>
+  <rect x="30" y="44" width="18" height="10" rx="2" fill="#6ca8ff"/>
+  <rect x="42" y="32" width="6" height="18" rx="2" fill="#6ca8ff"/>
+</svg>

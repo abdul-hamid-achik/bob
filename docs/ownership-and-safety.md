@@ -1,7 +1,12 @@
+---
+description: How Bob proves file ownership, why it refuses conflicts instead of guessing, and how to read a plan.
+---
+
 # Ownership & Safety
 
-Bob's defining feature is not file generation. It is proving when a generated
-file may be changed again.
+Bob's defining feature is not file generation. Any template engine can spray
+files onto a disk. Bob's job is proving when a generated file may be safely
+changed again, and refusing the moment it can't prove that.
 
 ## Two repository contracts
 
@@ -23,7 +28,7 @@ credentials, environment values, or execution history.
 | `conflict` | Ownership is absent, stale, or unsafe. | The complete apply is refused. |
 
 One conflict blocks every planned write. Bob never partially applies a plan it
-already knows is conflicted.
+already knows is conflicted. It would rather do nothing than do half a job.
 
 ## Files Bob refuses to own
 
@@ -35,18 +40,21 @@ Recipe output cannot target:
 - a pre-existing symlink, directory, device, socket, or named pipe.
 
 Bob also refuses to overwrite an unmanaged differing file or a managed file
-whose current hash no longer matches `bob.lock`.
+whose current hash no longer matches `bob.lock`. If you hand-edited a
+Bob-managed file, Bob notices, and it stops rather than clobbering your edit.
 
 ## Publication and crash recovery
 
 Changed files are staged as temporary siblings and published with atomic rename
 operations. Bob rechecks file and lock preconditions immediately before
-publication and writes `bob.lock` last.
+publication and writes `bob.lock` last, because the lock is the receipt and you
+don't hand out a receipt before the goods ship.
 
 The multi-file operation is not globally transactional. A process crash can
-publish some matching files before the new lock. The next `bob plan` reports the
-actual state and may classify those exact files as safe `adopt` actions. Review
-that plan before continuing.
+publish some matching files before the new lock lands. The next `bob plan`
+reports the actual state and may classify those exact files as safe `adopt`
+actions. Review that plan before continuing. Bob doesn't panic about a crash
+mid-apply; it just tells you exactly where the truck stopped.
 
 ## Commands and authority
 

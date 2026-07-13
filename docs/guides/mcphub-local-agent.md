@@ -1,8 +1,13 @@
+---
+description: Wire Bob's six read-only MCP tools into MCPHub and local-agent, and keep apply on the approved shell path.
+---
+
 # MCPHub & local-agent
 
 Bob exposes six typed MCP tools for repository orientation, validation,
-planning, convergence, recipe discovery, and aggregate local usage. Repository
-mutation stays on the agent runtime's normal approved shell path.
+planning, convergence, recipe discovery, and aggregate local usage. None of
+them mutate anything. Repository mutation stays exactly where it belongs: the
+agent runtime's normal approved shell path, with a human or a policy watching.
 
 ## Tools
 
@@ -150,3 +155,10 @@ bob inspect /path/to/project --probe-integrations
 Bob normalizes readiness information; it never searches code, calculates
 impact, repairs an index, or treats status as verification evidence. Cortex
 remains the owner of evidence-guided Vecgrep-to-Codemap investigation.
+
+## New here as a coding agent
+
+If an agent is reading this file to decide how to behave, start with
+[Bob for coding agents](../agents.md) instead. Run `bob learn --json` once,
+before touching MCP or the shell, for the full product brief in one read-only
+call.

@@ -1,8 +1,13 @@
+---
+description: Bob Studio is a read-only, interactive terminal board for Overview, Plan, and Stats — no apply button anywhere.
+---
+
 # Bob Studio
 
 Studio is Bob's interactive, repository-read-only operations board. It presents
 one coherent offline snapshot from the same inspection and planning packages as
-the CLI.
+the CLI. Think of it as the foreman's clipboard: it shows you the site, it does
+not hand you a hammer.
 
 ```bash
 bob studio .
@@ -55,7 +60,8 @@ of replacing useful state with an empty screen.
 Studio performs repository reads only. It has no apply, shell, editor, index,
 search, integration-probe, repair, or approval shortcut. Suggested next actions
 remain text for a person or agent to review and invoke through the normal
-approved command path.
+approved command path. If Studio suggests something, it is a note on the
+clipboard, not a signature on the work order.
 
 Codemap and Vecgrep availability is discovered offline. Studio never runs their
 status commands; use `bob inspect --probe-integrations` only when that extra

@@ -1,0 +1,81 @@
+/* ---------------------------------------------------------------------------
+ * Bob brand skin for the default VitePress theme.
+ * Semantic accents: blueprint blue = read-only, safety orange = mutation.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --bob-safety: #f25c1a;
+  --bob-safety-strong: #d84e10;
+  --bob-safety-soft: rgba(242, 92, 26, 0.14);
+  --bob-draft: #4f8fdd;
+  --bob-ink: #0e1116;
+  --bob-steel: #151b23;
+  --bob-line: #29323e;
+  --bob-bone: #e9edf2;
+  --bob-dim: #97a2b0;
+  --bob-create: #2fbf83;
+  --bob-conflict: #ff5c5c;
+  --bob-update: #d9b23d;
+
+  --vp-c-brand-1: var(--bob-safety-strong);
+  --vp-c-brand-2: var(--bob-safety);
+  --vp-c-brand-3: var(--bob-safety);
+  --vp-c-brand-soft: var(--bob-safety-soft);
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular,
+    Menlo, monospace;
+}
+
+.dark {
+  --vp-c-brand-1: #ff8b4d;
+  --vp-c-brand-2: var(--bob-safety);
+  --vp-c-brand-3: var(--bob-safety-strong);
+  --vp-c-bg: #0e1116;
+  --vp-c-bg-alt: #12161c;
+  --vp-c-bg-soft: #161c24;
+}
+
+/* Landing page, light theme: engineering paper. Cool white, blue drafting
+ * grid, darker accents for contrast. The dark tokens live in BobHome.vue. */
+html:not(.dark) .bob-home {
+  --ink: #f5f7fa;
+  --steel: #eef1f5;
+  --panel: #ffffff;
+  --line: #d7dee8;
+  --bone: #1a222c;
+  --dim: #55606e;
+  --safety: #e05513;
+  --safety-bright: #d84e10;
+  --draft: #2f6fc4;
+  --create: #157f52;
+  --update: #8a6d14;
+  --conflict: #c53030;
+  background:
+    linear-gradient(rgba(47, 111, 196, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 111, 196, 0.06) 1px, transparent 1px),
+    var(--ink);
+  background-size: 32px 32px, 32px 32px, auto;
+}
+
+html:not(.dark) .bob-home .term {
+  box-shadow: 0 24px 60px rgba(26, 34, 44, 0.18);
+}
+
+html:not(.dark) .bob-home .card,
+html:not(.dark) .bob-home .cards .card {
+  box-shadow: 0 1px 3px rgba(26, 34, 44, 0.06);
+}
+
+.VPNavBarTitle .title {
+  font-family: 'Archivo Black', 'Archivo', var(--vp-font-family-base);
+  letter-spacing: 0.02em;
+}
+
+/* Buttons keep the hard-hat orange in both modes */
+.VPButton.brand {
+  background-color: var(--bob-safety);
+  border-color: var(--bob-safety);
+}
+.VPButton.brand:hover {
+  background-color: var(--bob-safety-strong);
+  border-color: var(--bob-safety-strong);
+}

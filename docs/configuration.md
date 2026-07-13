@@ -1,8 +1,12 @@
+---
+description: How Bob resolves XDG paths, initializes user settings, and handles opt-in local-only telemetry.
+---
+
 # Configuration & local telemetry
 
 Bob keeps repository intent in `bob.yaml` and machine-local user preferences in
 an XDG-style settings file. A missing user settings file is valid and leaves
-telemetry disabled.
+telemetry disabled. No settings file, no telemetry, no drama.
 
 ## Inspect the effective configuration
 
@@ -83,10 +87,11 @@ BOB_TELEMETRY=false bob plan .
 ```
 
 Enabling telemetry does not enable a service or network request. Bob has no
-telemetry transport. It writes one bounded JSON event per recorded operation
-under `<state_dir>/telemetry/v1/YYYY-MM-DD/`, with private directories and
-files. Recording is best-effort: a full, unavailable, or damaged telemetry
-store cannot change the command's product result.
+telemetry transport, full stop. It writes one bounded JSON event per recorded
+operation under `<state_dir>/telemetry/v1/YYYY-MM-DD/`, with private
+directories and files. Recording is best-effort: a full, unavailable, or
+damaged telemetry store cannot change the command's product result. The ledger
+is for your benefit, not a dependency of the work.
 
 The durable event schema can contain only:
 
@@ -99,7 +104,8 @@ The durable event schema can contain only:
 It has no field for a raw path, argument, filename, file or manifest content,
 free-form label, model input/output, secret, or raw error. The canonical path is
 used only as HMAC input and is not persisted. Pseudonyms are comparable only
-within the local store that owns the random HMAC key.
+within the local store that owns the random HMAC key. Bob keeps a count, not a
+diary.
 
 Bob records `new`, `init`, `plan`, `apply`, `check`, `doctor`, and `inspect` on
 the CLI. MCP records its corresponding inspect, plan, check, manifest

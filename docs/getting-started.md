@@ -1,6 +1,12 @@
+---
+description: Install Bob and go from an empty directory to a converged, agent-ready Go repository in about five minutes.
+---
+
 # Getting Started
 
-Install and use Bob in about five minutes.
+Bob does not brainstorm. Give it a name, a module path, and a description, and
+it hands back a plan. Approve the plan, and it builds. Five minutes, no
+surprises.
 
 ## Prerequisites
 
@@ -42,12 +48,13 @@ bob new acme-tool \
   --description "Agent-ready Acme CLI"
 ```
 
-The preview prints the proposed `bob.yaml` and the number of files Bob would
-create. It does not create the target directory.
+This is a preview. Bob prints the proposed `bob.yaml` and the number of files
+it would create, and it touches nothing on disk. No target directory, no
+surprise scaffolding waiting for you tomorrow.
 
 ## Create it explicitly
 
-Repeat the command with `--write`:
+Nothing gets built until you say `--write`. Repeat the command:
 
 ```bash
 bob new acme-tool \
@@ -57,7 +64,7 @@ bob new acme-tool \
 ```
 
 Bob writes the manifest, renders the recipe, applies one conflict-free plan,
-and publishes `bob.lock` last.
+and publishes `bob.lock` last. The lock is Bob's receipt, not yours to edit.
 
 ## Confirm convergence
 
@@ -68,8 +75,9 @@ bob check
 go test ./...
 ```
 
-A newly created project should report only `unchanged` actions, with no lock
-change. `bob check` then exits successfully.
+A newly created project reports only `unchanged` actions, with no lock change.
+`bob check` exits `0`. Run it again if you don't believe it. Run it a third
+time out of spite. It stays `0`. That is the feature.
 
 ## What Bob created
 
@@ -84,8 +92,15 @@ The default manifest creates:
 - Codemap and Vecgrep integration guidance plus a Glyphrun terminal contract.
 
 The same recipe can add Cairntrace, TinyVault, and file.cheap seams when the
-manifest selects them. A selection adds guidance and capability checks; it does
-not mean Bob ran or verified the external tool.
+manifest selects them. A selection adds guidance and capability checks. It does
+not mean Bob ran the tool, indexed anything, or vouches for it. Bob signs off on
+files, not on vendors.
+
+## If a coding agent is driving
+
+Point it at [Bob for coding agents](./agents.md) and have it run `bob learn --json`
+first. That single, read-only command briefs the agent on the whole product
+contract before it plans anything.
 
 ## Next steps
 
@@ -94,3 +109,4 @@ not mean Bob ran or verified the external tool.
 - Open [Bob Studio](./studio.md) for a read-only interactive workspace view.
 - Read the [Manifest Reference](./reference/manifest.md) before changing capabilities.
 - Use [MCPHub & local-agent](./guides/mcphub-local-agent.md) to expose Bob to an agent.
+- Onboard a coding agent with [Bob for coding agents](./agents.md).
