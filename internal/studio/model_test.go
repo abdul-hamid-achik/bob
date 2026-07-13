@@ -205,6 +205,15 @@ func TestRenderFitsTerminalAtSupportedSizes(t *testing.T) {
 	}
 }
 
+func TestWindowSizeBeforeInitialSnapshotDoesNotPanic(t *testing.T) {
+	m := NewModel("/tmp/acme", fakeSource{}, false)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24})
+	got := updated.(Model)
+	if got.width != 90 || got.height != 24 || got.snapshot != nil {
+		t.Fatalf("unexpected pre-snapshot resize state: %#v", got)
+	}
+}
+
 func TestSinglePaneStillShowsSelectedPlanDetail(t *testing.T) {
 	m := loadedModel(t)
 	m.singlePane = true

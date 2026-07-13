@@ -342,6 +342,9 @@ func (m Model) statsLines() []string {
 }
 
 func (m Model) statsTotalLines() []string {
+	if m.snapshot == nil {
+		return m.loadingLines()
+	}
 	stats := m.snapshot.Stats
 	status := "disabled"
 	window := "No local usage events are being recorded."
@@ -363,6 +366,9 @@ func (m Model) statsTotalLines() []string {
 }
 
 func (m Model) statsOperationLines() []string {
+	if m.snapshot == nil {
+		return nil
+	}
 	stats := m.snapshot.Stats
 	keys := make([]string, 0, len(stats.PerOperation))
 	for key := range stats.PerOperation {
