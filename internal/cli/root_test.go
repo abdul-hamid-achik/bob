@@ -204,6 +204,57 @@ func TestDoctorAllowsMissingOptionalTool(t *testing.T) {
 	}
 }
 
+func TestInspectIsOfflineAndReportsExplicitProbeContinuation(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := executeForTest("inspect", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Bob        clean") || !strings.Contains(stdout, "not_requested") || !strings.Contains(stdout, "--probe-integrations") {
+		t.Fatalf("unexpected inspection output: %s", stdout)
+	}
+}
+
+func TestInspectJSONKeepsStructuredArgv(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := executeForTest("--json", "inspect", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Data struct {
+			NextActions []struct {
+				Argv []string `json:"argv"`
+			} `json:"next_actions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Data.NextActions) == 0 || len(got.Data.NextActions[0].Argv) == 0 {
+		t.Fatalf("structured continuation missing: %s", stdout)
+	}
+}
+
+func TestMCPServeHelpDocumentsStdioRegistration(t *testing.T) {
+	t.Parallel()
+	stdout, _, err := executeForTest("mcp", "serve", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "stdout is reserved") || !strings.Contains(stdout, "mcphub add bob") {
+		t.Fatalf("unexpected MCP help: %s", stdout)
+	}
+}
+
 func executeForTest(args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := New(Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}})

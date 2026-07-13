@@ -12,6 +12,7 @@ import (
 
 	"github.com/abdul-hamid-achik/bob/internal/doctor"
 	"github.com/abdul-hamid-achik/bob/internal/engine"
+	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
 	"github.com/abdul-hamid-achik/bob/internal/version"
@@ -19,9 +20,10 @@ import (
 )
 
 type Dependencies struct {
-	Out    io.Writer
-	ErrOut io.Writer
-	Prober doctor.Prober
+	Out               io.Writer
+	ErrOut            io.Writer
+	Prober            doctor.Prober
+	IntegrationRunner inspectpkg.Runner
 }
 
 type options struct {
@@ -29,7 +31,7 @@ type options struct {
 }
 
 func Execute() error {
-	return execute(os.Args[1:], Dependencies{Out: os.Stdout, ErrOut: os.Stderr, Prober: doctor.ExecProber{}})
+	return execute(os.Args[1:], Dependencies{Out: os.Stdout, ErrOut: os.Stderr, Prober: doctor.ExecProber{}, IntegrationRunner: inspectpkg.ExecRunner{}})
 }
 
 type reportedError struct{ err error }
@@ -41,7 +43,7 @@ func execute(args []string, deps Dependencies) error {
 	cmd := New(deps)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
-	if err == nil || !jsonRequested(args) {
+	if err == nil || !jsonRequested(args) || mcpRequested(args) {
 		return err
 	}
 	var reported reportedError
@@ -67,6 +69,9 @@ func New(deps Dependencies) *cobra.Command {
 	if deps.Prober == nil {
 		deps.Prober = doctor.ExecProber{}
 	}
+	if deps.IntegrationRunner == nil {
+		deps.IntegrationRunner = inspectpkg.ExecRunner{}
+	}
 	opts := &options{}
 	root := &cobra.Command{
 		Use:           "bob",
@@ -85,6 +90,8 @@ func New(deps Dependencies) *cobra.Command {
 		newApplyCommand(opts),
 		newCheckCommand(opts),
 		newDoctorCommand(opts, deps.Prober),
+		newInspectCommand(opts, deps.IntegrationRunner),
+		newMCPCommand(deps.IntegrationRunner),
 		newExplainCommand(opts),
 		newRecipeCommand(opts),
 		newVersionCommand(opts),
@@ -537,4 +544,14 @@ func commandFromArgs(args []string) string {
 		return arg
 	}
 	return "bob"
+}
+
+func mcpRequested(args []string) bool {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg == "mcp"
+	}
+	return false
 }

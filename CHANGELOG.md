@@ -13,3 +13,7 @@ and the project uses semantic versioning after the first tagged release.
 - Versioned `bob.yaml` manifest and content-hashed `bob.lock` ownership file.
 - Deterministic plan, explicit apply, drift checking, and dependency doctor.
 - Human-readable and versioned JSON command output.
+- Offline `bob inspect` readiness inventory with explicit bounded Codemap and
+  Vecgrep status probing.
+- Typed read-only stdio MCP server with compact `bob_inspect` and `bob_plan`
+  tools for MCPHub and local-agent.

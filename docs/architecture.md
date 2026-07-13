@@ -1,6 +1,6 @@
 # Architecture
 
-Bob 0.1 is a deterministic repository planner and whole-file reconciler. The
+Bob is a deterministic repository planner and whole-file reconciler. The
 implemented architecture separates the manifest, recipe, observed files,
 planning, mutation, and drift checks so generation remains inspectable.
 
@@ -9,7 +9,7 @@ planning, mutation, and drift checks so generation remains inspectable.
 ```text
                   human or agent
                         |
-                   CLI / JSON
+              CLI / JSON / read-only MCP
                         |
                         v
                   manifest loader
@@ -31,9 +31,9 @@ planning, mutation, and drift checks so generation remains inspectable.
             generated files + bob.lock
 ```
 
-There is one implemented product surface: the CLI with human-readable or
-versioned JSON output. MCP and Studio are future projections, not current
-surfaces.
+The CLI provides human-readable and versioned JSON output. A thin stdio MCP
+projection exposes offline inspection and compact planning. Studio and MCP
+mutation are not implemented.
 
 ## Implemented components
 
@@ -102,6 +102,31 @@ action is `unchanged`. It is suitable for CI drift detection.
 version commands. Missing required tools make the result not ready. Missing or
 failed optional probes produce an explicit degraded result.
 
+### Workspace inspection
+
+`inspect` combines Bob's existing plan engine with integration readiness. Its
+default path is offline: it reads the workspace and discovers selected binaries
+without launching them. `--probe-integrations` explicitly calls Codemap and
+Vecgrep status commands through direct argv, ten-second deadlines, and bounded
+stdout/stderr capture.
+
+Probe results are normalized into Bob-owned schema values. Upstream raw output
+is neither persisted nor treated as investigation or verification evidence.
+Bob validates that each reported project root matches the canonical requested
+workspace and never initializes, indexes, resets, migrates, searches, or repairs
+a specialist tool.
+
+### MCP projection
+
+`bob mcp serve` uses the official Go MCP SDK and newline-delimited stdio. It
+exposes exactly `bob_inspect` and `bob_plan`; both publish read-only,
+non-destructive, idempotent, closed-world annotations and inferred input/output
+schemas.
+
+The MCP inspector never enables specialist probes. The MCP planner returns a
+compact action projection without desired-content previews or mutation. Agents
+must use the separately approved CLI path for `bob apply`, then re-plan.
+
 ### Output
 
 All commands support a global `--json` flag. Structured stdout uses a versioned
@@ -117,11 +142,14 @@ internal/manifest/   strict schema, load, validation, and write
 internal/recipe/     embedded recipe and artifact rendering
 internal/engine/     plan, whole-file ownership, safe apply, and lock
 internal/doctor/     bounded dependency probes
+internal/inspect/    offline inventory and explicit specialist status probes
+internal/mcp/        typed read-only stdio projection
 internal/version/    build metadata
+internal/workspace/  shared canonical workspace resolution
 ```
 
-The CLI coordinates these packages. There is no MCP package, Studio package,
-persistent store, verifier, or integration orchestrator in version 0.1.
+The CLI coordinates these packages. There is no Studio package, persistent
+store, verifier, MCP mutation handler, or integration orchestrator.
 
 ## Ecosystem ownership map
 
@@ -132,7 +160,7 @@ Bob declares optional seams without absorbing specialist behavior.
 | Repository desired state | Bob | Render, plan, apply, and check whole files |
 | Agent reasoning and goals | Agent runtime | Invoke Bob through CLI/JSON |
 | Evidence-guided investigation | Reasoning kernel | Outside Bob; may inspect Bob output |
-| MCP aggregation and harness sync | MCP gateway | Outside Bob; Bob has no MCP surface yet |
+| MCP aggregation and harness sync | MCP gateway | Bob supplies two read-only tools; gateway owns routing and sync |
 | Structural code impact | Code graph tool | Optional generated seam and doctor probe |
 | Semantic search | Search tool | Optional generated seam and doctor probe |
 | Secrets | Secret broker | Optional generated seam; Bob stores no secret values |
@@ -176,8 +204,9 @@ Plans, command executions, and verification receipts are not stored.
 
 Future work may add:
 
-- thin MCP and Studio surfaces over the same deterministic engine;
-- standalone `inspect`, `adopt`, and `verify` workflows;
+- Studio projections over the same deterministic engine;
+- digest-gated, receipt-bearing MCP apply after its race and retry semantics are specified;
+- standalone `adopt` and `verify` workflows;
 - bounded, redacted persistent verification receipts;
 - additional recipe versions and languages;
 - explicit deletion and migration plans;

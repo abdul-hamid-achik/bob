@@ -1,6 +1,6 @@
 # Bob specification
 
-Status: v0.1 draft
+Status: v0.2 draft
 
 ## Purpose
 
@@ -71,6 +71,11 @@ run `apply` inside an untrusted, concurrently mutated directory tree.
 - `apply` is the explicit repository mutation command.
 - `check` exits non-zero when the repository or lock would change.
 - `doctor` probes declared dependencies with bounded direct commands.
+- `inspect` summarizes Bob state and binary availability without launching
+  specialist tools by default. `--probe-integrations` explicitly authorizes
+  bounded Codemap and Vecgrep status calls.
+- `mcp serve` exposes the read-only `bob_inspect` and `bob_plan` tools over
+  newline-delimited stdio.
 - `explain` describes Bob's capability and ecosystem boundary.
 - `recipe list|show` describes the embedded recipe catalog.
 - `version` reports build metadata.
@@ -78,9 +83,23 @@ run `apply` inside an untrusted, concurrently mutated directory tree.
 All agent-oriented commands support `--json`. JSON stdout uses a versioned
 envelope and contains no progress logging or ANSI escapes.
 
+## MCP behavior
+
+The MCP surface is a thin typed projection over manifest, recipe, engine, and
+inspection packages. It does not invoke Cobra or parse CLI JSON. Both tools are
+read-only, non-destructive, idempotent, and closed-world.
+
+`bob_inspect` never runs integration status probes. `bob_plan` omits desired
+content previews and returns exact paths, action kinds, hashes, modes, warnings,
+and argv-shaped next actions. A computed conflict is a successful plan result
+that contains no mutation authority.
+
+MCP mutation is outside v0.2. Agents apply through the normal approved
+`bob apply <workspace>` command and then plan again.
+
 ## Non-goals
 
 Bob does not implement model inference, autonomous task planning, behavioral
 acceptance truth, secrets, arbitrary plugins, background execution, remote
 repository creation, commits, pushes, tags, package publication, or hosted
-deployment in v0.1.
+deployment in v0.2. Repository mutation over MCP is also outside v0.2.

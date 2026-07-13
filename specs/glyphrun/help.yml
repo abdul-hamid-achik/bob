@@ -34,4 +34,14 @@ outcomes:
       verify:
         screen:
             contains: deterministic repository factory
-contractHash: sha256:68fa94f2b1ef68ca9914f33acc30ce190f4fa89bcccfec3f024c3eae62d2d076
+    - id: lists_inspect
+      description: help lists the offline workspace inventory command
+      verify:
+        screen:
+            contains: inspect
+    - id: lists_mcp
+      description: help lists the compact MCP surface
+      verify:
+        screen:
+            contains: mcp
+contractHash: sha256:b549fe2e186cec835c36d29c36c03935cbd1d53ba13b983d3f870c84acb1b720

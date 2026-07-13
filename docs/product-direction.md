@@ -62,7 +62,7 @@ not invent or reconstruct application business logic.
 - **Public by default:** the initial recipe includes the foundations for
   documentation, contribution, testing, security, and release packaging.
 
-## Implemented version 0.1 workflow
+## Implemented workflow
 
 ```text
 bob.yaml + embedded recipe + observed files + bob.lock
@@ -92,11 +92,14 @@ bob explain             describe Bob's contract and boundaries
 bob recipe list         list embedded recipes
 bob recipe show <id>    describe an embedded recipe
 bob version             print build metadata
+bob inspect [path]      summarize Bob and integration readiness
+bob mcp serve           expose compact read-only MCP tools
 ```
 
 `new` and `init` preview by default and require `--write` to create files.
-`plan` and `check` are read-only. Every command supports the global `--json`
-flag.
+`plan`, `check`, and plain `inspect` are read-only. Integration probes require
+an explicit inspect flag. Normal CLI commands support the global `--json` flag;
+MCP stdio reserves stdout for JSON-RPC.
 
 ## Implemented version 0.1 scope
 
@@ -115,7 +118,7 @@ action for an unmanaged regular file whose content already matches exactly; it
 is not a standalone `bob adopt` command or a claim that an existing application
 was behaviorally imported.
 
-## Version 0.1 boundaries
+## Current boundaries
 
 Bob 0.1 does not:
 
@@ -124,8 +127,8 @@ Bob 0.1 does not:
 - overwrite an unmanaged differing file or a managed file changed by a person;
 - own managed blocks inside otherwise user-owned files;
 - delete generated files;
-- expose MCP or Studio surfaces;
-- provide standalone `inspect`, `adopt`, or `verify` commands;
+- expose Studio or MCP mutation surfaces;
+- provide standalone `adopt` or `verify` commands;
 - persist plans, execution histories, or verification receipts;
 - implement a general plugin system;
 - create commits, push branches, tag releases, publish packages, or create
@@ -134,10 +137,10 @@ Bob 0.1 does not:
 
 ## Future directions
 
-Possible later additions include compact MCP and Studio projections over the
-same core, richer repository inspection, an explicit existing-repository
-adoption workflow, and bounded verification receipts. Those features must not
-weaken deterministic planning, whole-file ownership, or explicit mutation.
+Possible later additions include a Studio projection, digest-gated MCP apply,
+richer repository inspection, an explicit existing-repository adoption
+workflow, and bounded verification receipts. Those features must not weaken
+deterministic planning, whole-file ownership, or explicit mutation.
 
 ## Success criteria
 
