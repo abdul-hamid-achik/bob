@@ -5,7 +5,49 @@ All notable changes to Bob will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning after the first tagged release.
 
-## [Unreleased]
+## [0.3.0] - 2026-07-13
+
+### Added
+
+- `files` recipe (`files@1`): declare an arbitrary file tree inline in
+  `bob.yaml` with `files:` and `vars:`, materialized with the same plan/apply
+  ownership safety as `go-agent-tool`. Substitution is a single deterministic
+  `${vars.key}` literal-replacement pass — not a template language — and
+  unresolved references fail rendering with every offender listed.
+- Machine-readable action codes: every plan action now carries a stable
+  `code` (`unmanaged_differs`, `managed_hash_mismatch`, `symlink`,
+  `retired_owned`, …) in CLI JSON and the MCP `bob_plan`/`bob_check` tools, so
+  agents branch on codes instead of parsing English reasons.
+- Bounded `current_preview` next to `desired_preview` on conflict and update
+  actions in plan JSON; `plan --content` prints both sides for conflicts.
+- Exit-code contract: `0` success, `1` internal error, `2` conflicts
+  (`apply` refusal, `check`), `3` drift without conflicts (`check`),
+  `4` invalid input or manifest. `plan` remains a report and exits `0`.
+- JSON failure envelopes now carry a closed error-code vocabulary
+  (`missing_manifest`, `manifest_invalid`, `conflicts`, `input_invalid`,
+  `workspace_invalid`) and populated `next_actions` with copy-pasteable
+  corrective commands; human failures print the same next steps on stderr.
+- `apply` refused by conflicts now reports the conflicting paths with codes
+  and reasons (JSON `data.conflicts` and bounded human list) instead of
+  requiring a second `plan` round-trip.
+- `--conflicts-only` on `plan` and `check` for compact output in
+  output-capped agent harnesses.
+- Validation errors echo the offending value and suggest close matches
+  ("did you mean") for recipe ids and enum fields; missing `bob.yaml` errors
+  name the fix instead of a raw `lstat` errno.
+- `bob learn`: a one-shot, read-only onboarding brief for coding agents with a
+  versioned `--json` envelope covering the lifecycle, command catalog, safety
+  invariants, exit codes, error codes, MCP surface, and documentation
+  locations.
+- Public documentation site at <https://bobcli.dev>: custom VitePress theme,
+  agent-focused `/agents` guide, sitemap, and search-engine metadata.
+
+### Changed
+
+- Recipe versions are now tracked per recipe id (`go-agent-tool@3`,
+  `files@1`); `bob.lock` stamps the version of the manifest's own recipe.
+- The normative specification moved from the repository (`SPEC.md`) to the
+  published reference pages at <https://bobcli.dev>.
 
 ## [0.2.0] - 2026-07-12
 
