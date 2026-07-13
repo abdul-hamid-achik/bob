@@ -10,10 +10,21 @@ import (
 	"strings"
 	"testing"
 
+	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
 
 type testProber struct{}
+
+type testIntegrationRunner struct{}
+
+func (testIntegrationRunner) LookPath(name string) (string, error) {
+	return "/usr/bin/" + name, nil
+}
+
+func (testIntegrationRunner) Run(context.Context, string, string, ...string) inspectpkg.CommandResult {
+	return inspectpkg.CommandResult{}
+}
 
 func (testProber) LookPath(name string) (string, error) {
 	if name == "goreleaser" {
@@ -257,7 +268,7 @@ func TestMCPServeHelpDocumentsStdioRegistration(t *testing.T) {
 
 func executeForTest(args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
-	cmd := New(Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}})
+	cmd := New(Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	return stdout.String(), stderr.String(), err
