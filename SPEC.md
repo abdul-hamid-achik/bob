@@ -19,12 +19,13 @@ bob.yaml + recipe + observed files + bob.lock
           repository + new bob.lock
 ```
 
-## Version 0.1 scope
+## Current scope
 
-Version 0.1 supports one recipe, `go-agent-tool`. It creates a Go command-line
-project with a thin Cobra entrypoint, JSON output, version and doctor commands,
-tests, public documentation, Task tasks, CI, optional GoReleaser configuration,
-and an optional Glyphrun behavior spec.
+Bob supports one recipe, `go-agent-tool`, currently at recipe version 2. It
+creates a Go command-line project with a thin Cobra entrypoint, JSON output,
+version and doctor commands, tests, public and agent documentation, community
+templates for GitHub modules, non-mutating verification, vulnerability scans,
+CI, optional GoReleaser configuration, and an optional Glyphrun behavior spec.
 
 Release archives target macOS and Linux. Windows publication is deferred until
 Bob has a tested atomic file-replacement implementation for that platform.
@@ -46,7 +47,18 @@ For every desired artifact, planning returns exactly one state:
   now wants different content;
 - `conflict`: ownership is absent or stale, or the destination is unsafe.
 
-Any conflict blocks the complete apply. Bob does not delete files in v0.1.
+Any conflict blocks the complete apply. Bob does not delete files.
+
+## Recipe upgrades
+
+A lock from an older positive version of the same recipe is a safe upgrade
+input because it records the exact hash of every previously managed whole file.
+Planning uses those hashes for ownership decisions, renders the current recipe,
+and proposes the new lock version. Untouched managed files may update, new files
+may be created, and human-modified files remain conflicts.
+
+A lock whose recipe version is newer than the running Bob binary is rejected.
+Bob never changes the content of a published recipe version in place.
 
 ## Filesystem safety
 
@@ -58,7 +70,7 @@ is published last. Multi-file publication is not globally transactional, so a
 process crash can leave a partially applied tree. A subsequent plan reports the
 exact state and may safely adopt already-published matching files.
 
-Path publication is pathname-based in v0.1. A concurrent same-user process that
+Path publication is pathname-based. A concurrent same-user process that
 swaps a checked parent directory is an OS-containment boundary; callers must not
 run `apply` inside an untrusted, concurrently mutated directory tree.
 

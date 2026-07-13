@@ -1,0 +1,33 @@
+schema_version: 1
+recipe: go-agent-tool
+
+product:
+  name: integrated-tool
+  module: github.com/example/integrated-tool
+  description: Public Go CLI with local intelligence integration seams
+  visibility: public
+  license: MIT
+
+runtime:
+  language: go
+  kind: cli
+
+surfaces:
+  cli: true
+  json: true
+  mcp: false
+  studio: false
+
+integrations:
+  code_structure: codemap
+  semantic_search: vecgrep
+  terminal_verification: glyphrun
+  browser_verification: cairntrace
+  secrets: tinyvault
+  artifacts: fcheap
+
+distribution:
+  github_actions: true
+  goreleaser: true
+  homebrew: false
+  docs: markdown

@@ -35,8 +35,11 @@ homebrew_casks:
       owner: abdul-hamid-achik
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
     homepage: https://github.com/abdul-hamid-achik/bob
     description: Deterministic repository factory for agent-native developer tools
+    license: MIT
+    caveats: "Run `bob doctor` to inspect required and optional tools. Use `bob plan` before the explicit `bob apply`; agents can use `bob mcp serve` for the read-only inspect and plan surface. macOS may require explicit approval for an unsigned build."
     skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
 
 release:

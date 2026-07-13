@@ -2,6 +2,9 @@
 /dist/
 /coverage.out
 /coverage.html
+/docs/node_modules/
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
 /.glyphrun/
 /.bob-tmp-*
 /.bob.apply.lock

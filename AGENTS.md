@@ -23,7 +23,10 @@ internal/manifest  schema, strict YAML loading, validation, atomic writes
 internal/recipe    deterministic desired-artifact generation
 internal/engine    ownership lock, plan, conflict detection, safe apply
 internal/doctor    bounded optional-tool capability probes
+internal/inspect   offline workspace inventory and explicit specialist probes
+internal/mcp       typed read-only stdio projection
 internal/version   build metadata injected by ldflags
+internal/workspace shared canonical workspace resolution
 ```
 
 Keep command handlers thin. Filesystem ownership and mutation rules belong in
@@ -31,7 +34,11 @@ Keep command handlers thin. Filesystem ownership and mutation rules belong in
 
 ## Invariants
 
-- `plan`, `check`, `doctor`, and `explain` are read-only.
+- `plan`, `check`, plain `inspect`, and `explain` do not mutate repositories.
+- `inspect --probe-integrations` is explicit subprocess authority. It never
+  initializes, indexes, resets, searches, or repairs a specialist tool.
+- `bob_inspect` and `bob_plan` are the only MCP tools and never mutate.
+- MCP stdout is JSON-RPC-only. Diagnostics belong on stderr.
 - `apply` preflights the complete plan and writes nothing when any conflict
   exists.
 - Bob never overwrites an unmanaged differing file.
@@ -50,13 +57,27 @@ task build        # ./bin/bob with version metadata
 task test         # go test ./...
 task race         # go test -race ./...
 task lint         # golangci-lint v2, with vet/gofmt fallback
-task check        # fmt + lint + test
+task verify       # canonical non-mutating code/security/build gate
 task specs        # Glyphrun behavior specs (local)
+task docs-build   # VitePress production build and link validation
+task ship         # verify + specs + docs + release snapshot
 ```
 
 Run `gofmt -s` on Go changes. Return lowercase wrapped errors from library code;
 only `cmd/bob` may exit the process. Tests must use temporary directories and
-must never touch a real user's repositories or tool configuration.
+must never touch a real user's repositories or tool configuration. Opt-in live
+integration tests must isolate telemetry and state explicitly.
+
+## Documentation discipline
+
+User-facing tutorials, how-to guides, and reference pages belong in `docs/`.
+Normative product behavior belongs in root `SPEC.md`; architecture decisions
+belong in `docs/adr/`. `README.md` stays an orientation page rather than a
+second complete manual. Do not commit VitePress build output or dependencies.
+
+When a public contract changes, update the relevant README/docs page, the
+specification when normative behavior changes, the changelog, and any Glyphrun
+contract that proves the surface.
 
 ## Public repository hygiene
 
@@ -64,3 +85,7 @@ Working notes and handoffs do not belong in this repository. Keep root Markdown
 limited to public orientation, contribution, security, changelog, specification,
 and agent instructions. Never commit binaries, generated release archives,
 credentials, or private filesystem paths.
+
+GitHub-facing generated files are part of the recipe contract. Add or change
+them through a new recipe version and preserve safe upgrades from older lock
+versions; never change a published recipe version in place.

@@ -59,6 +59,11 @@ func TestRenderGoAgentToolIsDeterministicAndSafe(t *testing.T) {
 	}
 
 	for _, path := range []string{
+		".github/ISSUE_TEMPLATE/bug.yml",
+		".github/ISSUE_TEMPLATE/config.yml",
+		".github/ISSUE_TEMPLATE/feature.yml",
+		".github/dependabot.yml",
+		".github/pull_request_template.md",
 		".github/workflows/ci.yml",
 		".github/workflows/release.yml",
 		".goreleaser.yaml",
@@ -67,6 +72,7 @@ func TestRenderGoAgentToolIsDeterministicAndSafe(t *testing.T) {
 		"AGENTS.md",
 		"CHANGELOG.md",
 		"CLAUDE.md",
+		"CODE_OF_CONDUCT.md",
 		"CONTRIBUTING.md",
 		"LICENSE",
 		"README.md",
@@ -107,6 +113,11 @@ func TestRenderGoAgentToolCapabilityConditionals(t *testing.T) {
 			t.Fatal(err)
 		}
 		files := artifactContentByPath(artifacts)
+		for _, present := range []string{".github/ISSUE_TEMPLATE/bug.yml", ".github/dependabot.yml", ".github/pull_request_template.md", "CODE_OF_CONDUCT.md"} {
+			if _, ok := files[present]; !ok {
+				t.Errorf("minimal GitHub recipe omitted %s", present)
+			}
+		}
 		for _, absent := range []string{
 			".github/workflows/ci.yml",
 			".github/workflows/release.yml",
@@ -206,6 +217,10 @@ func TestRenderGoAgentToolProducesValidYAML(t *testing.T) {
 	}
 	files := artifactContentByPath(artifacts)
 	for _, path := range []string{
+		".github/ISSUE_TEMPLATE/bug.yml",
+		".github/ISSUE_TEMPLATE/config.yml",
+		".github/ISSUE_TEMPLATE/feature.yml",
+		".github/dependabot.yml",
 		".github/workflows/ci.yml",
 		".github/workflows/release.yml",
 		".golangci.yml",
@@ -261,6 +276,57 @@ func TestRenderGoAgentToolRejectsNonGitHubHomebrewModule(t *testing.T) {
 	}
 }
 
+func TestRenderGoAgentToolOmitsGitHubCommunityFilesForOtherHosts(t *testing.T) {
+	t.Parallel()
+	m := manifest.Default("acme-tool", "example.com/acme/acme-tool", "Build useful things.")
+	m.Distribution.GitHubActions = false
+	m.Distribution.GoReleaser = false
+	artifacts, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := artifactContentByPath(artifacts)
+	for _, path := range []string{".github/ISSUE_TEMPLATE/bug.yml", ".github/dependabot.yml", ".github/pull_request_template.md"} {
+		if _, ok := files[path]; ok {
+			t.Errorf("non-GitHub module unexpectedly generated %s", path)
+		}
+	}
+	if _, ok := files["CODE_OF_CONDUCT.md"]; !ok {
+		t.Fatal("host-independent Code of Conduct was omitted")
+	}
+	for _, path := range []string{"README.md", "CONTRIBUTING.md", "SECURITY.md"} {
+		if strings.Contains(files[path], "security/advisories") || strings.Contains(files[path], "GitHub private") {
+			t.Errorf("non-GitHub %s promises a GitHub reporting channel:\n%s", path, files[path])
+		}
+	}
+	if !strings.Contains(files["SECURITY.md"], "cannot name a configured private reporting channel") {
+		t.Fatalf("non-GitHub security policy does not expose its publication prerequisite:\n%s", files["SECURITY.md"])
+	}
+}
+
+func TestRenderGoAgentToolUsesVisibilityAwareGitHubSecurityLinks(t *testing.T) {
+	t.Parallel()
+	publicFiles := artifactContentByPath(mustRenderGoAgentTool(t, manifest.Default(
+		"acme-tool",
+		"github.com/acme/acme-tool",
+		"Build useful things.",
+	)))
+	if !strings.Contains(publicFiles["SECURITY.md"], "github.com/acme/acme-tool/security/advisories/new") ||
+		!strings.Contains(publicFiles[".github/ISSUE_TEMPLATE/config.yml"], "github.com/acme/acme-tool/security/advisories/new") {
+		t.Fatal("public GitHub recipe omitted private-vulnerability-reporting links")
+	}
+
+	privateManifest := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	privateManifest.Product.Visibility = "private"
+	privateFiles := artifactContentByPath(mustRenderGoAgentTool(t, privateManifest))
+	if strings.Contains(privateFiles["SECURITY.md"], "security/advisories") {
+		t.Fatalf("private GitHub security policy promises unsupported private reporting:\n%s", privateFiles["SECURITY.md"])
+	}
+	if !strings.Contains(privateFiles[".github/ISSUE_TEMPLATE/config.yml"], "/blob/main/SECURITY.md") {
+		t.Fatalf("private GitHub issue config does not route to SECURITY.md:\n%s", privateFiles[".github/ISSUE_TEMPLATE/config.yml"])
+	}
+}
+
 func TestRenderGoAgentToolRejectsModuleTemplateInjection(t *testing.T) {
 	t.Parallel()
 	m := manifest.Default("acme-tool", "github.com/acme/acme-tool;replace", "Build useful things.")
@@ -278,6 +344,15 @@ func fullGoAgentManifest() manifest.Manifest {
 	m.Distribution.Homebrew = true
 	m.Distribution.Docs = "markdown"
 	return m
+}
+
+func mustRenderGoAgentTool(t *testing.T, m manifest.Manifest) []Artifact {
+	t.Helper()
+	artifacts, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return artifacts
 }
 
 func artifactContentByPath(artifacts []Artifact) map[string]string {

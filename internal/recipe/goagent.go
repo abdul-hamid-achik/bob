@@ -72,6 +72,7 @@ func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
 		{"AGENTS.md", goAgentAgentsTemplate},
 		{"CHANGELOG.md", goAgentChangelogTemplate},
 		{"CLAUDE.md", goAgentClaudeTemplate},
+		{"CODE_OF_CONDUCT.md", goAgentCodeOfConductTemplate},
 		{"CONTRIBUTING.md", goAgentContributingTemplate},
 		{"LICENSE", goAgentLicenseTemplate},
 		{"README.md", goAgentReadmeTemplate},
@@ -87,6 +88,23 @@ func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
 	for _, item := range base {
 		if err := add(item.path, item.source); err != nil {
 			return nil, err
+		}
+	}
+
+	if githubModule {
+		for _, item := range []struct {
+			path   string
+			source string
+		}{
+			{".github/ISSUE_TEMPLATE/bug.yml", goAgentBugIssueTemplate},
+			{".github/ISSUE_TEMPLATE/config.yml", goAgentIssueConfigTemplate},
+			{".github/ISSUE_TEMPLATE/feature.yml", goAgentFeatureIssueTemplate},
+			{".github/dependabot.yml", goAgentDependabotTemplate},
+			{".github/pull_request_template.md", goAgentPullRequestTemplate},
+		} {
+			if err := add(item.path, item.source); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -578,8 +596,12 @@ task build
 [[if eq .Manifest.Integrations.TerminalVerification "glyphrun"]]task e2e
 [[end]]~~~
 
+[[if .Manifest.Distribution.GoReleaser]]The release check inside ` + "`task check`" + ` expects this checkout to be an
+initialized Git repository with its intended remote configured.
+
+[[end]]
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and
-[SECURITY.md](SECURITY.md) for private vulnerability reporting.
+[SECURITY.md](SECURITY.md) for security reporting instructions.
 
 ## License
 
@@ -637,6 +659,32 @@ Keep repository work deterministic, keep structured stdout clean, and verify
 changes with ` + "`task check`" + ` before handing them off.
 `
 
+const goAgentCodeOfConductTemplate = `# Code of Conduct
+
+This community policy is based on the
+[Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+
+Be respectful, inclusive, and constructive. Harassment, threats,
+discrimination, sexualized conduct, personal attacks, trolling, and publishing
+another person's private information are not accepted.
+
+This standard applies in repository issues, pull requests, reviews, and other
+spaces where someone represents the project. Maintainers may edit or remove
+contributions, limit participation, or ban a participant when needed to protect
+the community.
+
+[[if .GitHubOwner]]Report conduct concerns privately using a monitored contact method on the
+[repository owner's profile](https://github.com/[[.GitHubOwner]]). Before
+publishing, the owner must ensure that profile names an appropriate private
+channel. [[else]]Before publishing, replace this sentence with a monitored private conduct
+contact. [[end]]Do not post sensitive report details in a public issue. Reports
+should be handled promptly, fairly, and as confidentially as practical.
+
+This policy is adapted from the Contributor Covenant, version 2.1, available at
+https://www.contributor-covenant.org/version/2/1/code_of_conduct/ and licensed
+under Creative Commons Attribution 4.0.
+`
+
 const goAgentChangelogTemplate = `# Changelog
 
 All notable changes to this project will be documented in this file.
@@ -655,6 +703,9 @@ const goAgentContributingTemplate = `# Contributing
 
 Thank you for improving [[.Product.Name]].
 
+Read [AGENTS.md](AGENTS.md) before changing package boundaries, security
+behavior, or public contracts.
+
 1. Open an issue for substantial behavior or contract changes.
 2. Create a focused branch and keep unrelated changes out of the diff.
 3. Add or update tests for every behavior change.
@@ -664,22 +715,165 @@ Thank you for improving [[.Product.Name]].
 Pull requests should explain the user impact, compatibility implications, and
 verification performed. Never include credentials, private data, generated
 artifact packs, or local environment files.
+
+[[if and .GitHubOwner (eq .Product.Visibility "public")]]Security-sensitive reports belong in the repository's GitHub private
+vulnerability-reporting channel after the maintainer enables it. [[else]]Security-sensitive reports must follow the monitored private channel configured
+in SECURITY.md before publication. [[end]]Community participation follows
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Contributions are licensed under the
+repository's MIT License.
 `
 
 const goAgentSecurityTemplate = `# Security Policy
 
 ## Supported versions
 
-Security fixes are provided for the latest released minor version.
+Before the first tagged release, security fixes are made on ` + "`main`" + `. After
+the first release, the latest release and ` + "`main`" + ` are supported.
 
 ## Reporting a vulnerability
 
-Please use GitHub private vulnerability reporting when it is available for this
-repository. Do not open a public issue for an unpatched vulnerability.
+[[if and .GitHubOwner (eq .Product.Visibility "public")]]Use [GitHub private vulnerability reporting](https://github.com/[[.GitHubOwner]]/[[.GitHubRepo]]/security/advisories/new).
+Repository maintainers must enable that feature before publishing this project.
+[[else]]This scaffold cannot name a configured private reporting channel. Before
+publishing, replace this paragraph with an actually monitored private contact.
+[[end]]
+Do not open a public issue for an unpatched vulnerability. Include the affected
+version, impact, reproduction steps, and any suggested mitigation. Do not
+include real credentials or unrelated personal data.
+`
 
-Include the affected version, impact, reproduction steps, and any suggested
-mitigation. Do not include real credentials or unrelated personal data. You can
-expect a private response through GitHub's security advisory workflow.
+const goAgentBugIssueTemplate = `name: Bug report
+description: Report incorrect or unsafe [[.Product.Name]] behavior
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the exact command, expected result, and actual result.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI (human output)
+        - CLI (machine-readable output)
+        - Generated repository
+        - CI or release
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Remove secrets and private paths before posting.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: [[.Product.Name]] version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS arm64 or Ubuntu amd64
+    validations:
+      required: true
+`
+
+const goAgentFeatureIssueTemplate = `name: Feature request
+description: Propose a focused product or workflow improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this change solve?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Smallest useful contract
+      description: Show the smallest command, JSON, or file shape that solves the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Ownership and safety
+      description: Which files, processes, secrets, or remote systems would this observe or change?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What can users do today, and why is it insufficient?
+`
+
+const goAgentIssueConfigTemplate = `blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+[[if eq .Product.Visibility "public"]]
+    url: https://github.com/[[.GitHubOwner]]/[[.GitHubRepo]]/security/advisories/new
+    about: Share vulnerabilities privately with the maintainers.
+[[else]]
+    url: https://github.com/[[.GitHubOwner]]/[[.GitHubRepo]]/blob/main/SECURITY.md
+    about: Review the repository's private security reporting instructions.
+[[end]]
+`
+
+const goAgentPullRequestTemplate = `## Outcome
+
+Describe the user-visible result.
+
+## Verification
+
+- [ ] ` + "`task check`" + `
+- [ ] Terminal behavior specs when CLI behavior changed
+- [ ] ` + "`goreleaser check`" + ` when packaging changed
+- [ ] ` + "`git diff --check`" + `
+
+## Safety
+
+- [ ] Compatibility and wire-format impact are described.
+- [ ] Filesystem, subprocess, secret, and remote effects are described.
+- [ ] Tests use temporary state and do not touch real user configuration.
+
+## Verification evidence
+
+List the exact commands and user-visible behavior you verified.
+`
+
+const goAgentDependabotTemplate = `version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
 `
 
 const goAgentLicenseTemplate = `MIT License
@@ -725,6 +919,11 @@ tasks:
     cmds:
       - test -z "$(gofmt -l ./cmd ./internal)"
 
+  tidy-check:
+    desc: Check module files without changing them.
+    cmds:
+      - go mod tidy -diff
+
   lint:
     desc: Run static analysis.
     cmds:
@@ -742,10 +941,21 @@ tasks:
     cmds:
       - go test -race ./...
 
+  vet:
+    desc: Run Go static analysis.
+    cmds:
+      - go vet ./...
+
   vuln:
     desc: Check dependencies for known vulnerabilities.
     cmds:
-      - go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+  cover:
+    desc: Generate a local HTML coverage report.
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
 
   build:
     desc: Build the CLI.
@@ -753,13 +963,37 @@ tasks:
       - mkdir -p ./bin
       - go build -o {{.BINARY}} ./cmd/[[.Product.Name]]
 
+  build-check:
+    desc: Check that the CLI builds without writing into the workspace.
+    cmds:
+      - |
+        output="$(mktemp)"
+        trap 'rm -f "$output"' EXIT
+        go build -o "$output" ./cmd/[[.Product.Name]]
+
   check:
-    desc: Run the local pre-commit verification gate.
+    desc: Run the canonical non-mutating verification gate.
+    aliases: [verify]
     cmds:
       - task: fmt-check
+      - task: tidy-check
       - task: lint
+      - task: vet
       - task: test
-      - task: build
+      - task: race
+      - task: build-check
+      - task: vuln
+[[if .Manifest.Distribution.GoReleaser]]
+  release-check:
+    desc: Validate the GoReleaser configuration.
+    cmds:
+      - goreleaser check
+
+  snapshot:
+    desc: Build the complete release package without publishing.
+    cmds:
+      - goreleaser release --snapshot --clean
+[[end]]
 [[if eq .Manifest.Integrations.TerminalVerification "glyphrun"]]
   e2e:
     desc: Run Glyphrun terminal behavior specs.
@@ -804,28 +1038,43 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
-      - run: go mod download
-      - run: go test -race ./...
+      - run: go mod tidy -diff
+      - run: test -z "$(gofmt -l ./cmd ./internal)" || (gofmt -l ./cmd ./internal; exit 1)
+      - run: go test -count=1 ./...
+      - run: CGO_ENABLED=1 go test -race -count=1 ./...
       - run: go vet ./...
       - run: go build ./cmd/[[.Product.Name]]
-      - uses: golangci/golangci-lint-action@v9
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
+[[if .Manifest.Distribution.GoReleaser]]      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          args: check
+[[end]]
 [[if eq .Manifest.Integrations.TerminalVerification "glyphrun"]]
   terminal-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -836,11 +1085,12 @@ jobs:
 [[end]][[if eq .Manifest.Distribution.Docs "vitepress"]]
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 22
+          node-version: 24
       - run: npm install
       - run: npm run docs:build
 [[end]]`
@@ -853,29 +1103,50 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
       - run: go mod tidy -diff
-      - run: go test -race ./...
+      - run: test -z "$(gofmt -l ./cmd ./internal)" || (gofmt -l ./cmd ./internal; exit 1)
+      - run: go test -race -count=1 ./...
       - run: go vet ./...
-      - uses: golangci/golangci-lint-action@v9
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: v2.17.0
+          args: check
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.17.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -933,6 +1204,7 @@ homebrew_casks:
     homepage: https://github.com/[[.GitHubOwner]]/[[.GitHubRepo]]
     description: [[quote .Product.Description]]
     license: MIT
+    caveats: "Run ` + "`[[.Product.Name]] doctor`" + ` to inspect required and optional tools; pass ` + "`--json`" + ` for machine-readable output. macOS may require explicit approval for an unsigned build."
     skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
 [[end]]`
 

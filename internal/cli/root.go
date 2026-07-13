@@ -395,7 +395,7 @@ func newRecipeCommand(opts *options) *cobra.Command {
 				if opts.json {
 					return emitJSON(cmd.OutOrStdout(), "recipe list", []any{entry}, nil, nil)
 				}
-				_, err := fmt.Fprintln(cmd.OutOrStdout(), "go-agent-tool@1  public-ready Go and Cobra CLI")
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d  public-ready Go and Cobra CLI\n", engine.RecipeVersion)
 				return err
 			},
 		},
@@ -410,7 +410,7 @@ func newRecipeCommand(opts *options) *cobra.Command {
 				if opts.json {
 					return emitJSON(cmd.OutOrStdout(), "recipe show", entry, nil, nil)
 				}
-				_, err := fmt.Fprintln(cmd.OutOrStdout(), "go-agent-tool@1\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.")
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.\n", engine.RecipeVersion)
 				return err
 			},
 		},

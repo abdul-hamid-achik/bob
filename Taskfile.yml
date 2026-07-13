@@ -30,6 +30,15 @@ tasks:
     desc: Format Go source
     cmds: [gofmt -s -w .]
 
+  fmt-check:
+    desc: Check Go formatting without changing files
+    cmds:
+      - test -z "$(gofmt -l .)" || (gofmt -l .; exit 1)
+
+  tidy-check:
+    desc: Check module files without changing them
+    cmds: [go mod tidy -diff]
+
   lint:
     desc: Lint Go source
     cmds:
@@ -43,25 +52,54 @@ tasks:
 
   test:
     desc: Run unit tests
-    cmds: [go test ./...]
+    cmds: [go test -count=1 ./...]
 
   race:
     desc: Run unit tests with the race detector
     env:
       CGO_ENABLED: "1"
-    cmds: [go test -race ./...]
+    cmds: [go test -race -count=1 ./...]
+
+  vet:
+    desc: Run Go static analysis
+    cmds: [go vet ./...]
+
+  vuln:
+    desc: Scan called Go code for known vulnerabilities
+    cmds: [go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...]
+
+  cover:
+    desc: Generate a local HTML coverage report
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - 'echo "Coverage report: coverage.html"'
 
   check:
-    desc: Format, lint, and test
+    desc: Run the canonical non-mutating verification gate
     aliases: [ci, verify]
     cmds:
-      - task: fmt
+      - task: fmt-check
+      - task: tidy-check
       - task: lint
+      - task: vet
       - task: test
+      - task: race
+      - task: build-check
+      - task: vuln
+
+  build-check:
+    desc: Check that the CLI builds without writing into the workspace
+    cmds:
+      - |
+        output="$(mktemp)"
+        trap 'rm -f "$output"' EXIT
+        go build -trimpath -ldflags "{{.LDFLAGS}}" -o "$output" {{.MAIN}}
 
   build:
     desc: Build ./bin/bob
     cmds:
+      - mkdir -p {{.BUILD_DIR}}
       - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.MAIN}}
 
   install:
@@ -75,7 +113,42 @@ tasks:
     cmds:
       - glyph run specs/glyphrun/*.yml --format md --progress auto
 
+  release-check:
+    desc: Validate the GoReleaser configuration
+    cmds: [goreleaser check]
+
+  snapshot:
+    desc: Build the complete release package locally without publishing
+    cmds: [goreleaser release --snapshot --clean]
+
+  docs-deps:
+    desc: Install locked documentation dependencies
+    cmds: [npm --prefix docs ci]
+
+  docs:
+    desc: Start the documentation development server
+    deps: [docs-deps]
+    cmds: [npm --prefix docs run dev]
+
+  docs-build:
+    desc: Build the documentation site
+    deps: [docs-deps]
+    cmds: [npm --prefix docs run build]
+
+  docs-preview:
+    desc: Preview the built documentation site
+    deps: [docs-deps]
+    cmds: [npm --prefix docs run preview]
+
+  ship:
+    desc: Run the complete local pre-release gate
+    cmds:
+      - task: check
+      - task: specs
+      - task: docs-build
+      - task: snapshot
+
   clean:
     desc: Remove local build output
     cmds:
-      - rm -rf {{.BUILD_DIR}} dist coverage.out coverage.html
+      - rm -rf {{.BUILD_DIR}} dist coverage.out coverage.html docs/node_modules docs/.vitepress/cache docs/.vitepress/dist

@@ -28,6 +28,22 @@ func actionKinds(plan PlanResult) []ActionKind {
 	return kinds
 }
 
+func setLockRecipeVersion(t *testing.T, root string, version int) {
+	t.Helper()
+	lock, err := LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock.Recipe.Version = version
+	data, err := encodeLock(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, LockFilename), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFirstApplyWritesArtifactsAndSortedLock(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -88,6 +104,123 @@ func TestApplyIsIdempotent(t *testing.T) {
 	lockAfter, _ := os.ReadFile(filepath.Join(root, LockFilename))
 	if string(lockBefore) != string(lockAfter) {
 		t.Fatal("idempotent apply rewrote different lock content")
+	}
+}
+
+func TestPlanAndApplyUpgradeOlderRecipeLock(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m := testManifest()
+	v1Artifacts := []recipe.Artifact{artifact("README.md", "version one\n")}
+	if _, err := Apply(root, m, v1Artifacts); err != nil {
+		t.Fatal(err)
+	}
+	setLockRecipeVersion(t, root, RecipeVersion-1)
+
+	v2Artifacts := []recipe.Artifact{
+		artifact("README.md", "version two\n"),
+		artifact("CODE_OF_CONDUCT.md", "community\n"),
+	}
+	plan, err := Plan(root, m, v2Artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.LockChanged || plan.Recipe.Version != RecipeVersion {
+		t.Fatalf("upgrade plan = %#v", plan)
+	}
+	actions := make(map[string]ActionKind, len(plan.Actions))
+	for _, action := range plan.Actions {
+		actions[action.Path] = action.Kind
+	}
+	if actions["README.md"] != ActionUpdate || actions["CODE_OF_CONDUCT.md"] != ActionCreate {
+		t.Fatalf("upgrade actions = %#v", actions)
+	}
+	if _, err := Apply(root, m, v2Artifacts); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.Recipe.Version != RecipeVersion {
+		t.Fatalf("lock version = %d, want %d", upgraded.Recipe.Version, RecipeVersion)
+	}
+	for path, want := range map[string]string{
+		"README.md":          "version two\n",
+		"CODE_OF_CONDUCT.md": "community\n",
+	} {
+		got, readErr := os.ReadFile(filepath.Join(root, path))
+		if readErr != nil || string(got) != want {
+			t.Fatalf("%s = %q, %v; want %q", path, got, readErr, want)
+		}
+	}
+}
+
+func TestRecipeUpgradeRefusesHumanModifiedManagedFileWithoutPartialWrites(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m := testManifest()
+	v1Artifacts := []recipe.Artifact{artifact("README.md", "version one\n")}
+	if _, err := Apply(root, m, v1Artifacts); err != nil {
+		t.Fatal(err)
+	}
+	setLockRecipeVersion(t, root, RecipeVersion-1)
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lockBefore, err := os.ReadFile(filepath.Join(root, LockFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2Artifacts := []recipe.Artifact{
+		artifact("README.md", "version two\n"),
+		artifact("CODE_OF_CONDUCT.md", "community\n"),
+	}
+	plan, err := Plan(root, m, v2Artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.HasConflicts() {
+		t.Fatalf("human-modified upgrade plan has no conflict: %#v", plan)
+	}
+	if _, err := Apply(root, m, v2Artifacts); err == nil {
+		t.Fatal("conflicted recipe upgrade unexpectedly applied")
+	}
+	if _, err := os.Stat(filepath.Join(root, "CODE_OF_CONDUCT.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("conflicted upgrade created new artifact: %v", err)
+	}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil || string(readme) != "human edit\n" {
+		t.Fatalf("human file changed: %q, %v", readme, err)
+	}
+	lockAfter, err := os.ReadFile(filepath.Join(root, LockFilename))
+	if err != nil || !reflect.DeepEqual(lockAfter, lockBefore) {
+		t.Fatalf("conflicted upgrade changed lock: %v", err)
+	}
+}
+
+func TestPlanRejectsNewerRecipeLock(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m := testManifest()
+	artifacts := []recipe.Artifact{artifact("README.md", "hello\n")}
+	if _, err := Apply(root, m, artifacts); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock.Recipe.Version = RecipeVersion + 1
+	data, err := encodeLock(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, LockFilename), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Plan(root, m, artifacts); err == nil || !strings.Contains(err.Error(), "newer than supported") {
+		t.Fatalf("expected newer lock rejection, got %v", err)
 	}
 }
 

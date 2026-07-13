@@ -1,0 +1,49 @@
+schema_version: 1
+recipe:
+    id: go-agent-tool
+    version: 1
+files:
+    - path: .github/workflows/ci.yml
+      sha256: f5e13d67abf26d02186051466866ed78eed4231073bdf47e84ea286f096fe29f
+    - path: .github/workflows/release.yml
+      sha256: 1e7d7dea8d01230a064e5137b8f6be035da29bb3c7ee6989ff709080efa4d880
+    - path: .gitignore
+      sha256: 017200ab5fbdf384a636bb4e52120c219d81120c1d3ab4e97e3cd52746bdb451
+    - path: .golangci.yml
+      sha256: bc5549ef01619ff2c0c0fc68c819fa93e0420dc81662b37834242e26c54dd046
+    - path: .goreleaser.yaml
+      sha256: e93ff492618ce5cc10817b2c89c0e38062ed3fd67637304be414a4a97f50552b
+    - path: AGENTS.md
+      sha256: b2cf09b3cafaf38bf989a1487ec9e8d87287dabf8d7964481de868eb14ec51ff
+    - path: CHANGELOG.md
+      sha256: 931843bd634a4d45de9c299d13776a3c01b273fdd7e3fcbeb443763840b32645
+    - path: CLAUDE.md
+      sha256: 80cecbc319a97d0a434606e5e82b7e4873963bbb6cdf75838eb367cadef61eee
+    - path: CONTRIBUTING.md
+      sha256: fcd4f8c30d5e423cecca77f80953bfedbf117b9a9b0b4d05c8351e6e98958f92
+    - path: LICENSE
+      sha256: 27c1236b99a9d2d65a022f81c191916309c4fc46cd6b34ed4e40d526f146e9f2
+    - path: README.md
+      sha256: a85538d7e5243a41144096a4ff72836f075765dae6a209262675a48402b0a1d6
+    - path: SECURITY.md
+      sha256: 65cc28c388602da90ebce99fe3503462e34f05a36ee0182b94a7e2159eaa716c
+    - path: Taskfile.yml
+      sha256: f68fefc46c9ffa918e44d48d0dc0edced96198c407506b41676c16a303de790e
+    - path: cmd/integrated-tool/main.go
+      sha256: 423fa8572b7d5f5be714a47f5dcc8d76d525c565b91fb26cef31133cd82da823
+    - path: docs/index.md
+      sha256: 36ac7e9b029298faea5121afe5a5fc4156a207c9adefc92cbd6ff195c5bdd652
+    - path: glyphrun.config.yml
+      sha256: b21cd795d9edd119be65f2e1089d27f640dac1c096e4a77c8bdcc1dd32feed94
+    - path: go.mod
+      sha256: 955d2af2697c67cbcd85c48b960f34b987c2a45d43930c6525bbbc33709364c0
+    - path: go.sum
+      sha256: 8443a862d2e8b05ac34298d963911aa22b0e54978185655078ae2e83346cfa51
+    - path: internal/cli/root.go
+      sha256: c47ec112710e1df73d34945e98c8dc7e64cae7d5f826b8f8fdaa8afa347685fc
+    - path: internal/cli/root_test.go
+      sha256: 8e47f6023b0474826f9f7cf15829be917d399b35781d35b27f2943b1ae51dbfa
+    - path: internal/version/version.go
+      sha256: 57ff6eb61f7dd821c25a04a9ddcb6b7ec24760f4274660c4a1bbcbcb675e7f5e
+    - path: specs/help.yml
+      sha256: b22bb151e7c0b8e21a241b94ee2440a6d898c6dd8f2ba73fc8d2eadaf526676e

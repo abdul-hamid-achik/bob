@@ -13,10 +13,19 @@ body:
   - type: textarea
     id: contract
     attributes:
-      label: Proposed contract
-      description: Show the manifest or command shape if possible.
+      label: Smallest useful contract
+      description: Show the smallest manifest, command, or tool shape that solves the problem.
+    validations:
+      required: true
   - type: textarea
     id: safety
     attributes:
       label: Ownership and safety
       description: Which files would Bob own, observe, or refuse to change?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What can users do today, and why is it insufficient?

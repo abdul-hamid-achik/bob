@@ -7,18 +7,39 @@ body:
     id: behavior
     attributes:
       label: What happened?
-      description: Include the command, expected result, and actual result.
+      description: Include the exact command, expected result, and actual result.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI (human output)
+        - CLI (--json)
+        - MCP (direct)
+        - MCPHub or local-agent
+        - Generated repository
     validations:
       required: true
   - type: textarea
     id: manifest
     attributes:
       label: Minimal manifest or reproduction
-      description: Remove secrets and private paths before posting.
+      description: Include a minimal redacted bob.yaml and plan when relevant. Remove secrets and private paths.
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
       label: Bob version
       placeholder: bob version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS 15 arm64 or Ubuntu 24.04 amd64
     validations:
       required: true

@@ -19,8 +19,10 @@ import (
 const (
 	// PlanSchemaVersion independently versions the structured plan projection.
 	PlanSchemaVersion = 1
-	// RecipeVersion is the version of the built-in schema-v1 recipe contract.
-	RecipeVersion = 1
+	// RecipeVersion is the current built-in recipe contract. Locks
+	// from older positive versions are safe upgrade inputs because they record
+	// exact content hashes for every previously managed whole file.
+	RecipeVersion = 2
 )
 
 // ActionKind is the planner's decision for one desired artifact.
@@ -106,8 +108,11 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 	if err != nil {
 		return result, fmt.Errorf("plan: %w", err)
 	}
-	if lockExists && (lock.Recipe.ID != m.Recipe || lock.Recipe.Version != RecipeVersion) {
-		return result, fmt.Errorf("plan: lock recipe %s@%d does not match %s@%d", lock.Recipe.ID, lock.Recipe.Version, m.Recipe, RecipeVersion)
+	if lockExists && lock.Recipe.ID != m.Recipe {
+		return result, fmt.Errorf("plan: lock recipe %s@%d does not match %s", lock.Recipe.ID, lock.Recipe.Version, m.Recipe)
+	}
+	if lockExists && lock.Recipe.Version > RecipeVersion {
+		return result, fmt.Errorf("plan: lock recipe %s@%d is newer than supported %s@%d", lock.Recipe.ID, lock.Recipe.Version, m.Recipe, RecipeVersion)
 	}
 
 	locked := make(map[string]LockEntry, len(lock.Files))

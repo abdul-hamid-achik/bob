@@ -79,7 +79,7 @@ bob.yaml + embedded recipe + observed files + bob.lock
                     bob check
 ```
 
-Version 0.1 exposes these commands:
+The version 0.1 baseline exposed these commands:
 
 ```text
 bob new <name>          preview or create a new repository
@@ -92,6 +92,11 @@ bob explain             describe Bob's contract and boundaries
 bob recipe list         list embedded recipes
 bob recipe show <id>    describe an embedded recipe
 bob version             print build metadata
+```
+
+The current version 0.2 draft surface adds:
+
+```text
 bob inspect [path]      summarize Bob and integration readiness
 bob mcp serve           expose compact read-only MCP tools
 ```
@@ -101,7 +106,7 @@ bob mcp serve           expose compact read-only MCP tools
 an explicit inspect flag. Normal CLI commands support the global `--json` flag;
 MCP stdio reserves stdout for JSON-RPC.
 
-## Implemented version 0.1 scope
+## Version 0.1 foundation
 
 Version 0.1 proves one embedded recipe: `go-agent-tool`. It generates a Go/Cobra
 CLI with JSON output, version and doctor commands, tests, public documentation,
@@ -118,9 +123,14 @@ action for an unmanaged regular file whose content already matches exactly; it
 is not a standalone `bob adopt` command or a claim that an existing application
 was behaviorally imported.
 
+The current recipe version 2 keeps that ownership model and adds the public
+repository structure proven in practice: community templates, a Code of
+Conduct, Dependabot, non-mutating verification, vulnerability scanning, pinned
+CI actions, and stronger release configuration.
+
 ## Current boundaries
 
-Bob 0.1 does not:
+Bob currently does not:
 
 - require an LLM or embedding model;
 - infer or rewrite application business logic;

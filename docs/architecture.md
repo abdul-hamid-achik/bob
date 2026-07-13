@@ -47,8 +47,8 @@ validation. MCP and Studio must be disabled.
 ### Embedded recipe
 
 The `go-agent-tool` recipe renders the complete desired artifact set in memory.
-It is deterministic and versioned. Version 0.1 has no third-party recipe or
-plugin runtime.
+It is deterministic and versioned. The current `go-agent-tool@2` recipe has no
+third-party recipe or plugin runtime.
 
 Every artifact has a repository-relative path, complete content, and file mode.
 Recipe output cannot own `.git`, `bob.yaml`, or `bob.lock`.
@@ -75,8 +75,13 @@ The planner is read-only. A conflict blocks the complete apply.
 and version, and the SHA-256 digest of every Bob-owned file. It contains no
 commands, environment, secrets, plans, or execution history.
 
-Version 0.1 has one ownership mode: the complete file. It has no managed-block
+Bob has one ownership mode: the complete file. It has no managed-block
 merge behavior.
+
+An older positive lock version for the same recipe ID is accepted as an upgrade
+input. Its content hashes remain the ownership proof while the current recipe
+renders desired files and a new lock version. A future lock version is rejected
+so an older Bob binary cannot reinterpret newer state.
 
 ### Applier
 
@@ -89,7 +94,7 @@ Multi-file apply is not globally transactional. A process crash can leave some
 files published before the lock is written. A later plan observes the exact
 state and may classify already-published matching files as `adopt`.
 
-Bob does not delete files in version 0.1.
+Bob does not delete files.
 
 ### Drift check
 
@@ -155,7 +160,7 @@ store, verifier, MCP mutation handler, or integration orchestrator.
 
 Bob declares optional seams without absorbing specialist behavior.
 
-| Concern | Owner | Bob 0.1 behavior |
+| Concern | Owner | Current Bob behavior |
 |---|---|---|
 | Repository desired state | Bob | Render, plan, apply, and check whole files |
 | Agent reasoning and goals | Agent runtime | Invoke Bob through CLI/JSON |
@@ -167,14 +172,14 @@ Bob declares optional seams without absorbing specialist behavior.
 | Terminal behavior | Terminal spec runner | Optional generated spec and doctor probe |
 | Browser behavior | Browser spec runner | Manifest selection only; no Bob runner |
 | Evidence preservation | Artifact store | Manifest selection only; no Bob receipt export |
-| Resource observation | System monitor | Outside Bob 0.1 |
+| Resource observation | System monitor | Outside Bob |
 
 Optional integrations are declared honestly. Selecting one does not imply that
 Bob ran it or verified application behavior.
 
 ## Repository state
 
-Bob 0.1 persists only repository-visible state:
+Bob persists only repository-visible state:
 
 - `bob.yaml`, owned by the user;
 - `bob.lock`, written at the repository root by Bob;
@@ -184,7 +189,8 @@ Plans, command executions, and verification receipts are not stored.
 
 ## Implemented safety invariants
 
-1. `plan`, `check`, and `explain` do not mutate repository files.
+1. `plan`, `check`, plain `inspect`, and `explain` do not mutate repository
+   files; the two MCP tools are read-only projections over inspect and plan.
 2. `new` and `init` preview unless `--write` is explicit.
 3. The same validated manifest, recipe version, files, and lock produce the same
    plan.
@@ -194,7 +200,7 @@ Plans, command executions, and verification receipts are not stored.
 6. Bob adopts only an unmanaged regular file with exactly matching content.
 7. Absolute paths, parent traversal, reserved files, pre-existing symlinks, and
    special files are rejected from recipe ownership. Concurrent same-user parent
-   replacement remains a documented v0.1 OS-containment boundary.
+   replacement remains a documented OS-containment boundary.
 8. Apply rechecks observed files and `bob.lock` after staging and before
    publication.
 9. `bob.lock` is published last.

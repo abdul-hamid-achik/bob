@@ -2,6 +2,9 @@
 
 **A deterministic repository factory for agent-native developer tools.**
 
+[![CI](https://github.com/abdul-hamid-achik/bob/actions/workflows/ci.yml/badge.svg)](https://github.com/abdul-hamid-achik/bob/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Bob turns a small `bob.yaml` product contract into a reviewable repository plan,
 applies only the files it can prove it owns, and detects drift in CI. It is local,
 model-free, and useful from a terminal, MCPHub, or an existing coding agent.
@@ -67,7 +70,7 @@ bob plan
 bob check
 ```
 
-To adopt an empty or existing directory, initialize only the human-owned
+To initialize Bob in an empty or existing directory, write only the human-owned
 manifest first:
 
 ```bash
@@ -80,8 +83,8 @@ bob apply
 `plan` and `check` never write. `apply` refuses the entire operation if even one
 target conflicts.
 
-Inspect the complete workspace readiness inventory without running specialist
-tools:
+Inspect Bob-managed state and offline binary availability without running
+specialist tools:
 
 ```bash
 bob inspect .
@@ -93,84 +96,23 @@ Codemap and Vecgrep status commands. Those commands may open their tool-owned
 stores, and Vecgrep may contact its configured embedding provider. Bob never
 searches, indexes, repairs, or declares verification.
 
-## Manifest
+## Product contract and ownership
 
-```yaml
-schema_version: 1
-recipe: go-agent-tool
+`bob.yaml` is a strict human-owned contract for product identity, surfaces,
+local intelligence seams, and distribution. See the complete
+[manifest reference](docs/reference/manifest.md) and the tested
+[minimal and integrated examples](examples/README.md).
 
-product:
-  name: acme-tool
-  module: github.com/acme/acme-tool
-  description: Agent-ready Acme CLI
-  visibility: public
-  license: MIT
+`bob.lock` records the recipe version and SHA-256 digest of every Bob-owned
+whole file. Plans classify paths as `create`, `adopt`, `unchanged`, `update`, or
+`conflict`; one conflict blocks the complete apply. Bob never overwrites an
+unmanaged differing file or a managed file changed by a person. Read the full
+[ownership and safety contract](docs/ownership-and-safety.md) and
+[CLI reference](docs/reference/cli.md) before initializing Bob in an existing
+repository.
 
-runtime:
-  language: go
-  kind: cli
-
-surfaces:
-  cli: true
-  json: true
-  mcp: false
-  studio: false
-
-integrations:
-  code_structure: codemap
-  semantic_search: vecgrep
-  terminal_verification: glyphrun
-  browser_verification: none
-  secrets: none
-  artifacts: none
-
-distribution:
-  github_actions: true
-  goreleaser: true
-  homebrew: false
-  docs: markdown
-```
-
-The schema is strict: unknown fields and unsupported capability combinations are
-errors. MCP and Studio output recipes are intentionally deferred until the core
-ownership contract has real use behind it.
-
-## Ownership and safety
-
-`bob.lock` records the SHA-256 digest of every Bob-owned file. Planning classifies
-each desired file as:
-
-| State | Meaning |
-|---|---|
-| `create` | The path does not exist. |
-| `adopt` | An unmanaged regular file already matches exactly. |
-| `unchanged` | The managed file matches the recipe. |
-| `update` | The file still matches the old lock and the recipe changed. |
-| `conflict` | Ownership is absent or stale, or the destination is unsafe. |
-
-Bob never overwrites an unmanaged differing file or a managed file changed by a
-person. Absolute paths, parent traversal, `.git`, manifests, locks, symlinks, and
-special files are outside recipe ownership. File publication uses atomic sibling
-renames and writes the lock last.
-
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `bob new <name>` | Preview or explicitly create a new project. |
-| `bob init [path]` | Preview or write `bob.yaml` in a repository. |
-| `bob plan [path]` | Compute desired changes without writing; add `--content` for bounded previews. |
-| `bob apply [path]` | Apply one fully conflict-free plan. |
-| `bob check [path]` | Exit non-zero when managed state or the lock would change. |
-| `bob doctor [path]` | Probe required and selected optional tools. |
-| `bob inspect [path]` | Summarize Bob drift and offline integration availability; probing is explicit. |
-| `bob mcp serve` | Expose `bob_inspect` and `bob_plan` over stdio. |
-| `bob explain` | Describe Bob's contract and integration boundary. |
-| `bob recipe list\|show` | Inspect the embedded recipe catalog. |
-| `bob version` | Print build metadata. |
-
-Use `--json` for the versioned, machine-readable envelope. JSON goes to stdout;
-diagnostics and errors go to stderr.
+Use `--json` for versioned machine output. JSON goes to stdout; diagnostics and
+errors go to stderr.
 
 ## Intelligence-stack integration
 
@@ -204,7 +146,7 @@ Vecgrep-to-Codemap routing.
 
 ### MCPHub and local-agent
 
-Install a stable binary and register it with MCPHub:
+Install a checkout-built binary and register it with MCPHub:
 
 ```bash
 task install
@@ -214,33 +156,19 @@ mcphub add bob "$BOB_BIN/bob" mcp serve \
   --description "Deterministic agent-ready repository builder" \
   --tag builder
 mcphub pin bob__bob_inspect bob__bob_plan
-```
-
-If the local-agent route uses an explicit server allowlist, add `bob` to
-`agents.local-agent.servers` in `~/.config/mcphub/mcphub.yaml`, then reconcile
-and probe:
-
-```bash
-mcphub sync local-agent
-# Run this only if the dry run above reports a diff:
-mcphub sync local-agent --write
 mcphub doctor --server bob --probe
 ```
 
-Pinning keeps the two Bob tools directly advertised in MCPHub's lazy mode; it
-does not grant permission. With the current local-agent integration they appear
-as `mcphub__bob__bob_inspect` and `mcphub__bob__bob_plan`, remain conservatively
-classified as unknown-effect MCP calls, and prompt under the default Ask policy.
-Avoid a persistent allow for the generic `mcphub__mcphub_call_tool` proxy because
-that name can dispatch many downstream tools. Restart an already running
-local-agent process after changing gateway configuration.
-
-MCPHub servers and pins are global unless an agent has an explicit allowlist.
-Add per-agent `servers` or `tools` scopes if Bob should not be advertised to
-other configured gateways.
+For allowlists, gateway names, approval behavior, and the explicit integration
+probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local-agent.md).
 
 ## Documentation
 
+- [Documentation home](docs/index.md)
+- [Getting started](docs/getting-started.md)
+- [Ownership and safety](docs/ownership-and-safety.md)
+- [Manifest reference](docs/reference/manifest.md)
+- [CLI reference](docs/reference/cli.md)
 - [Product direction](docs/product-direction.md)
 - [Architecture](docs/architecture.md)
 - [ADR-0001: choose a repository factory](docs/adr/0001-repository-factory.md)
@@ -248,14 +176,15 @@ other configured gateways.
 - [Specification](SPEC.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Development
 
 ```bash
-task check
-task race
-task build
-task specs   # requires glyph
+task verify       # non-mutating code, security, and build checks
+task specs        # terminal behavior; requires glyph
+task docs-build   # VitePress production build
+task ship         # complete pre-release gate
 ```
 
 Without Task:
@@ -265,6 +194,8 @@ go test ./...
 go test -race ./...
 go vet ./...
 go build ./cmd/bob
+npm --prefix docs ci
+npm --prefix docs run build
 ```
 
 ## License
