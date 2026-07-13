@@ -6,9 +6,25 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestEmptyAllTimeAggregateHasStableMachineShape(t *testing.T) {
+	stats, err := (*Store)(nil).Aggregate(context.Background(), Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, `"since"`) || !strings.Contains(text, `"by_operation":[]`) {
+		t.Fatalf("empty aggregate JSON shape is ambiguous: %s", text)
+	}
+}
 
 func TestAggregateFiltersSinceAndWorkspaceAndSumsPlanActions(t *testing.T) {
 	current := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)

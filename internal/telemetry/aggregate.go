@@ -25,7 +25,7 @@ type Query struct {
 // Stats is a privacy-preserving summary. It never returns individual events.
 type Stats struct {
 	SchemaVersion  int              `json:"schema_version"`
-	Since          time.Time        `json:"since,omitempty"`
+	Since          time.Time        `json:"since,omitempty,omitzero"`
 	Until          time.Time        `json:"until"`
 	WorkspaceID    string           `json:"workspace_id,omitempty"`
 	Events         int              `json:"events"`
@@ -67,6 +67,7 @@ func (store *Store) Aggregate(ctx context.Context, query Query) (Stats, error) {
 		Since:         query.Since.UTC(),
 		Until:         now,
 		WorkspaceID:   query.WorkspaceID,
+		ByOperation:   []OperationStats{},
 	}
 	if store == nil || !store.enabled {
 		return stats, nil
