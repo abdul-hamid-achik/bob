@@ -98,13 +98,22 @@ The current version 0.2 draft surface adds:
 
 ```text
 bob inspect [path]      summarize Bob and integration readiness
-bob mcp serve           expose compact read-only MCP tools
+bob config show|init    inspect or initialize XDG user settings
+bob stats [path]        summarize opt-in local usage
+bob studio [path]       open a read-only terminal operations board
+bob mcp serve           expose six typed repository-read-only MCP tools
 ```
 
 `new` and `init` preview by default and require `--write` to create files.
 `plan`, `check`, and plain `inspect` are read-only. Integration probes require
 an explicit inspect flag. Normal CLI commands support the global `--json` flag;
 MCP stdio reserves stdout for JSON-RPC.
+
+Local telemetry is disabled by default and has no network transport. When
+enabled, it provides privacy-bounded aggregates for people and agents without
+storing repository paths, arguments, filenames, content, or raw errors. Studio
+uses the deterministic engine and those aggregates as a projection; it does not
+become a task runner.
 
 ## Version 0.1 foundation
 
@@ -123,10 +132,10 @@ action for an unmanaged regular file whose content already matches exactly; it
 is not a standalone `bob adopt` command or a claim that an existing application
 was behaviorally imported.
 
-The current recipe version 2 keeps that ownership model and adds the public
+The current recipe version 3 keeps that ownership model and adds the public
 repository structure proven in practice: community templates, a Code of
 Conduct, Dependabot, non-mutating verification, vulnerability scanning, pinned
-CI actions, and stronger release configuration.
+CI actions, stronger release configuration, and a security-patched Go baseline.
 
 ## Current boundaries
 
@@ -137,9 +146,9 @@ Bob currently does not:
 - overwrite an unmanaged differing file or a managed file changed by a person;
 - own managed blocks inside otherwise user-owned files;
 - delete generated files;
-- expose Studio or MCP mutation surfaces;
+- expose Studio mutation or MCP mutation surfaces;
 - provide standalone `adopt` or `verify` commands;
-- persist plans, execution histories, or verification receipts;
+- persist plans, detailed execution histories, or verification receipts;
 - implement a general plugin system;
 - create commits, push branches, tag releases, publish packages, or create
   hosted resources;
@@ -147,10 +156,10 @@ Bob currently does not:
 
 ## Future directions
 
-Possible later additions include a Studio projection, digest-gated MCP apply,
-richer repository inspection, an explicit existing-repository adoption
-workflow, and bounded verification receipts. Those features must not weaken
-deterministic planning, whole-file ownership, or explicit mutation.
+Possible later additions include digest-gated MCP apply, richer repository
+inspection, an explicit existing-repository adoption workflow, and bounded
+verification receipts. Those features must not weaken deterministic planning,
+whole-file ownership, or explicit mutation.
 
 ## Success criteria
 

@@ -1,6 +1,6 @@
 # Development
 
-Bob is a Go 1.26 module with a small VitePress documentation site and optional
+Bob is a Go 1.26.5 module with a small VitePress documentation site and optional
 Glyphrun terminal contract. Building the site requires Node.js 22 or newer.
 
 ## Setup

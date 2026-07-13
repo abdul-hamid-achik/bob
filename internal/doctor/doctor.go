@@ -65,6 +65,7 @@ type tool struct {
 	note     string
 	minMajor int
 	minMinor int
+	minPatch int
 }
 
 func Run(ctx context.Context, m manifest.Manifest, prober Prober) Result {
@@ -95,9 +96,9 @@ func Run(ctx context.Context, m manifest.Manifest, prober Prober) Result {
 		if probeErr == nil {
 			check.Version = version
 			check.Usable = true
-			if candidate.minMajor > 0 && !versionAtLeast(version, candidate.minMajor, candidate.minMinor) {
+			if candidate.minMajor > 0 && !versionAtLeast(version, candidate.minMajor, candidate.minMinor, candidate.minPatch) {
 				check.Usable = false
-				check.Note = strings.TrimSpace(strings.Join([]string{candidate.note, fmt.Sprintf("requires Go %d.%d or newer", candidate.minMajor, candidate.minMinor)}, "; "))
+				check.Note = strings.TrimSpace(strings.Join([]string{candidate.note, fmt.Sprintf("requires Go %d.%d.%d or newer", candidate.minMajor, candidate.minMinor, candidate.minPatch)}, "; "))
 			}
 		} else {
 			check.Note = strings.TrimSpace(strings.Join([]string{candidate.note, "version probe failed: " + probeErr.Error()}, "; "))
@@ -116,7 +117,7 @@ func Run(ctx context.Context, m manifest.Manifest, prober Prober) Result {
 
 func selectedTools(m manifest.Manifest) []tool {
 	tools := []tool{
-		{name: "Go", command: "go", args: []string{"version"}, required: true, note: "builds the generated project", minMajor: 1, minMinor: 26},
+		{name: "Go", command: "go", args: []string{"version"}, required: true, note: "builds the generated project", minMajor: 1, minMinor: 26, minPatch: 5},
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
 	}
 	if m.Distribution.GitHubActions || m.Distribution.GoReleaser {
@@ -155,7 +156,7 @@ func selectedTools(m manifest.Manifest) []tool {
 	return tools
 }
 
-func versionAtLeast(output string, wantMajor, wantMinor int) bool {
+func versionAtLeast(output string, wantMajor, wantMinor, wantPatch int) bool {
 	for _, field := range strings.Fields(output) {
 		if !strings.HasPrefix(field, "go") {
 			continue
@@ -169,7 +170,17 @@ func versionAtLeast(output string, wantMajor, wantMinor int) bool {
 		if majorErr != nil || minorErr != nil {
 			continue
 		}
-		return major > wantMajor || major == wantMajor && minor >= wantMinor
+		if major != wantMajor {
+			return major > wantMajor
+		}
+		if minor != wantMinor {
+			return minor > wantMinor
+		}
+		if len(parts) < 3 {
+			return wantPatch == 0
+		}
+		patch, patchErr := strconv.Atoi(parts[2])
+		return patchErr == nil && patch >= wantPatch
 	}
 	return false
 }

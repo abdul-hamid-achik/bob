@@ -9,7 +9,7 @@ planning, mutation, and drift checks so generation remains inspectable.
 ```text
                   human or agent
                         |
-              CLI / JSON / read-only MCP
+          CLI / JSON / Studio / read-only MCP
                         |
                         v
                   manifest loader
@@ -31,9 +31,10 @@ planning, mutation, and drift checks so generation remains inspectable.
             generated files + bob.lock
 ```
 
-The CLI provides human-readable and versioned JSON output. A thin stdio MCP
-projection exposes offline inspection and compact planning. Studio and MCP
-mutation are not implemented.
+The CLI provides human-readable and versioned JSON output. Studio presents the
+same coherent offline inspection and plan snapshot interactively. A typed stdio
+MCP projection exposes six repository-read-only operations. MCP mutation is not
+implemented.
 
 ## Implemented components
 
@@ -47,7 +48,7 @@ validation. MCP and Studio must be disabled.
 ### Embedded recipe
 
 The `go-agent-tool` recipe renders the complete desired artifact set in memory.
-It is deterministic and versioned. The current `go-agent-tool@2` recipe has no
+It is deterministic and versioned. The current `go-agent-tool@3` recipe has no
 third-party recipe or plugin runtime.
 
 Every artifact has a repository-relative path, complete content, and file mode.
@@ -121,21 +122,61 @@ Bob validates that each reported project root matches the canonical requested
 workspace and never initializes, indexes, resets, migrates, searches, or repairs
 a specialist tool.
 
+### XDG settings and local telemetry
+
+The paths package resolves Bob-specific and XDG configuration, data, state, and
+cache locations without creating them. Settings are strict schema-v1 YAML; a
+missing file produces defaults with telemetry disabled. Initialization is an
+explicit, private, no-overwrite operation.
+
+When enabled, telemetry stores one schema-v1 event per recorded operation under
+the XDG state directory. The durable type contains only closed surface,
+operation, outcome, reason, and recipe values, duration, aggregate action
+counts, and a machine-local HMAC workspace pseudonym. It cannot represent
+paths, argv, filenames, content, labels, or raw errors. Each event claims an
+atomic daily slot; retention and daily caps are local. A best-effort recorder
+keeps telemetry failure outside product-command outcomes.
+
+Aggregation scans only retained private event files and returns totals grouped
+by the closed operation vocabulary. Malformed files are counted as skipped; a
+newer schema is refused rather than reinterpreted.
+
+### Studio
+
+`bob studio` is a Bubble Tea v2 projection with Overview, Plan, and Stats
+views. Its source performs one coherent inspect/plan load per refresh with
+specialist probing disabled. A telemetry adapter supplies only a 30-day
+workspace aggregate. The model exposes no apply, shell, editor, search,
+indexing, probe, or repair command.
+
+The TUI responds to terminal size, supports a forced single-pane layout, and
+keeps the last successful snapshot visible after a failed refresh. It rejects
+non-interactive and dumb terminals so automation receives an ordinary error
+instead of control sequences.
+
 ### MCP projection
 
 `bob mcp serve` uses the official Go MCP SDK and newline-delimited stdio. It
-exposes exactly `bob_inspect` and `bob_plan`; both publish read-only,
-non-destructive, idempotent, closed-world annotations and inferred input/output
-schemas.
+exposes inspect, plan, check, manifest-validation, recipe-description, and
+aggregate-stats tools. All publish repository-read-only, non-destructive,
+idempotent, closed-world annotations and inferred input/output schemas.
 
-The MCP inspector never enables specialist probes. The MCP planner returns a
-compact action projection without desired-content previews or mutation. Agents
-must use the separately approved CLI path for `bob apply`, then re-plan.
+The MCP inspector never enables specialist probes. Planning is bounded by both
+an action count and a byte budget, excludes unchanged actions by default, and
+returns truncation metadata plus a digest of the complete plan. Check computes
+the same digest. Manifest validation accepts exactly one authorized workspace
+or a 64-KiB inline document. Stats returns aggregates, never events.
+
+The server's canonical startup workspace is its exact allowlist by default.
+Repeatable additional paths and explicit any-workspace mode expand that read
+authority. Agents must use the separately approved CLI path for `bob apply`,
+then check or plan again.
 
 ### Output
 
-All commands support a global `--json` flag. Structured stdout uses a versioned
-envelope containing command data, warnings, and next actions. The current CLI
+Normal non-interactive commands support a global `--json` flag. Structured
+stdout uses a versioned envelope containing command data, warnings, and next
+actions. Studio is interactive-only; MCP reserves stdout for JSON-RPC. The CLI
 does not persist plans or receipts.
 
 ## Implemented package boundaries
@@ -148,13 +189,17 @@ internal/recipe/     embedded recipe and artifact rendering
 internal/engine/     plan, whole-file ownership, safe apply, and lock
 internal/doctor/     bounded dependency probes
 internal/inspect/    offline inventory and explicit specialist status probes
-internal/mcp/        typed read-only stdio projection
+internal/paths/      side-effect-free XDG layout resolution
+internal/settings/   strict user settings and private initialization
+internal/telemetry/  local-only event storage, pruning, and aggregation
+internal/studio/     read-only Bubble Tea projection
+internal/mcp/        typed repository-read-only stdio projection
 internal/version/    build metadata
 internal/workspace/  shared canonical workspace resolution
 ```
 
-The CLI coordinates these packages. There is no Studio package, persistent
-store, verifier, MCP mutation handler, or integration orchestrator.
+The CLI coordinates these packages. There is no verifier, MCP mutation handler,
+remote telemetry transport, or integration orchestrator.
 
 ## Ecosystem ownership map
 
@@ -165,7 +210,9 @@ Bob declares optional seams without absorbing specialist behavior.
 | Repository desired state | Bob | Render, plan, apply, and check whole files |
 | Agent reasoning and goals | Agent runtime | Invoke Bob through CLI/JSON |
 | Evidence-guided investigation | Reasoning kernel | Outside Bob; may inspect Bob output |
-| MCP aggregation and harness sync | MCP gateway | Bob supplies two read-only tools; gateway owns routing and sync |
+| MCP aggregation and harness sync | MCP gateway | Bob supplies six typed repository-read-only tools; gateway owns routing, authorization, and sync |
+| Local Bob operations view | Bob Studio | Offline Overview/Plan plus aggregate local Stats; no action execution |
+| Local product usage | Bob telemetry | Disabled by default; private XDG events and aggregate-only public projections |
 | Structural code impact | Code graph tool | Optional generated seam and doctor probe |
 | Semantic search | Search tool | Optional generated seam and doctor probe |
 | Secrets | Secret broker | Optional generated seam; Bob stores no secret values |
@@ -179,18 +226,22 @@ Bob ran it or verified application behavior.
 
 ## Repository state
 
-Bob persists only repository-visible state:
+Bob's repository-visible state remains:
 
 - `bob.yaml`, owned by the user;
 - `bob.lock`, written at the repository root by Bob;
 - whole files generated by the selected recipe.
 
-Plans, command executions, and verification receipts are not stored.
+Plans and verification receipts are not stored. Separately, if and only if
+telemetry is enabled, Bob stores schema-bounded operational events under its XDG
+state directory. The user settings file is machine-local rather than repository
+intent.
 
 ## Implemented safety invariants
 
-1. `plan`, `check`, plain `inspect`, and `explain` do not mutate repository
-   files; the two MCP tools are read-only projections over inspect and plan.
+1. `plan`, `check`, plain `inspect`, `stats`, Studio, and all six MCP tools do
+   not mutate repository files. Optional telemetry writes are isolated to XDG
+   state.
 2. `new` and `init` preview unless `--write` is explicit.
 3. The same validated manifest, recipe version, files, and lock produce the same
    plan.
@@ -210,7 +261,6 @@ Plans, command executions, and verification receipts are not stored.
 
 Future work may add:
 
-- Studio projections over the same deterministic engine;
 - digest-gated, receipt-bearing MCP apply after its race and retry semantics are specified;
 - standalone `adopt` and `verify` workflows;
 - bounded, redacted persistent verification receipts;

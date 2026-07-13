@@ -7,12 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
+	"github.com/abdul-hamid-achik/bob/internal/recipe"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -36,7 +39,7 @@ func (r *offlineRunner) calls() int {
 	return r.runCalls
 }
 
-func TestServerExposesTwoTypedReadOnlyTools(t *testing.T) {
+func TestServerExposesSixTypedReadOnlyTools(t *testing.T) {
 	t.Parallel()
 	root := mcpWorkspace(t)
 	runner := &offlineRunner{}
@@ -45,10 +48,14 @@ func TestServerExposesTwoTypedReadOnlyTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tools) != 2 {
-		t.Fatalf("tool count = %d, want 2", len(listed.Tools))
+	if len(listed.Tools) != 6 {
+		t.Fatalf("tool count = %d, want 6", len(listed.Tools))
 	}
-	want := map[string]bool{"bob_inspect": true, "bob_plan": true}
+	want := map[string]bool{
+		"bob_inspect": true, "bob_plan": true, "bob_check": true,
+		"bob_validate_manifest": true, "bob_recipe_describe": true,
+		"bob_stats": true,
+	}
 	for _, tool := range listed.Tools {
 		if !want[tool.Name] {
 			t.Fatalf("unexpected tool %q", tool.Name)
@@ -58,6 +65,9 @@ func TestServerExposesTwoTypedReadOnlyTools(t *testing.T) {
 		}
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint || !tool.Annotations.IdempotentHint || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
 			t.Fatalf("unsafe annotations for %s: %#v", tool.Name, tool.Annotations)
+		}
+		if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
+			t.Fatalf("open-world annotation for closed-world tool %s: %#v", tool.Name, tool.Annotations)
 		}
 	}
 
@@ -85,8 +95,11 @@ func TestPlanReturnsCompactActionsAndStructuredFailure(t *testing.T) {
 	}
 	var output PlanOutput
 	decodeStructured(t, result, &output)
-	if !output.OK || output.Clean || output.Counts.Create == 0 || len(output.Actions) == 0 {
+	if !output.OK || output.Clean || output.Counts.Create == 0 || len(output.Actions) == 0 || len(output.PlanDigest) != 64 {
 		t.Fatalf("unexpected plan: %#v", output)
+	}
+	if output.Truncation.IncludeUnchanged || output.Truncation.Truncated || output.Truncation.ReturnedActions != len(output.Actions) || output.Truncation.OutputByteLimit != planOutputByteLimit {
+		t.Fatalf("unexpected default action projection: %#v", output.Truncation)
 	}
 	for _, action := range output.Actions {
 		if action.Path == "" || action.DesiredMode == "" {
@@ -129,7 +142,7 @@ func TestMCPStdioSubprocessHasCleanNewlineFraming(t *testing.T) {
 		t.Fatalf("stdio handshake: %v (stderr: %s)", err, stderr.String())
 	}
 	listed, err := session.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 2 {
+	if err != nil || len(listed.Tools) != 6 {
 		t.Fatalf("list tools: count=%d err=%v stderr=%s", len(listed.Tools), err, stderr.String())
 	}
 	if err := session.Close(); err != nil {
@@ -141,10 +154,14 @@ func TestMCPStdioSubprocessHasCleanNewlineFraming(t *testing.T) {
 }
 
 func connect(t *testing.T, root string, runner inspectpkg.Runner) *sdkmcp.ClientSession {
+	return connectWithOptions(t, root, runner, ServerOptions{})
+}
+
+func connectWithOptions(t *testing.T, root string, runner inspectpkg.Runner, options ServerOptions) *sdkmcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	clientTransport, serverTransport := sdkmcp.NewInMemoryTransports()
-	server, err := NewServer(root, runner)
+	server, err := NewServerWithOptions(root, runner, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,6 +173,55 @@ func connect(t *testing.T, root string, runner inspectpkg.Runner) *sdkmcp.Client
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	return session
+}
+
+func applyWorkspace(t *testing.T, root string) {
+	t.Helper()
+	m, err := manifest.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := recipe.Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Apply(root, m, artifacts); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func fileSnapshot(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	got := map[string][]byte{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		got[rel] = data
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func assertSnapshotEqual(t *testing.T, want, got map[string][]byte) {
+	t.Helper()
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("read-only MCP tool changed workspace files\nbefore: %#v\nafter: %#v", want, got)
+	}
 }
 
 func decodeStructured(t *testing.T, result *sdkmcp.CallToolResult, dst any) {
@@ -183,7 +249,11 @@ func mcpWorkspace(t *testing.T) string {
 	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), m, false); err != nil {
 		t.Fatal(err)
 	}
-	return root
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
 }
 
 type synchronizedBuffer struct {

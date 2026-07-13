@@ -12,12 +12,14 @@ export default defineConfig({
     search: { provider: 'local' },
     nav: [
       { text: 'Get Started', link: '/getting-started' },
+      { text: 'Studio', link: '/studio' },
       { text: 'Guides', link: '/guides/existing-repository' },
       {
         text: 'Reference',
         items: [
           { text: 'Manifest', link: '/reference/manifest' },
           { text: 'CLI', link: '/reference/cli' },
+          { text: 'Configuration', link: '/configuration' },
         ],
       },
       { text: 'Architecture', link: '/architecture' },
@@ -36,6 +38,8 @@ export default defineConfig({
         items: [
           { text: 'Existing Repository', link: '/guides/existing-repository' },
           { text: 'Ownership & Safety', link: '/ownership-and-safety' },
+          { text: 'Configuration & Telemetry', link: '/configuration' },
+          { text: 'Studio', link: '/studio' },
         ],
       },
       {
@@ -59,6 +63,7 @@ export default defineConfig({
           { text: 'Product Direction', link: '/product-direction' },
           { text: 'ADR-0001: Repository factory', link: '/adr/0001-repository-factory' },
           { text: 'ADR-0002: Read-only MCP', link: '/adr/0002-read-only-mcp' },
+          { text: 'ADR-0003: Local operator surfaces', link: '/adr/0003-local-operator-surfaces' },
         ],
       },
     ],

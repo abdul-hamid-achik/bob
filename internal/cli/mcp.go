@@ -7,11 +7,14 @@ import (
 
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/mcp"
+	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
-func newMCPCommand(runner inspectpkg.Runner) *cobra.Command {
+func newMCPCommand(runner inspectpkg.Runner, recorder telemetry.Recorder, store *telemetry.Store) *cobra.Command {
 	var selectedWorkspace string
+	var allowedWorkspaces []string
+	var allowAnyWorkspace bool
 	mcpCommand := &cobra.Command{
 		Use:   "mcp",
 		Short: "Expose Bob's compact read-only MCP surface",
@@ -33,7 +36,12 @@ stdio. stdout is reserved for the protocol. Register with MCPHub using:
 				}
 				root = cwd
 			}
-			server, err := mcp.NewServer(root, runner)
+			server, err := mcp.NewServerWithOptions(root, runner, mcp.ServerOptions{
+				AllowedWorkspaces: allowedWorkspaces,
+				AllowAnyWorkspace: allowAnyWorkspace,
+				Recorder:          recorder,
+				Telemetry:         store,
+			})
 			if err != nil {
 				return err
 			}
@@ -43,6 +51,8 @@ stdio. stdout is reserved for the protocol. Register with MCPHub using:
 		},
 	}
 	serve.Flags().StringVar(&selectedWorkspace, "workspace", "", "default existing workspace (defaults to startup cwd)")
+	serve.Flags().StringArrayVar(&allowedWorkspaces, "allow-workspace", nil, "additional exact existing workspace allowed to MCP tools (repeatable)")
+	serve.Flags().BoolVar(&allowAnyWorkspace, "allow-any-workspace", false, "allow MCP tools to read any existing workspace accessible to Bob")
 	mcpCommand.AddCommand(serve)
 	return mcpCommand
 }

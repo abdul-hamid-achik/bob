@@ -24,7 +24,11 @@ internal/recipe    deterministic desired-artifact generation
 internal/engine    ownership lock, plan, conflict detection, safe apply
 internal/doctor    bounded optional-tool capability probes
 internal/inspect   offline workspace inventory and explicit specialist probes
-internal/mcp       typed read-only stdio projection
+internal/paths     side-effect-free XDG path resolution
+internal/settings  strict per-user settings load and private initialization
+internal/telemetry privacy-bounded local event store and aggregates
+internal/studio    read-only Bubble Tea repository and usage projection
+internal/mcp       typed repository-read-only stdio projection
 internal/version   build metadata injected by ldflags
 internal/workspace shared canonical workspace resolution
 ```
@@ -34,10 +38,18 @@ Keep command handlers thin. Filesystem ownership and mutation rules belong in
 
 ## Invariants
 
-- `plan`, `check`, plain `inspect`, and `explain` do not mutate repositories.
+- `plan`, `check`, plain `inspect`, `stats`, `studio`, and `explain` do not
+  mutate repositories.
 - `inspect --probe-integrations` is explicit subprocess authority. It never
   initializes, indexes, resets, searches, or repairs a specialist tool.
-- `bob_inspect` and `bob_plan` are the only MCP tools and never mutate.
+- The six MCP tools never mutate repositories or run specialist probes.
+- MCP defaults to an exact startup workspace allowlist. Broader read authority
+  requires `--allow-workspace` or explicit `--allow-any-workspace`.
+- Telemetry is disabled by default, has no network transport, and never stores
+  paths, arguments, filenames, manifest content, or raw errors.
+- When telemetry is enabled, CLI and MCP operations may append private XDG
+  state; `studio`, `stats`, and configuration commands never record events.
+- Studio exposes no apply, shell, editor, indexing, probing, or repair action.
 - MCP stdout is JSON-RPC-only. Diagnostics belong on stderr.
 - `apply` preflights the complete plan and writes nothing when any conflict
   exists.

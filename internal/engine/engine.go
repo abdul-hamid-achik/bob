@@ -22,7 +22,7 @@ const (
 	// RecipeVersion is the current built-in recipe contract. Locks
 	// from older positive versions are safe upgrade inputs because they record
 	// exact content hashes for every previously managed whole file.
-	RecipeVersion = 2
+	RecipeVersion = 3
 )
 
 // ActionKind is the planner's decision for one desired artifact.

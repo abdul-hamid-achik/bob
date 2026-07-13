@@ -22,8 +22,8 @@ bob.yaml + embedded recipe + bob.lock + working tree
 ```
 
 > **Status: early alpha.** The current contract supports one recipe,
-> `go-agent-tool`, plus a compact read-only MCP surface. Review every plan and
-> resulting diff before publishing.
+> `go-agent-tool`, plus a read-only Studio and six typed MCP tools. Review every
+> plan and resulting diff before publishing.
 
 ## Why Bob exists
 
@@ -46,7 +46,7 @@ feature verified. Agent runtimes may drive Bob; evidence tools verify the result
 
 ## Quick start
 
-Prerequisites: macOS or Linux and Go 1.26 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
+Prerequisites: macOS or Linux and Go 1.26.5 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
 are optional and reported by `bob doctor` when selected.
 
 ```bash
@@ -82,6 +82,20 @@ bob apply
 
 `plan` and `check` never write. `apply` refuses the entire operation if even one
 target conflicts.
+
+Bob also has local operator surfaces that do not change repository files:
+
+```bash
+bob config show       # resolved XDG paths and effective settings
+bob stats .           # aggregate local usage; empty while telemetry is disabled
+bob studio .          # interactive Overview, Plan, and Stats board
+```
+
+Telemetry is disabled by default, has no network transport, and stores only a
+bounded event schema under Bob's XDG state directory when explicitly enabled.
+It never stores paths, arguments, filenames, manifest content, or raw errors.
+See [Configuration & local telemetry](docs/configuration.md) and
+[Studio](docs/studio.md).
 
 Inspect Bob-managed state and offline binary availability without running
 specialist tools:
@@ -132,11 +146,14 @@ file.cheap    durable evidence artifacts
 Monitor       bounded runtime observations
 ```
 
-Bob exposes a compact stdio MCP projection with exactly two read-only tools:
+Bob exposes a typed stdio MCP projection with six repository-read-only tools:
 
 - `bob_inspect` returns Bob drift plus offline Codemap and Vecgrep availability;
-- `bob_plan` returns a compact, structured repository plan without content
-  previews.
+- `bob_plan` returns a bounded plan and deterministic digest;
+- `bob_check` returns a compact convergence and drift result;
+- `bob_validate_manifest` strictly validates workspace or inline YAML;
+- `bob_recipe_describe` reports the embedded recipe contract;
+- `bob_stats` returns aggregate opt-in local usage without individual events.
 
 Mutation deliberately remains on the normal approved command path:
 `bob apply <workspace>`. This avoids hiding filesystem effects behind a generic
@@ -152,12 +169,19 @@ Install a checkout-built binary and register it with MCPHub:
 task install
 BOB_BIN="$(go env GOBIN)"
 [ -n "$BOB_BIN" ] || BOB_BIN="$(go env GOPATH)/bin"
-mcphub add bob "$BOB_BIN/bob" mcp serve \
+mcphub add bob "$BOB_BIN/bob" \
   --description "Deterministic agent-ready repository builder" \
-  --tag builder
-mcphub pin bob__bob_inspect bob__bob_plan
+  --tag builder --tag code -- \
+  mcp serve --workspace /absolute/path/to/repository
+mcphub pin bob__bob_inspect bob__bob_plan bob__bob_check \
+  bob__bob_validate_manifest bob__bob_recipe_describe bob__bob_stats
 mcphub doctor --server bob --probe
 ```
+
+That registration gives the selected repository as the server's exact
+workspace allowlist. A trusted local gateway that intentionally serves many
+repositories can register `mcp serve --allow-any-workspace` instead; this
+expands read authority and must be an explicit choice.
 
 For allowlists, gateway names, approval behavior, and the explicit integration
 probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local-agent.md).
@@ -167,12 +191,15 @@ probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local
 - [Documentation home](docs/index.md)
 - [Getting started](docs/getting-started.md)
 - [Ownership and safety](docs/ownership-and-safety.md)
+- [Configuration & local telemetry](docs/configuration.md)
+- [Studio](docs/studio.md)
 - [Manifest reference](docs/reference/manifest.md)
 - [CLI reference](docs/reference/cli.md)
 - [Product direction](docs/product-direction.md)
 - [Architecture](docs/architecture.md)
 - [ADR-0001: choose a repository factory](docs/adr/0001-repository-factory.md)
 - [ADR-0002: compact read-only MCP surface](docs/adr/0002-read-only-mcp.md)
+- [ADR-0003: local operator surfaces and rich MCP](docs/adr/0003-local-operator-surfaces.md)
 - [Specification](SPEC.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)

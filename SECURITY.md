@@ -23,10 +23,27 @@ Bob generates and reconciles repository files. It does not sandbox commands,
 manage secrets, or make agent authorization decisions. It does not run generated
 project commands during `plan` or `apply`.
 
-Bob's MCP tools are read-only, but they may read any existing workspace path the
-hosting process can access. The server's `--workspace` is a default, not a
-sandbox boundary. MCP annotations describe intended effects; MCPHub and agent
-runtimes must still enforce their own authorization policies.
+Bob's MCP tools never mutate repositories. By default, they may read only the
+canonical startup workspace. Repeatable `--allow-workspace` flags add exact
+existing workspaces. `--allow-any-workspace` deliberately expands this to any
+existing workspace path the hosting process can access; it is not a sandbox
+boundary. MCP annotations describe intended repository effects; MCPHub and
+agent runtimes must still enforce their own authorization policies.
+
+Telemetry is disabled by default and has no network transport. When explicitly
+enabled, CLI and MCP operations write bounded JSON events only beneath Bob's
+resolved XDG state directory. The event schema has no field for paths,
+arguments, filenames, file or manifest content, free-form labels, or raw error
+messages. Workspace identity is a machine-local HMAC pseudonym whose secret key
+is stored alongside the private telemetry metadata. Directories are mode 0700
+and files are mode 0600. Recording is best-effort and cannot fail the requested
+Bob operation.
+
+`bob stats`, `bob_stats`, and Studio consume aggregates rather than exposing
+individual events. Studio never records its own use or changes repository
+files. With telemetry enabled, Bob runtime initialization may create private
+store metadata in the XDG state directory even for a read-only repository
+surface.
 
 Plain `inspect` does not launch specialist tools. The explicit
 `--probe-integrations` flag runs bounded Codemap and Vecgrep status commands;
@@ -41,3 +58,8 @@ Bob uses pathname-based atomic publication. A concurrent same-user
 process that replaces an already-checked parent directory is outside Bob's OS
 containment boundary. Run `apply` only in a trusted workspace whose parent
 directories are not being mutated concurrently.
+
+The settings and telemetry directories protect against symlinked terminal
+directories and reject non-regular settings/event files. They do not protect
+against another process already running as the same OS user. Treat access to
+the Bob process and its XDG directories as access to local operational data.

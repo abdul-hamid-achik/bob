@@ -7,7 +7,7 @@ subprocess behavior, or public contracts.
 
 ## Development setup
 
-You need Go 1.26 or newer. Node.js 22 or newer is required only for the
+You need Go 1.26.5 or newer. Node.js 22 or newer is required only for the
 documentation site. [Task](https://taskfile.dev/) is recommended but not
 required.
 

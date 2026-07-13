@@ -20,7 +20,7 @@ features:
   - title: Ownership you can audit
     details: bob.lock records content hashes for whole files Bob may safely reconcile.
   - title: Agent-native, model-free
-    details: Use stable JSON and read-only MCP tools from local-agent, MCPHub, or another runtime.
+    details: Use stable JSON, six read-only MCP tools, or the local Studio without adding a model runtime.
 ---
 
 Bob compiles `bob.yaml` through a versioned recipe, compares the result with the
@@ -47,6 +47,8 @@ bob.yaml + recipe + bob.lock + working tree
 | Create a new public Go tool | [Getting Started](./getting-started.md) |
 | Bring Bob into an existing directory | [Existing Repository](./guides/existing-repository.md) |
 | Understand a conflict or lock decision | [Ownership & Safety](./ownership-and-safety.md) |
+| Configure local paths or usage stats | [Configuration & local telemetry](./configuration.md) |
+| Monitor a workspace interactively | [Bob Studio](./studio.md) |
 | Connect Bob to an agent | [MCPHub & local-agent](./guides/mcphub-local-agent.md) |
 
 > Bob is early alpha. There is no tagged release yet. Build from a checkout,

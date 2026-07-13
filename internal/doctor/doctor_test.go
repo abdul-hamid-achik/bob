@@ -59,6 +59,10 @@ func TestRunRejectsFailedRequiredProbeAndOldGo(t *testing.T) {
 	if result.Ready || result.Checks[0].Usable {
 		t.Fatalf("old Go reported usable: %#v", result)
 	}
+	result = Run(context.Background(), m, fakeProber{goVersion: "go version go1.26.4 test"})
+	if result.Ready || result.Checks[0].Usable || !strings.Contains(result.Checks[0].Note, "Go 1.26.5 or newer") {
+		t.Fatalf("pre-security-patch Go reported usable: %#v", result)
+	}
 }
 
 func TestVersionAtLeast(t *testing.T) {
@@ -66,8 +70,18 @@ func TestVersionAtLeast(t *testing.T) {
 	for _, test := range []struct {
 		value string
 		want  bool
-	}{{"go version go1.26.0 darwin/arm64", true}, {"go1.27.1", true}, {"go version go1.25.9", false}, {"garbage", false}} {
-		if got := versionAtLeast(test.value, 1, 26); got != test.want {
+	}{
+		{"go version go1.26.0 darwin/arm64", false},
+		{"go version go1.26.4 darwin/arm64", false},
+		{"go version go1.26.5 darwin/arm64", true},
+		{"go version go1.26.6 darwin/arm64", true},
+		{"go1.26.5rc1", false},
+		{"go1.27.0", true},
+		{"go2.0.0", true},
+		{"go version go1.25.99", false},
+		{"garbage", false},
+	} {
+		if got := versionAtLeast(test.value, 1, 26, 5); got != test.want {
 			t.Errorf("versionAtLeast(%q) = %t, want %t", test.value, got, test.want)
 		}
 	}

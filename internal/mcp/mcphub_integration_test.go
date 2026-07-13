@@ -13,7 +13,8 @@ import (
 
 // TestMCPHubLocalAgentScopeRoute is opt-in because it exercises the user's
 // installed Bob binary and MCPHub's local-agent-scoped configuration. It does
-// not start Local Agent or test its outer namespacing and approval policy.
+// not start Local Agent or test its outer namespacing and approval policy. The
+// temporary workspace is intentionally outside Bob's startup allowlist.
 func TestMCPHubLocalAgentScopeRoute(t *testing.T) {
 	if os.Getenv("BOB_TEST_MCPHUB") != "1" {
 		t.Skip("set BOB_TEST_MCPHUB=1 to test the installed local-agent gateway route")
@@ -49,8 +50,15 @@ func TestMCPHubLocalAgentScopeRoute(t *testing.T) {
 		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
 			Name: name, Arguments: map[string]any{"workspace": root},
 		})
-		if err != nil || result.IsError {
-			t.Fatalf("call %s through MCPHub: result=%#v err=%v", name, result, err)
+		if err != nil || !result.IsError {
+			t.Fatalf("call %s should preserve Bob's exact workspace authority: result=%#v err=%v", name, result, err)
+		}
+		var output struct {
+			Error *ErrorInfo `json:"error,omitempty"`
+		}
+		decodeStructured(t, result, &output)
+		if output.Error == nil || output.Error.Code != "workspace_unauthorized" {
+			t.Fatalf("call %s returned unexpected authority error: %#v", name, output.Error)
 		}
 	}
 }

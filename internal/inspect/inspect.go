@@ -132,13 +132,32 @@ type Report struct {
 	NextActions   []CommandAction `json:"next_actions"`
 }
 
+// Snapshot is one coherent repository observation shared by the CLI, Studio,
+// and other read-only adapters. Plan is nil when no valid Bob plan can be
+// produced, while Report still carries the bounded missing/invalid state.
+type Snapshot struct {
+	Report     Report             `json:"report"`
+	Plan       *engine.PlanResult `json:"plan,omitempty"`
+	CapturedAt time.Time          `json:"captured_at"`
+}
+
 // Run inspects a workspace. Specialist processes run only when explicitly
 // requested because their current status commands may open tool-owned stores,
 // migrate metadata, or contact a configured provider.
 func Run(ctx context.Context, root string, opts Options, runner Runner) (Report, error) {
-	canonical, err := workspace.Resolve(root, true)
+	snapshot, err := Load(ctx, root, opts, runner)
 	if err != nil {
 		return Report{}, err
+	}
+	return snapshot.Report, nil
+}
+
+// Load observes the repository once and returns the report together with the
+// exact plan from which its repository counts were projected.
+func Load(ctx context.Context, root string, opts Options, runner Runner) (Snapshot, error) {
+	canonical, err := workspace.Resolve(root, true)
+	if err != nil {
+		return Snapshot{}, err
 	}
 	if runner == nil {
 		runner = ExecRunner{}
@@ -160,7 +179,7 @@ func Run(ctx context.Context, root string, opts Options, runner Runner) (Report,
 		report.Warnings = append(report.Warnings, "specialist status probes were explicitly requested; Codemap may open tool-owned stores and Vecgrep may contact its configured provider")
 	}
 
-	m, manifestOK := inspectRepository(canonical, &report)
+	m, manifestOK, plan := inspectRepository(canonical, &report)
 	selected := map[string]bool{}
 	if manifestOK {
 		selected["codemap"] = m.Integrations.CodeStructure == "codemap"
@@ -171,10 +190,10 @@ func Run(ctx context.Context, root string, opts Options, runner Runner) (Report,
 		report.Integrations = append(report.Integrations, integration)
 		mergeIntegration(&report, integration, opts.ProbeIntegrations)
 	}
-	return report, nil
+	return Snapshot{Report: report, Plan: plan, CapturedAt: time.Now().UTC()}, nil
 }
 
-func inspectRepository(root string, report *Report) (manifest.Manifest, bool) {
+func inspectRepository(root string, report *Report) (manifest.Manifest, bool, *engine.PlanResult) {
 	if _, err := os.Stat(report.Repository.ManifestPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			report.Repository.Error = "bob.yaml is missing"
@@ -183,19 +202,19 @@ func inspectRepository(root string, report *Report) (manifest.Manifest, bool) {
 				Reason: "initialize a Bob manifest after choosing the public module path", CWD: root,
 				Argv: []string{"bob", "init", ".", "--module", "<module>", "--write"}, RequiresExplicitAuthority: true,
 			})
-			return manifest.Manifest{}, false
+			return manifest.Manifest{}, false, nil
 		}
 		report.Repository.State = "invalid_manifest"
 		report.Repository.Error = boundedDetail(err.Error())
 		report.Warnings = append(report.Warnings, "bob.yaml could not be read")
-		return manifest.Manifest{}, false
+		return manifest.Manifest{}, false, nil
 	}
 	m, err := manifest.Load(root)
 	if err != nil {
 		report.Repository.State = "invalid_manifest"
 		report.Repository.Error = boundedDetail(err.Error())
 		report.Warnings = append(report.Warnings, "bob.yaml is invalid")
-		return manifest.Manifest{}, false
+		return manifest.Manifest{}, false, nil
 	}
 	report.Repository.Recipe = m.Recipe
 	artifacts, err := recipe.Render(m)
@@ -203,14 +222,14 @@ func inspectRepository(root string, report *Report) (manifest.Manifest, bool) {
 		report.Repository.State = "plan_error"
 		report.Repository.Error = boundedDetail(err.Error())
 		report.Warnings = append(report.Warnings, "recipe rendering failed")
-		return m, true
+		return m, true, nil
 	}
 	plan, err := engine.Plan(root, m, artifacts)
 	if err != nil {
 		report.Repository.State = "plan_error"
 		report.Repository.Error = boundedDetail(err.Error())
 		report.Warnings = append(report.Warnings, "repository planning failed")
-		return m, true
+		return m, true, nil
 	}
 	report.Repository.ManagedFiles = len(plan.Actions)
 	report.Repository.LockChanged = plan.LockChanged
@@ -248,7 +267,7 @@ func inspectRepository(root string, report *Report) (manifest.Manifest, bool) {
 			Argv: []string{"bob", "plan", "."}, RequiresExplicitAuthority: false,
 		})
 	}
-	return m, true
+	return m, true, &plan
 }
 
 func inspectIntegration(ctx context.Context, root, name string, selected bool, opts Options, runner Runner) Integration {

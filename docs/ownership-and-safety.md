@@ -50,11 +50,26 @@ that plan before continuing.
 
 ## Commands and authority
 
-- `plan`, `check`, and plain `inspect` do not mutate the repository.
+- `plan`, `check`, plain `inspect`, `stats`, and Studio do not mutate the
+  repository.
 - `inspect --probe-integrations` explicitly launches selected status commands;
   current Codemap may open tool-owned state and Vecgrep may contact its provider.
 - `apply` is the explicit repository mutation command.
-- `bob_inspect` and `bob_plan` are the only MCP tools; both are read-only.
+- All six MCP tools have read-only repository effects. Manifest validation may
+  also operate on bounded inline YAML; recipe description needs no workspace.
+- MCP starts with an exact workspace allowlist. `--allow-workspace` adds exact
+  paths and `--allow-any-workspace` deliberately broadens read authority.
+
+Repository-read-only does not mean Bob never writes any machine-local state.
+When telemetry is explicitly enabled, recorded CLI and MCP operations may
+append a privacy-bounded event beneath Bob's XDG state directory. Telemetry is
+disabled by default, has no network transport, and cannot represent paths,
+arguments, filenames, content, or raw errors. `stats`, `bob_stats`, Studio, and
+configuration commands do not record events.
+
+Studio never runs specialist probes and exposes no apply, shell, editor,
+indexing, or repair action. A displayed next action is inert text until a person
+or agent invokes it through the normal authority path.
 
 MCP annotations describe intent but do not grant permission. MCPHub and the
 calling agent runtime remain separate authorization boundaries.

@@ -44,4 +44,19 @@ outcomes:
       verify:
         screen:
             contains: mcp
-contractHash: sha256:b549fe2e186cec835c36d29c36c03935cbd1d53ba13b983d3f870c84acb1b720
+    - id: lists_config
+      description: help lists the user configuration command
+      verify:
+        screen:
+            contains: config
+    - id: lists_stats
+      description: help lists the local aggregate usage command
+      verify:
+        screen:
+            contains: stats
+    - id: lists_studio
+      description: help lists the interactive read-only studio
+      verify:
+        screen:
+            contains: studio
+contractHash: sha256:f3561232101d332e66a13c311f90e87a6bb3dd76a7d5d6e514d49c9ae983b33b

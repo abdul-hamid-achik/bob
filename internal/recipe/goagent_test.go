@@ -204,7 +204,8 @@ func TestRenderGoAgentToolProducesSyntacticGo(t *testing.T) {
 			t.Errorf("generated %s is not gofmt-clean", path)
 		}
 	}
-	if got := files["go.mod"]; !strings.Contains(got, "module github.com/acme/acme-tool") || !strings.Contains(got, "github.com/spf13/cobra v1.10.2") {
+	if got := files["go.mod"]; !strings.Contains(got, "module github.com/acme/acme-tool") ||
+		!strings.Contains(got, "go 1.26.5") || !strings.Contains(got, "github.com/spf13/cobra v1.10.2") {
 		t.Errorf("generated go.mod is incomplete:\n%s", got)
 	}
 }

@@ -1,78 +1,53 @@
-// Package mcp exposes Bob's read-only repository inventory and planning surface
+// Package mcp exposes Bob's repository-read-only inventory and planning surface
 // over stdio. It never invokes Cobra, parses CLI output, or writes to stdout
-// outside the MCP transport.
+// outside the MCP transport. When explicitly enabled, machine-local telemetry
+// records privacy-bounded operation events under Bob's XDG state directory.
 package mcp
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
-	"github.com/abdul-hamid-achik/bob/internal/manifest"
-	"github.com/abdul-hamid-achik/bob/internal/recipe"
+	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 	"github.com/abdul-hamid-achik/bob/internal/version"
 	"github.com/abdul-hamid-achik/bob/internal/workspace"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const instructions = `Bob is a deterministic repository factory. Use bob_inspect first to read
-Bob-managed drift and offline integration availability, then bob_plan to review every proposed
-file action. These MCP tools never mutate. To apply a conflict-free plan, use the normal approved
-shell path with "bob apply <workspace>", then call bob_plan again. Codemap and Vecgrep search,
+const instructions = `Bob is a deterministic repository factory. Use bob_inspect or bob_check to
+read Bob-managed state, bob_validate_manifest to validate a workspace manifest or bounded inline
+YAML, bob_recipe_describe to inspect the embedded recipe contract, bob_stats to summarize opt-in
+local usage, and bob_plan to review proposed file actions. These MCP tools never mutate repositories; opt-in telemetry may update Bob's local XDG state. To apply a conflict-free plan, use the normal approved
+shell path with "bob apply <workspace>", then call bob_check again. Codemap and Vecgrep search,
 impact analysis, indexing, and verification remain owned by those tools and Cortex.`
 
 type Server struct {
-	defaultWorkspace string
-	runner           inspectpkg.Runner
-	srv              *sdkmcp.Server
+	authority workspaceAuthority
+	runner    inspectpkg.Runner
+	recorder  telemetry.Recorder
+	telemetry *telemetry.Store
+	srv       *sdkmcp.Server
 }
 
-type WorkspaceInput struct {
-	Workspace string `json:"workspace,omitempty" jsonschema:"existing repository directory; defaults to the server startup workspace"`
-}
-
-type ErrorInfo struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-type InspectOutput struct {
-	SchemaVersion int                `json:"schema_version"`
-	OK            bool               `json:"ok"`
-	Report        *inspectpkg.Report `json:"report,omitempty"`
-	Error         *ErrorInfo         `json:"error,omitempty"`
-}
-
-type PlanAction struct {
-	Path          string `json:"path"`
-	Kind          string `json:"kind"`
-	CurrentSHA256 string `json:"current_sha256,omitempty"`
-	DesiredSHA256 string `json:"desired_sha256,omitempty"`
-	LockedSHA256  string `json:"locked_sha256,omitempty"`
-	CurrentMode   string `json:"current_mode,omitempty"`
-	DesiredMode   string `json:"desired_mode,omitempty"`
-	Reason        string `json:"reason,omitempty"`
-}
-
-type PlanOutput struct {
-	SchemaVersion int                        `json:"schema_version"`
-	OK            bool                       `json:"ok"`
-	Workspace     string                     `json:"workspace"`
-	Clean         bool                       `json:"clean"`
-	LockChanged   bool                       `json:"lock_changed"`
-	ConflictCount int                        `json:"conflict_count"`
-	Counts        inspectpkg.ActionCounts    `json:"counts"`
-	Actions       []PlanAction               `json:"actions"`
-	Warnings      []string                   `json:"warnings"`
-	NextActions   []inspectpkg.CommandAction `json:"next_actions"`
-	Error         *ErrorInfo                 `json:"error,omitempty"`
+// ServerOptions narrows the filesystem authority granted to the MCP server.
+// The startup workspace is always included in the exact allowlist.
+type ServerOptions struct {
+	AllowedWorkspaces []string
+	AllowAnyWorkspace bool
+	Recorder          telemetry.Recorder
+	Telemetry         *telemetry.Store
 }
 
 // NewServer constructs the compact read-only MCP surface.
 func NewServer(defaultWorkspace string, runner inspectpkg.Runner) (*Server, error) {
+	return NewServerWithOptions(defaultWorkspace, runner, ServerOptions{})
+}
+
+// NewServerWithOptions constructs the MCP surface with explicit workspace
+// authority. Relative allowed workspaces are resolved from the startup root.
+func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, options ServerOptions) (*Server, error) {
 	if defaultWorkspace == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -87,7 +62,17 @@ func NewServer(defaultWorkspace string, runner inspectpkg.Runner) (*Server, erro
 	if runner == nil {
 		runner = inspectpkg.ExecRunner{}
 	}
-	s := &Server{defaultWorkspace: canonical, runner: runner}
+	if options.Recorder == nil {
+		options.Recorder = telemetry.Noop{}
+	}
+	authority, err := newWorkspaceAuthority(canonical, options.AllowedWorkspaces, options.AllowAnyWorkspace)
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{
+		authority: authority, runner: runner,
+		recorder: telemetry.BestEffort(options.Recorder), telemetry: options.Telemetry,
+	}
 	s.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "bob", Version: version.Version},
 		&sdkmcp.ServerOptions{Instructions: instructions},
@@ -112,8 +97,24 @@ func (s *Server) register() {
 	), s.handleInspect)
 	sdkmcp.AddTool(s.srv, readOnlyTool(
 		"bob_plan", "Plan repository construction",
-		"Return a compact deterministic action list for the current bob.yaml and bob.lock. Conflicts are useful plan results and block the separate approved CLI apply path.",
+		"Return a bounded deterministic action list and digest for the current bob.yaml and bob.lock. Unchanged actions are excluded by default. Conflicts are useful plan results and block the separate approved CLI apply path.",
 	), s.handlePlan)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_check", "Check Bob-managed repository convergence",
+		"Return a compact convergence, conflict, and lock-drift summary with the same complete-plan digest as bob_plan. Does not run specialist commands or mutate.",
+	), s.handleCheck)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_validate_manifest", "Validate a Bob manifest",
+		"Strictly validate exactly one source: bob.yaml in an authorized workspace or bounded inline YAML. Returns the normalized typed manifest and never writes it.",
+	), s.handleValidateManifest)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_recipe_describe", "Describe an embedded Bob recipe",
+		"Describe the deterministic built-in recipe contract, supported choices, schema version, and generated surfaces without reading a workspace.",
+	), s.handleRecipeDescribe)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_stats", "Summarize local Bob usage",
+		"Return aggregate opt-in local telemetry for an authorized workspace or all pseudonymous workspaces. Never returns individual events or stored raw paths, arguments, filenames, manifests, or raw errors.",
+	), s.handleStats)
 }
 
 func readOnlyTool(name, title, description string) *sdkmcp.Tool {
@@ -126,104 +127,4 @@ func readOnlyTool(name, title, description string) *sdkmcp.Tool {
 			IdempotentHint: true, OpenWorldHint: &openWorld,
 		},
 	}
-}
-
-func (s *Server) handleInspect(ctx context.Context, _ *sdkmcp.CallToolRequest, in WorkspaceInput) (*sdkmcp.CallToolResult, *InspectOutput, error) {
-	root := s.resolveInput(in.Workspace)
-	report, err := inspectpkg.Run(ctx, root, inspectpkg.Options{}, s.runner)
-	if err != nil {
-		out := &InspectOutput{SchemaVersion: 1, OK: false, Error: &ErrorInfo{Code: "workspace_invalid", Message: err.Error()}}
-		return &sdkmcp.CallToolResult{IsError: true}, out, nil
-	}
-	out := &InspectOutput{SchemaVersion: 1, OK: true, Report: &report}
-	return &sdkmcp.CallToolResult{}, out, nil
-}
-
-func (s *Server) handlePlan(_ context.Context, _ *sdkmcp.CallToolRequest, in WorkspaceInput) (*sdkmcp.CallToolResult, *PlanOutput, error) {
-	root := s.resolveInput(in.Workspace)
-	canonical, err := workspace.Resolve(root, true)
-	if err != nil {
-		return planFailure(root, "workspace_invalid", err)
-	}
-	m, err := manifest.Load(canonical)
-	if err != nil {
-		return planFailure(canonical, "manifest_invalid", err)
-	}
-	artifacts, err := recipe.Render(m)
-	if err != nil {
-		return planFailure(canonical, "recipe_invalid", err)
-	}
-	plan, err := engine.Plan(canonical, m, artifacts)
-	if err != nil {
-		return planFailure(canonical, "plan_failed", err)
-	}
-	out := projectPlan(canonical, plan)
-	return &sdkmcp.CallToolResult{}, out, nil
-}
-
-func (s *Server) resolveInput(input string) string {
-	if input == "" {
-		return s.defaultWorkspace
-	}
-	if filepath.IsAbs(input) {
-		return input
-	}
-	return filepath.Join(s.defaultWorkspace, input)
-}
-
-func projectPlan(root string, plan engine.PlanResult) *PlanOutput {
-	out := &PlanOutput{
-		SchemaVersion: 1, OK: true, Workspace: root, LockChanged: plan.LockChanged,
-		ConflictCount: plan.ConflictCount, Actions: make([]PlanAction, 0, len(plan.Actions)),
-		Warnings: []string{}, NextActions: []inspectpkg.CommandAction{},
-	}
-	for _, action := range plan.Actions {
-		projected := PlanAction{
-			Path: action.Path, Kind: string(action.Kind), CurrentSHA256: action.CurrentSHA256,
-			DesiredSHA256: action.DesiredSHA256, LockedSHA256: action.LockedSHA256,
-			DesiredMode: fmt.Sprintf("%04o", action.DesiredMode.Perm()), Reason: action.Reason,
-		}
-		if action.CurrentMode != 0 {
-			projected.CurrentMode = fmt.Sprintf("%04o", action.CurrentMode.Perm())
-		}
-		out.Actions = append(out.Actions, projected)
-		switch action.Kind {
-		case engine.ActionCreate:
-			out.Counts.Create++
-		case engine.ActionUpdate:
-			out.Counts.Update++
-		case engine.ActionAdopt:
-			out.Counts.Adopt++
-		case engine.ActionUnchanged:
-			out.Counts.Unchanged++
-		case engine.ActionConflict:
-			out.Counts.Conflict++
-		}
-	}
-	out.Clean = !plan.LockChanged && out.Counts.Unchanged == len(plan.Actions)
-	switch {
-	case plan.HasConflicts():
-		out.Warnings = append(out.Warnings, fmt.Sprintf("%d conflict(s) block apply", plan.ConflictCount))
-		out.NextActions = append(out.NextActions, inspectpkg.CommandAction{
-			Reason: "resolve Bob ownership conflicts, then replan", CWD: root,
-			Argv: []string{"bob", "plan", root}, RequiresExplicitAuthority: false,
-		})
-	case out.Clean:
-		// The empty continuation is intentional: the repository is converged.
-	default:
-		out.NextActions = append(out.NextActions, inspectpkg.CommandAction{
-			Reason: "apply the reviewed conflict-free plan through the approved shell path", CWD: root,
-			Argv: []string{"bob", "apply", root}, RequiresExplicitAuthority: true,
-		})
-	}
-	return out
-}
-
-func planFailure(root, code string, err error) (*sdkmcp.CallToolResult, *PlanOutput, error) {
-	out := &PlanOutput{
-		SchemaVersion: 1, OK: false, Workspace: root, Actions: []PlanAction{},
-		Warnings: []string{}, NextActions: []inspectpkg.CommandAction{},
-		Error: &ErrorInfo{Code: code, Message: err.Error()},
-	}
-	return &sdkmcp.CallToolResult{IsError: true}, out, nil
 }

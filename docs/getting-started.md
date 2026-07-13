@@ -5,7 +5,7 @@ Build and use Bob from source in about five minutes.
 ## Prerequisites
 
 - macOS or Linux
-- Go 1.26 or newer
+- Go 1.26.5 or newer
 - Git
 - Task is optional; direct Go commands work too
 
@@ -76,5 +76,7 @@ not mean Bob ran or verified the external tool.
 ## Next steps
 
 - Read [Ownership & Safety](./ownership-and-safety.md) before changing managed files.
+- Review [Configuration & local telemetry](./configuration.md) before opting into local stats.
+- Open [Bob Studio](./studio.md) for a read-only interactive workspace view.
 - Read the [Manifest Reference](./reference/manifest.md) before changing capabilities.
 - Use [MCPHub & local-agent](./guides/mcphub-local-agent.md) to expose Bob to an agent.

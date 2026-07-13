@@ -26,6 +26,7 @@ searches, indexes, repairs, or verifies the repository.`,
 			if err != nil {
 				return fmt.Errorf("inspect: %w", err)
 			}
+			captureInspectMetrics(opts, report)
 			if opts.json {
 				return emitJSON(cmd.OutOrStdout(), "inspect", report, report.Warnings, actionReasons(report.NextActions))
 			}

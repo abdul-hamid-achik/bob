@@ -1,6 +1,6 @@
 # ADR-0002: expose a compact read-only MCP surface
 
-- Status: accepted
+- Status: superseded by ADR-0003
 - Date: 2026-07-12
 
 ## Context

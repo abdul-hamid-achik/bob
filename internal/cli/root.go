@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abdul-hamid-achik/bob/internal/doctor"
 	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
+	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 	"github.com/abdul-hamid-achik/bob/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -24,14 +26,26 @@ type Dependencies struct {
 	ErrOut            io.Writer
 	Prober            doctor.Prober
 	IntegrationRunner inspectpkg.Runner
+	Recorder          telemetry.Recorder
+	Telemetry         *telemetry.Store
+	StudioRunner      StudioRunner
+	metrics           *commandMetrics
 }
 
 type options struct {
-	json bool
+	json    bool
+	metrics *commandMetrics
 }
 
 func Execute() error {
-	return execute(os.Args[1:], Dependencies{Out: os.Stdout, ErrOut: os.Stderr, Prober: doctor.ExecProber{}, IntegrationRunner: inspectpkg.ExecRunner{}})
+	deps := Dependencies{Out: os.Stdout, ErrOut: os.Stderr, Prober: doctor.ExecProber{}, IntegrationRunner: inspectpkg.ExecRunner{}}
+	store, recorder, warning := loadTelemetryRuntime()
+	deps.Telemetry = store
+	deps.Recorder = recorder
+	if warning != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "bob: warning: %s\n", warning)
+	}
+	return execute(os.Args[1:], deps)
 }
 
 type reportedError struct{ err error }
@@ -40,9 +54,14 @@ func (e reportedError) Error() string { return e.err.Error() }
 func (e reportedError) Unwrap() error { return e.err }
 
 func execute(args []string, deps Dependencies) error {
+	if deps.metrics == nil {
+		deps.metrics = &commandMetrics{}
+	}
+	started := time.Now()
 	cmd := New(deps)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
+	recordCLI(cmd.Context(), deps, args, time.Since(started), err)
 	if err == nil || !jsonRequested(args) || mcpRequested(args) {
 		return err
 	}
@@ -72,7 +91,10 @@ func New(deps Dependencies) *cobra.Command {
 	if deps.IntegrationRunner == nil {
 		deps.IntegrationRunner = inspectpkg.ExecRunner{}
 	}
-	opts := &options{}
+	if deps.Recorder == nil {
+		deps.Recorder = telemetry.Noop{}
+	}
+	opts := &options{metrics: deps.metrics}
 	root := &cobra.Command{
 		Use:           "bob",
 		Short:         "deterministic repository factory for agent-native developer tools",
@@ -91,7 +113,10 @@ func New(deps Dependencies) *cobra.Command {
 		newCheckCommand(opts),
 		newDoctorCommand(opts, deps.Prober),
 		newInspectCommand(opts, deps.IntegrationRunner),
-		newMCPCommand(deps.IntegrationRunner),
+		newMCPCommand(deps.IntegrationRunner, deps.Recorder, deps.Telemetry),
+		newConfigCommand(opts),
+		newStatsCommand(opts, deps.Telemetry),
+		newStudioCommand(opts, deps.StudioRunner, deps.IntegrationRunner, deps.Telemetry),
 		newExplainCommand(opts),
 		newRecipeCommand(opts),
 		newVersionCommand(opts),
@@ -120,6 +145,7 @@ func newNewCommand(opts *options) *cobra.Command {
 			}
 			target = canonicalTarget
 			m := manifest.Default(name, module, description)
+			captureWorkspaceMetrics(opts, target, true)
 			artifacts, err := recipe.Render(m)
 			if err != nil {
 				return fmt.Errorf("new: %w", err)
@@ -174,6 +200,7 @@ func newInitCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("init: inspect target: %w", err)
 			}
 			root = canonicalRoot
+			captureWorkspaceMetrics(opts, root, true)
 			if name == "" {
 				absolute, absErr := filepath.Abs(root)
 				if absErr != nil {
@@ -226,6 +253,7 @@ func newPlanCommand(opts *options) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("plan: %w", err)
 			}
+			capturePlanMetrics(opts, root, plan)
 			if opts.json {
 				return emitJSON(cmd.OutOrStdout(), "plan", plan, conflictWarnings(plan), planNextActions(plan))
 			}
@@ -243,6 +271,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
+			captureWorkspaceMetrics(opts, root, true)
 			m, err := manifest.Load(root)
 			if err != nil {
 				return fmt.Errorf("apply: %w", err)
@@ -273,10 +302,12 @@ func newCheckCommand(opts *options) *cobra.Command {
 		Short: "Fail when managed repository state would change",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			plan, err := loadPlan(argumentPath(args))
+			root := argumentPath(args)
+			plan, err := loadPlan(root)
 			if err != nil {
 				return fmt.Errorf("check: %w", err)
 			}
+			capturePlanMetrics(opts, root, plan)
 			clean := !plan.LockChanged
 			for _, action := range plan.Actions {
 				if action.Kind != engine.ActionUnchanged {
@@ -314,7 +345,9 @@ func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
 		Short: "Probe required and selected optional development tools",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.Load(argumentPath(args))
+			root := argumentPath(args)
+			captureWorkspaceMetrics(opts, root, true)
+			m, err := manifest.Load(root)
 			if err != nil {
 				return fmt.Errorf("doctor: %w", err)
 			}
