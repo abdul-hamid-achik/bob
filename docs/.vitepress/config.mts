@@ -93,6 +93,9 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'Manifest', link: '/reference/manifest' },
+          { text: 'Workspace Context', link: '/reference/context' },
+          { text: 'Path Classification', link: '/reference/path' },
+          { text: 'Deterministic Playbooks', link: '/reference/playbooks' },
           { text: 'CLI', link: '/reference/cli' },
           { text: 'Configuration', link: '/configuration' },
         ],
@@ -133,6 +136,9 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'Manifest', link: '/reference/manifest' },
+          { text: 'Workspace Context', link: '/reference/context' },
+          { text: 'Path Classification', link: '/reference/path' },
+          { text: 'Deterministic Playbooks', link: '/reference/playbooks' },
           { text: 'CLI', link: '/reference/cli' },
           { text: 'Development', link: '/development' },
         ],
@@ -142,9 +148,6 @@ export default defineConfig({
         items: [
           { text: 'Architecture', link: '/architecture' },
           { text: 'Product Direction', link: '/product-direction' },
-          { text: 'ADR-0001: Repository factory', link: '/adr/0001-repository-factory' },
-          { text: 'ADR-0002: Read-only MCP', link: '/adr/0002-read-only-mcp' },
-          { text: 'ADR-0003: Local operator surfaces', link: '/adr/0003-local-operator-surfaces' },
         ],
       },
     ],

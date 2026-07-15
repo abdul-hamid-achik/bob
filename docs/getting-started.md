@@ -1,12 +1,11 @@
 ---
-description: Install Bob and go from an empty directory to a converged, agent-ready Go repository in about five minutes.
+description: Install Bob and go from an empty directory to a converged, agent-ready Go repository.
 ---
 
 # Getting Started
 
 Bob does not brainstorm. Give it a name, a module path, and a description, and
-it hands back a plan. Approve the plan, and it builds. Five minutes, no
-surprises.
+it hands back a plan. Approve the plan, and it builds without hidden steps.
 
 ## Prerequisites
 
@@ -98,9 +97,10 @@ files, not on vendors.
 
 ## If a coding agent is driving
 
-Point it at [Bob for coding agents](./agents.md) and have it run `bob learn --json`
-first. That single, read-only command briefs the agent on the whole product
-contract before it plans anything.
+Point it at [Bob for coding agents](./agents.md) and have it run
+`bob learn --json`, then `bob context --json`. The first read-only call briefs
+the agent on Bob; the second compiles the active workspace contract before it
+plans anything.
 
 ## Next steps
 

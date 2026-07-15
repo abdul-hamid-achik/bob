@@ -9,7 +9,7 @@ planning, mutation, and drift checks so generation remains inspectable.
 ```text
                   human or agent
                         |
-          CLI / JSON / Studio / read-only MCP
+       CLI / JSON / context / Studio / read-only MCP
                         |
                         v
                   manifest loader
@@ -33,7 +33,7 @@ planning, mutation, and drift checks so generation remains inspectable.
 
 The CLI provides human-readable and versioned JSON output. Studio presents the
 same coherent offline inspection and plan snapshot interactively. A typed stdio
-MCP projection exposes six repository-read-only operations. MCP mutation is not
+MCP projection exposes nine repository-read-only operations. MCP mutation is not
 implemented.
 
 ## Implemented components
@@ -48,11 +48,43 @@ validation. MCP and Studio must be disabled.
 ### Embedded recipe
 
 The `go-agent-tool` recipe renders the complete desired artifact set in memory.
-It is deterministic and versioned. The current `go-agent-tool@3` recipe has no
-third-party recipe or plugin runtime.
+It is deterministic and versioned. The current `go-agent-tool@4` recipe has a
+static human-owned command extension contract and no third-party recipe or
+plugin runtime.
 
 Every artifact has a repository-relative path, complete content, and file mode.
 Recipe output cannot own `.git`, `bob.yaml`, or `bob.lock`.
+
+Recipe metadata is a separate versioned, deterministic projection resolved from
+the same validated manifest. It assigns stable artifact and capability IDs,
+declares invariants and honest human extension points, and cross-validates every
+artifact reference against rendered output. Metadata resolution never observes
+the workspace and does not change rendered bytes.
+
+### Workspace context
+
+The `internal/context` service resolves one canonical workspace, loads the
+manifest, renders artifacts, computes one engine plan, resolves recipe metadata,
+and projects capability states, entry points, extension points, invariants,
+typed notices, and structured actions. Compact, standard, and full profiles are
+deterministic views of one full semantic result and share contract, plan, and
+context digests.
+
+Context performs offline executable lookup only. It never uses the integration
+runner, launches a subprocess, contacts a provider, or stores a snapshot.
+
+### Path classification and playbooks
+
+The engine classifies an exact canonical relative path using the same desired
+artifacts, lock ownership, destination observation, symlink rules, and action
+codes as planning. `internal/pathinfo` composes that result with exact recipe
+artifact and extension-pattern metadata; extension patterns can never override
+managed or reserved ownership.
+
+`internal/playbook` lists, shows, and resolves the closed playbook definitions
+owned by `internal/recipe`. It validates typed inputs, resolves only named path
+and argv placeholders, and returns ordered steps with explicit effects and
+authority requirements. The service executes no step and writes nothing.
 
 ### Planning engine
 
@@ -69,6 +101,10 @@ versioned plan projection with exactly one action per desired file:
 | `conflict` | Ownership is absent or stale, or the destination is unsafe. |
 
 The planner is read-only. A conflict blocks the complete apply.
+
+Plan digest version 1 now lives in the engine. CLI plan/check and MCP
+`bob_plan`/`bob_check` use the same implementation; filtering and previews do
+not change the identity.
 
 ### Whole-file ownership lock
 
@@ -90,6 +126,14 @@ so an older Bob binary cannot reinterpret newer state.
 changed files, and rechecks file and lock preconditions. Creates use atomic
 no-replace publication; updates use atomic replacement after a final content and
 mode check. `bob.lock` is written last.
+
+With `--expect-plan-digest`, apply validates an exact qualified SHA-256 value,
+loads and renders `bob.yaml` while holding the workspace apply lock, then
+fresh-plans and compares identities before conflict preflight, staging, or
+writes. Its exact manifest source is rechecked before staging and publication.
+A mismatch is a distinct zero-write result. Success returns a bounded immediate
+apply receipt with complete counts and deterministic path omissions; Bob does
+not persist it or interpret it as behavioral verification.
 
 Multi-file apply is not globally transactional. A process crash can leave some
 files published before the lock is written. A later plan observes the exact
@@ -157,20 +201,28 @@ instead of control sequences.
 ### MCP projection
 
 `bob mcp serve` uses the official Go MCP SDK and newline-delimited stdio. It
-exposes inspect, plan, check, manifest-validation, recipe-description, and
-aggregate-stats tools. All publish repository-read-only, non-destructive,
-idempotent, closed-world annotations and inferred input/output schemas.
+exposes context, exact-path, closed-playbook, inspect, plan, check,
+manifest-validation, recipe-description, and aggregate-stats tools. All publish
+repository-read-only, non-destructive, idempotent, closed-world annotations and
+inferred input/output schemas.
 
 The MCP inspector never enables specialist probes. Planning is bounded by both
 an action count and a byte budget, excludes unchanged actions by default, and
 returns truncation metadata plus a digest of the complete plan. Check computes
 the same digest. Manifest validation accepts exactly one authorized workspace
-or a 64-KiB inline document. Stats returns aggregates, never events.
+or a 64-KiB inline document. Context defaults to compact; path and playbook
+inputs are closed and length-bounded; every guidance result has a deterministic
+byte cap and explicit truncation. Stats returns aggregates, never events. MCP
+publishes the exact validated contract in `structuredContent`. To keep compact
+context below the gateway page threshold, `bob_context` uses a small
+identity/state JSON text projection that points clients to `structuredContent`
+instead of duplicating the complete contract; the other typed tools retain the
+SDK's equivalent JSON text projection.
 
 The server's canonical startup workspace is its exact allowlist by default.
 Repeatable additional paths and explicit any-workspace mode expand that read
 authority. Agents must use the separately approved CLI path for `bob apply`,
-then check or plan again.
+preferably guarded by the reviewed plan digest, then check or plan again.
 
 ### Output
 
@@ -187,6 +239,10 @@ internal/cli/        Cobra commands and human/JSON rendering
 internal/manifest/   strict schema, load, validation, and write
 internal/recipe/     embedded recipe and artifact rendering
 internal/engine/     plan, whole-file ownership, safe apply, and lock
+internal/context/    bounded offline workspace-contract composition
+internal/guidance/   shared typed notices, actions, and truncation contracts
+internal/pathinfo/   exact ownership plus extension-metadata projection
+internal/playbook/   typed non-executing playbook resolution
 internal/doctor/     bounded dependency probes
 internal/inspect/    offline inventory and explicit specialist status probes
 internal/paths/      side-effect-free XDG layout resolution
@@ -210,7 +266,7 @@ Bob declares optional seams without absorbing specialist behavior.
 | Repository desired state | Bob | Render, plan, apply, and check whole files |
 | Agent reasoning and goals | Agent runtime | Invoke Bob through CLI/JSON |
 | Evidence-guided investigation | Reasoning kernel | Outside Bob; may inspect Bob output |
-| MCP aggregation and harness sync | MCP gateway | Bob supplies six typed repository-read-only tools; gateway owns routing, authorization, and sync |
+| MCP aggregation and harness sync | MCP gateway | Bob supplies nine typed repository-read-only tools; gateway owns routing, authorization, and sync |
 | Local Bob operations view | Bob Studio | Offline Overview/Plan plus aggregate local Stats; no action execution |
 | Local product usage | Bob telemetry | Disabled by default; private XDG events and aggregate-only public projections |
 | Structural code impact | Code graph tool | Optional generated seam and doctor probe |
@@ -239,7 +295,7 @@ intent.
 
 ## Implemented safety invariants
 
-1. `plan`, `check`, plain `inspect`, `stats`, Studio, and all six MCP tools do
+1. `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, Studio, and all nine MCP tools do
    not mutate repository files. Optional telemetry writes are isolated to XDG
    state.
 2. `new` and `init` preview unless `--write` is explicit.

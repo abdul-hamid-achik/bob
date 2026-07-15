@@ -1,0 +1,52 @@
+version: 1
+name: bob_path_matrix
+intent: |
+    bob path distinguishes the human manifest, Bob's lock, a recipe-declared
+    extension path, and an arbitrary unmanaged path using closed states.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-paths.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          ./bin/bob path bob.yaml --workspace "$root"
+          ./bin/bob path bob.lock --workspace "$root"
+          ./bin/bob path internal/cli/hello.go --workspace "$root"
+          ./bin/bob path notes.txt --workspace "$root"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: path_matrix
+outcomes:
+    - id: manifest_is_human_contract
+      description: bob.yaml requires a manifest change rather than a generated-file edit
+      verify:
+        screen:
+            contains: 'bob.yaml: reserved'
+    - id: lock_is_reserved
+      description: bob.lock remains reserved for Bob
+      verify:
+        screen:
+            contains: 'bob.lock: reserved'
+    - id: command_path_is_extension
+      description: the v4 command convention is a human-owned extension point
+      verify:
+        screen:
+            contains: 'internal/cli/hello.go: extension_point'
+    - id: arbitrary_path_is_unmanaged
+      description: Bob makes no global safety claim for an arbitrary absent path
+      verify:
+        screen:
+            contains: 'notes.txt: missing'
+contractHash: sha256:e0fddef8e405ee5a57af0993930364d29d0eb4be09f6ec47240ae8a132e02e13

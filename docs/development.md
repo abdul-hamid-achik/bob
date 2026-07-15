@@ -49,9 +49,9 @@ the static output from `task docs-build`.
 
 User-facing guides and reference pages belong in `docs/`. Normative product
 behavior lives on this site's reference pages — [Manifest](./reference/manifest.md)
-and [CLI](./reference/cli.md) — rather than a root `SPEC.md`; repository-visible
-design decisions belong in `docs/adr/`. Temporary notes, handoffs, and private
-filesystem details do not belong in the public repository.
+and [CLI](./reference/cli.md) — rather than a root `SPEC.md`. Design decisions
+and working notes stay outside this published repository. Temporary notes,
+handoffs, and private filesystem details do not belong in the public repository.
 
 ## Live integration test
 

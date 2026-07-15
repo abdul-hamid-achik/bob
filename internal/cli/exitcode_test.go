@@ -9,8 +9,8 @@ import (
 
 // TestExitCodeContract proves the closed exit-code contract: 0 for success
 // (including a plan that finds conflicts, since plan is a read-only report),
-// 2 for apply/check conflicts, 3 for check drift without conflicts, and 4 for
-// invalid input such as a missing or unparsable manifest.
+// 2 for apply/check conflicts, 3 for check drift without conflicts, 4 for
+// invalid input, and 5 when guarded apply detects a stale reviewed plan.
 func TestExitCodeContract(t *testing.T) {
 	t.Parallel()
 

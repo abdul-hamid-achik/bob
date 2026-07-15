@@ -1,18 +1,22 @@
 ---
-description: Wire Bob's six read-only MCP tools into MCPHub and local-agent, and keep apply on the approved shell path.
+description: Wire Bob's nine read-only MCP tools into MCPHub and local-agent, and keep digest-gated apply on the approved shell path.
 ---
 
 # MCPHub & local-agent
 
-Bob exposes six typed MCP tools for repository orientation, validation,
-planning, convergence, recipe discovery, and aggregate local usage. None of
-them mutate anything. Repository mutation stays exactly where it belongs: the
-agent runtime's normal approved shell path, with a human or a policy watching.
+Bob exposes nine typed MCP tools for repository context, exact ownership,
+closed guidance, validation, planning, convergence, recipe discovery, and
+aggregate local usage. None of them mutate a repository or run specialist
+probes. Repository mutation stays on the agent runtime's normal approved shell
+path, with a human or policy watching.
 
 ## Tools
 
 | Tool | Purpose | Effect |
 |---|---|---|
+| `bob_context` | Return a bounded workspace contract and current plan identity. | Repository-read-only and offline; defaults to `compact`. |
+| `bob_path` | Classify one exact repository-relative path. | Repository-read-only; returns no file body. |
+| `bob_playbook` | `list`, `show`, or `plan` a closed typed procedure. | Repository-read-only; never executes a step. |
 | `bob_inspect` | Return Bob state and offline availability of selected binaries. | Read-only; never runs specialist probes. |
 | `bob_plan` | Return a bounded deterministic plan and digest. | Repository-read-only; omits desired-content previews. |
 | `bob_check` | Return convergence, conflict, and lock-drift state. | Repository-read-only; shares the complete-plan digest. |
@@ -20,8 +24,18 @@ agent runtime's normal approved shell path, with a human or a policy watching.
 | `bob_recipe_describe` | Describe the embedded recipe contract. | Read-only; does not require a workspace. |
 | `bob_stats` | Return aggregate opt-in local usage. | Reads XDG state; never returns individual events. |
 
-Use `bob apply <workspace>` through an explicitly approved shell call after
-reviewing a conflict-free plan.
+After reviewing a conflict-free plan, prefer an explicitly approved guarded
+shell call:
+
+```bash
+bob apply <workspace> --expect-plan-digest sha256:<64-lowercase-hex> --json
+```
+
+Copy MCP `plan_digest_qualified` directly into the apply flag. The original
+raw `plan_digest` remains available for wire compatibility. Bob fresh-plans
+under its apply lock. A mismatch returns
+`plan_digest_mismatch` and writes nothing. The successful apply receipt is not
+a behavioral verification receipt.
 
 ## Install from a checkout
 
@@ -73,13 +87,15 @@ calling agent still own policy and approval.
 ## Pin and probe
 
 ```bash
-mcphub pin bob__bob_inspect bob__bob_plan bob__bob_check \
-  bob__bob_validate_manifest bob__bob_recipe_describe bob__bob_stats
+mcphub pin bob__bob_context bob__bob_plan bob__bob_check
 mcphub doctor --server bob --probe
 ```
 
-Pinning keeps the tools directly advertised when MCPHub uses lazy exposure. It
-does not name, authorize, or execute them.
+This minimal pin set keeps workspace orientation, plan review, and convergence
+visible to small models. `bob_path` and `bob_playbook` remain available through
+lazy discovery until a task needs them; validation, recipe description,
+inspection, and stats remain discoverable as well. Pinning does not name a
+workspace, grant authority, or execute a tool.
 
 ## Scope local-agent
 
@@ -110,9 +126,12 @@ pins.
 
 ## Approval behavior
 
-With the current gateway integration, local-agent sees the pinned names as:
+With the current gateway integration, Bob's available names appear as:
 
 ```text
+mcphub__bob__bob_context
+mcphub__bob__bob_path
+mcphub__bob__bob_playbook
 mcphub__bob__bob_inspect
 mcphub__bob__bob_plan
 mcphub__bob__bob_check
@@ -129,6 +148,37 @@ policy.
 
 MCPHub servers and pins are global unless an agent has an explicit allowlist.
 Scope other configured gateways if Bob should not be advertised to them.
+
+## Input and output bounds
+
+`bob_context` accepts `compact`, `standard`, or `full` and defaults to compact;
+normal compact responses target less than 8 KiB end-to-end. `bob_path` accepts
+one repository-relative UTF-8 path of at most 4 KiB and caps output at 8 KiB.
+`bob_playbook` accepts only `list`, `show`, or `plan`, an ID of at most 128
+bytes, and at most 32 plan values with 128-byte keys and 4-KiB values. Guidance
+requests are capped at 64 KiB. Playbook list output is capped at 8 KiB; show and
+plan are capped at 24 KiB. Every bounded domain result reports truncation
+explicitly and returns no raw file body or subprocess output. The exact
+validated object is in MCP `structuredContent`. `bob_context` avoids a second
+full copy by returning only identity, repository state, digests, and a
+`detail_location: "structuredContent"` marker in its JSON text block. Consumers
+must parse the allowlisted structured contract rather than treating that text
+summary as the complete context.
+
+## Consumer contract fixtures
+
+Bob publishes versioned JSON examples under `testdata/contracts/` for clean,
+drifted, and conflicted context; managed and extension paths; a ready playbook;
+missing input; and rejection of an unknown future schema. These fixtures are a
+consumer boundary, not persisted workspace snapshots.
+
+A local-agent or Cortex adapter should parse each allowlisted Bob operation
+through an exact schema. Successful MCP transport with a malformed or unknown
+domain schema must remain an unknown domain result. Persist only a bounded
+digest or summary; pass validated compact content to a model transiently. A
+structured Bob action is guidance: validate its tool and arguments, fill only
+named missing inputs, respect `blocked_by`, and route its declared effect
+through normal approval policy.
 
 ## Local telemetry remains local
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
@@ -128,6 +129,243 @@ func TestPlanJSONUsesVersionedEnvelope(t *testing.T) {
 	}
 }
 
+func TestPlanAndCheckJSONExposeSharedDigest(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	planJSON, _, err := executeForTest("--json", "plan", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkJSON, _, err := executeForTest("--json", "check", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan struct {
+		Data struct {
+			Version int    `json:"plan_digest_version"`
+			Digest  string `json:"plan_digest"`
+		} `json:"data"`
+	}
+	var check struct {
+		Data struct {
+			Version int    `json:"plan_digest_version"`
+			Digest  string `json:"plan_digest"`
+			Plan    struct {
+				Digest string `json:"plan_digest"`
+			} `json:"plan"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(checkJSON), &check); err != nil {
+		t.Fatal(err)
+	}
+	if plan.Data.Version != 1 || plan.Data.Digest == "" || plan.Data.Digest != check.Data.Digest || check.Data.Digest != check.Data.Plan.Digest {
+		t.Fatalf("plan=%#v check=%#v", plan.Data, check.Data)
+	}
+	complete, err := loadPlan(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := engine.DigestPlan(complete)
+	if plan.Data.Version != shared.Version || plan.Data.Digest != shared.Qualified() {
+		t.Fatalf("CLI digest differs from engine: cli=%d:%s engine=%d:%s", plan.Data.Version, plan.Data.Digest, shared.Version, shared.SHA256)
+	}
+	if !strings.HasPrefix(plan.Data.Digest, "sha256:") {
+		t.Fatalf("CLI digest is not directly consumable by guarded apply: %q", plan.Data.Digest)
+	}
+}
+
+func TestContextCLIProfilesFailuresAndPlainOutput(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := executeForTest("--json", "context", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("JSON stderr = %q", stderr)
+	}
+	var got struct {
+		OK      bool   `json:"ok"`
+		Command string `json:"command"`
+		Data    struct {
+			Profile    string `json:"profile"`
+			Repository struct {
+				State      string `json:"state"`
+				PlanDigest string `json:"plan_digest"`
+			} `json:"repository"`
+			Truncation struct {
+				ByteLimit int `json:"byte_limit"`
+			} `json:"truncation"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("machine stdout is not JSON: %v\n%s", err, stdout)
+	}
+	if !got.OK || got.Command != "context" || got.Data.Profile != "compact" || got.Data.Repository.State != "clean" || !strings.HasPrefix(got.Data.Repository.PlanDigest, "sha256:") || got.Data.Truncation.ByteLimit != 6144 {
+		t.Fatalf("context = %#v", got)
+	}
+	human, _, err := executeForTest("context", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(human, "\x1b[") || !strings.Contains(human, "repository: clean") {
+		t.Fatalf("human output = %q", human)
+	}
+
+	missing := t.TempDir()
+	var failureOut, failureErr bytes.Buffer
+	err = execute([]string{"--json", "context", missing}, Dependencies{Out: &failureOut, ErrOut: &failureErr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
+	failure := failureOut.String()
+	if err == nil {
+		t.Fatal("missing manifest should fail")
+	}
+	var failed struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		} `json:"data"`
+	}
+	if decodeErr := json.Unmarshal([]byte(failure), &failed); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if failed.OK || failed.Data.Error.Code != "missing_manifest" {
+		t.Fatalf("failure = %s", failure)
+	}
+	invalid := t.TempDir()
+	if err := os.WriteFile(filepath.Join(invalid, manifest.Filename), []byte("schema_version: nope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	failureOut.Reset()
+	failureErr.Reset()
+	err = execute([]string{"--json", "context", invalid}, Dependencies{Out: &failureOut, ErrOut: &failureErr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
+	failure = failureOut.String()
+	if err == nil {
+		t.Fatal("invalid manifest should fail")
+	}
+	if decodeErr := json.Unmarshal([]byte(failure), &failed); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if failed.Data.Error.Code != "manifest_invalid" {
+		t.Fatalf("failure = %s", failure)
+	}
+}
+
+func TestPathCLIJSONAndPlainOutput(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := executeForTest("--json", "path", "internal/cli/root.go", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q", stderr)
+	}
+	var got struct {
+		OK      bool   `json:"ok"`
+		Command string `json:"command"`
+		Data    struct {
+			Classification  string `json:"classification"`
+			State           string `json:"state"`
+			HumanEditEffect string `json:"human_edit_effect"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("machine stdout is not JSON: %v\n%s", err, stdout)
+	}
+	if !got.OK || got.Command != "path" || got.Data.Classification != "managed" || got.Data.State != "managed_in_sync" || got.Data.HumanEditEffect != "will_conflict" {
+		t.Fatalf("path = %#v", got)
+	}
+	human, _, err := executeForTest("path", "internal/domain/service.go", "--workspace", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(human, "\x1b[") || !strings.Contains(human, "extension_point") {
+		t.Fatalf("human output = %q", human)
+	}
+	if _, _, err := executeForTest("path", "../escape", target); err == nil || ExitCode(err) != ExitInvalidInput {
+		t.Fatalf("unsafe path error = %v code=%d", err, ExitCode(err))
+	}
+	var failureOut, failureErr bytes.Buffer
+	err = execute([]string{"--json", "path", "../escape", target}, Dependencies{Out: &failureOut, ErrOut: &failureErr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
+	if err == nil {
+		t.Fatal("unsafe JSON path should fail")
+	}
+	stdout = failureOut.String()
+	if failureErr.Len() != 0 {
+		t.Fatalf("unsafe JSON stderr = %q", failureErr.String())
+	}
+	var failed struct {
+		Data struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		} `json:"data"`
+	}
+	if decodeErr := json.Unmarshal([]byte(stdout), &failed); decodeErr != nil || failed.Data.Error.Code != "input_invalid" {
+		t.Fatalf("unsafe JSON path = %s decode=%v", stdout, decodeErr)
+	}
+}
+
+func TestPlaybookCLIUsesVersionedJSONAndTypedSetValues(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "acme")
+	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := executeForTest("--json", "playbook", "list", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q", stderr)
+	}
+	var listed struct {
+		OK      bool   `json:"ok"`
+		Command string `json:"command"`
+		Data    struct {
+			Playbooks []struct {
+				ID        string `json:"id"`
+				Available bool   `json:"available"`
+			} `json:"playbooks"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &listed); err != nil {
+		t.Fatalf("machine stdout is not JSON: %v\n%s", err, stdout)
+	}
+	if !listed.OK || listed.Command != "playbook list" || len(listed.Data.Playbooks) != 7 || listed.Data.Playbooks[0].ID != "add-cli-command" || !listed.Data.Playbooks[0].Available {
+		t.Fatalf("list = %#v", listed)
+	}
+	stdout, _, err = executeForTest("--json", "playbook", "plan", "add-cli-command", target, "--set", "command_name=hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var planned struct {
+		Data struct {
+			Values map[string]string `json:"values"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &planned); err != nil || planned.Data.Values["command_name"] != "hello" {
+		t.Fatalf("plan = %s err=%v", stdout, err)
+	}
+	if _, _, err := executeForTest("playbook", "plan", "add-cli-command", target, "--set", "command_name=hello;rm"); err == nil || ExitCode(err) != ExitInvalidInput {
+		t.Fatalf("unsafe input error = %v code=%d", err, ExitCode(err))
+	}
+}
+
 func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 	t.Parallel()
 	stdout, _, err := executeForTest("learn")
@@ -167,20 +405,53 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 	if got.SchemaVersion != 1 || !got.OK || got.Command != "learn" {
 		t.Fatalf("unexpected envelope: %#v", got)
 	}
-	if len(got.Data.Lifecycle) != 4 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 6 {
+	if len(got.Data.Lifecycle) != 4 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 9 {
 		t.Fatalf("unexpected learn data: %#v", got.Data)
 	}
+	for _, tool := range []string{"bob_context", "bob_path", "bob_playbook"} {
+		found := false
+		for _, candidate := range got.Data.MCP.Tools {
+			found = found || candidate == tool
+		}
+		if !found {
+			t.Fatalf("learn MCP catalog omitted %s: %#v", tool, got.Data.MCP.Tools)
+		}
+	}
+	contextFound := false
+	pathFound := false
+	playbookFound := false
 	for _, command := range got.Data.Commands {
 		if command.Name == "learn" && command.Mutates {
 			t.Fatal("learn must describe itself as non-mutating")
 		}
+		if command.Name == "context" {
+			contextFound = true
+			if command.Mutates {
+				t.Fatal("context must be cataloged as non-mutating")
+			}
+		}
+		if command.Name == "path" {
+			pathFound = true
+			if command.Mutates {
+				t.Fatal("path must be cataloged as non-mutating")
+			}
+		}
+		if command.Name == "playbook" {
+			playbookFound = true
+			if command.Mutates {
+				t.Fatal("playbook must be cataloged as non-mutating")
+			}
+		}
 	}
-	for _, code := range []string{"0", "1", "2", "3", "4"} {
+	if !contextFound || !pathFound || !playbookFound {
+		t.Fatalf("learn command catalog omitted guidance commands: context=%t path=%t playbook=%t", contextFound, pathFound, playbookFound)
+	}
+	for _, code := range []string{"0", "1", "2", "3", "4", "5"} {
 		if _, ok := got.Data.ExitCodes[code]; !ok {
 			t.Fatalf("learn data.exit_codes missing %q: %#v", code, got.Data.ExitCodes)
 		}
 	}
-	for _, code := range []string{"missing_manifest", "manifest_invalid", "input_invalid", "conflicts", "workspace_invalid", "command_failed"} {
+	for _, code := range []string{"missing_manifest", "manifest_invalid", "input_invalid", "conflicts", "workspace_invalid", "plan_digest_mismatch", "command_failed"} {
 		if _, ok := got.Data.ErrorCodes[code]; !ok {
 			t.Fatalf("learn data.error_codes missing %q: %#v", code, got.Data.ErrorCodes)
 		}

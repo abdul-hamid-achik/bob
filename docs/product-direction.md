@@ -53,10 +53,12 @@ not invent or reconstruct application business logic.
 - **Deterministic:** the same manifest, recipe version, and observed files
   produce the same plan.
 - **Plan before mutation:** users and agents can inspect proposed changes.
-- **Whole-file ownership:** Bob 0.1 updates only complete files tracked by
+- **Whole-file ownership:** Bob updates only complete files tracked by
   content hash in the repository-root `bob.lock`.
 - **Agent-native:** the CLI and its versioned JSON envelope are first-class
   interfaces.
+- **Bounded guidance:** recipe metadata and workspace context reduce guessing
+  without adding model inference, task memory, or behavioral verification.
 - **Honest degradation:** optional tools may be absent without being reported as
   successful.
 - **Public by default:** the initial recipe includes the foundations for
@@ -94,18 +96,21 @@ bob recipe show <id>    describe an embedded recipe
 bob version             print build metadata
 ```
 
-The current version 0.2 draft surface adds:
+The current command surface also includes:
 
 ```text
 bob inspect [path]      summarize Bob and integration readiness
 bob config show|init    inspect or initialize XDG user settings
 bob stats [path]        summarize opt-in local usage
 bob studio [path]       open a read-only terminal operations board
-bob mcp serve           expose six typed repository-read-only MCP tools
+bob mcp serve           expose nine typed repository-read-only MCP tools
+bob context [path]      compile a bounded, read-only workspace contract
+bob path <path>         classify one exact repository path through Bob ownership
+bob playbook ...        resolve a closed typed procedure without executing it
 ```
 
 `new` and `init` preview by default and require `--write` to create files.
-`plan`, `check`, and plain `inspect` are read-only. Integration probes require
+`context`, `path`, `playbook`, `plan`, `check`, and plain `inspect` are read-only. Integration probes require
 an explicit inspect flag. Normal CLI commands support the global `--json` flag;
 MCP stdio reserves stdout for JSON-RPC.
 
@@ -115,9 +120,9 @@ storing repository paths, arguments, filenames, content, or raw errors. Studio
 uses the deterministic engine and those aggregates as a projection; it does not
 become a task runner.
 
-## Version 0.1 foundation
+## Current foundation
 
-Version 0.1 proves one embedded recipe: `go-agent-tool`. It generates a Go/Cobra
+The `go-agent-tool` recipe generates a Go/Cobra
 CLI with JSON output, version and doctor commands, tests, public documentation,
 Task tasks, CI, optional GoReleaser configuration, and an optional Glyphrun
 behavior spec.
@@ -126,16 +131,19 @@ The manifest may select optional integration seams and development tools. Bob
 can render those files and probe selected tools, but it does not run external
 verification workflows or persist verification receipts.
 
-Bob 0.1 uses whole-file ownership only. Planning classifies each desired file as
+Bob uses whole-file ownership only. Planning classifies each desired file as
 `create`, `adopt`, `unchanged`, `update`, or `conflict`. Here, `adopt` is a plan
 action for an unmanaged regular file whose content already matches exactly; it
 is not a standalone `bob adopt` command or a claim that an existing application
 was behaviorally imported.
 
-The current recipe version 3 keeps that ownership model and adds the public
-repository structure proven in practice: community templates, a Code of
-Conduct, Dependabot, non-mutating verification, vulnerability scanning, pinned
-CI actions, stronger release configuration, and a security-patched Go baseline.
+The current recipe version 4 keeps that ownership model and adds a deterministic
+human-owned command-registration seam. New Cobra commands live in extension
+files; the generated root and registry remain complete Bob-owned artifacts.
+Version 4 also retains the public repository structure established in version
+3: community templates, a Code of Conduct, Dependabot, non-mutating
+verification, vulnerability scanning, pinned CI actions, release configuration,
+and a security-patched Go baseline.
 
 ## Current boundaries
 
@@ -149,6 +157,7 @@ Bob currently does not:
 - expose Studio mutation or MCP mutation surfaces;
 - provide standalone `adopt` or `verify` commands;
 - persist plans, detailed execution histories, or verification receipts;
+- infer natural-language intent or provide autonomous playbook routing;
 - implement a general plugin system;
 - create commits, push branches, tag releases, publish packages, or create
   hosted resources;
@@ -163,7 +172,7 @@ whole-file ownership, or explicit mutation.
 
 ## Success criteria
 
-Bob 0.1 is successful when a user can preview and create a small public Go tool,
+Bob is successful when a user can preview and create a small public Go tool,
 review the complete plan, apply it, run `bob check`, and understand which files
 the root `bob.lock` proves Bob owns.
 

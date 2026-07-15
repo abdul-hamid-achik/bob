@@ -12,12 +12,13 @@ import (
 )
 
 type goAgentTemplateData struct {
-	Manifest     manifest.Manifest
-	Product      manifest.Product
-	Integrations []goAgentIntegration
-	DoctorChecks []goAgentDoctorCheck
-	GitHubOwner  string
-	GitHubRepo   string
+	Manifest      manifest.Manifest
+	Product       manifest.Product
+	RecipeVersion int
+	Integrations  []goAgentIntegration
+	DoctorChecks  []goAgentDoctorCheck
+	GitHubOwner   string
+	GitHubRepo    string
 }
 
 type goAgentIntegration struct {
@@ -32,7 +33,7 @@ type goAgentDoctorCheck struct {
 	Required bool
 }
 
-func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
+func renderGoAgentTool(m manifest.Manifest, version int) ([]Artifact, error) {
 	if err := m.Validate(); err != nil {
 		return nil, fmt.Errorf("render go-agent-tool: %w", err)
 	}
@@ -45,11 +46,12 @@ func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
 	}
 
 	data := goAgentTemplateData{
-		Manifest:     m,
-		Product:      m.Product,
-		Integrations: selectedGoAgentIntegrations(m),
-		GitHubOwner:  owner,
-		GitHubRepo:   repo,
+		Manifest:      m,
+		Product:       m.Product,
+		RecipeVersion: version,
+		Integrations:  selectedGoAgentIntegrations(m),
+		GitHubOwner:   owner,
+		GitHubRepo:    repo,
 	}
 	data.DoctorChecks = selectedGoAgentDoctorChecks(m, data.Integrations)
 
@@ -63,10 +65,11 @@ func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
 		return nil
 	}
 
-	base := []struct {
+	type templateArtifact struct {
 		path   string
 		source string
-	}{
+	}
+	base := []templateArtifact{
 		{".gitignore", goAgentGitignoreTemplate},
 		{".golangci.yml", goAgentGolangCITemplate},
 		{"AGENTS.md", goAgentAgentsTemplate},
@@ -84,6 +87,12 @@ func renderGoAgentTool(m manifest.Manifest) ([]Artifact, error) {
 		{"internal/cli/root.go", goAgentRootTemplate},
 		{"internal/cli/root_test.go", goAgentRootTestTemplate},
 		{"internal/version/version.go", goAgentVersionTemplate},
+	}
+	if version >= 4 {
+		base = append(base,
+			templateArtifact{"internal/cli/registry.go", goAgentRegistryTemplate},
+			templateArtifact{"internal/cli/registry_test.go", goAgentRegistryTestTemplate},
+		)
 	}
 	for _, item := range base {
 		if err := add(item.path, item.source); err != nil {
@@ -283,12 +292,21 @@ import (
 )
 
 func main() {
-	cmd := cli.New(version.Current(), cli.Dependencies{
+	[[if ge .RecipeVersion 4]]cmd, err := cli.New(version.Current(), cli.Dependencies{
 		Out:      os.Stdout,
 		ErrOut:   os.Stderr,
 		LookPath: exec.LookPath,
 	})
-	if err := cmd.Execute(); err != nil {
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	[[else]]cmd := cli.New(version.Current(), cli.Dependencies{
+		Out:      os.Stdout,
+		ErrOut:   os.Stderr,
+		LookPath: exec.LookPath,
+	})
+	[[end]]if err := cmd.Execute(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -348,8 +366,9 @@ var doctorDefinitions = []doctorDefinition{
 
 // New builds a command tree over explicit dependencies. It performs no work
 // until Execute is called.
-func New(info version.Info, deps Dependencies) *cobra.Command {
-	if deps.Out == nil {
+[[if ge .RecipeVersion 4]]func New(info version.Info, deps Dependencies) (*cobra.Command, error) {
+[[else]]func New(info version.Info, deps Dependencies) *cobra.Command {
+[[end]]	if deps.Out == nil {
 		deps.Out = io.Discard
 	}
 	if deps.ErrOut == nil {
@@ -373,8 +392,12 @@ func New(info version.Info, deps Dependencies) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opts.json, "json", false, "write machine-readable JSON to stdout")
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.AddCommand(newDoctorCommand(opts, deps), newVersionCommand(opts, info))
-	return root
-}
+[[if ge .RecipeVersion 4]]	if err := addExtensionCommands(root, opts, deps, extensionFactories); err != nil {
+		return nil, err
+	}
+	return root, nil
+[[else]]	return root
+[[end]]}
 
 func newVersionCommand(opts *options, info version.Info) *cobra.Command {
 	return &cobra.Command{
@@ -493,11 +516,18 @@ import (
 func TestVersionJSON(t *testing.T) {
 	t.Parallel()
 	var output bytes.Buffer
-	cmd := New(version.Info{Version: "v0.1.0", Commit: "abc123", Date: "today"}, Dependencies{
+[[if ge .RecipeVersion 4]]	cmd, err := New(version.Info{Version: "v0.1.0", Commit: "abc123", Date: "today"}, Dependencies{
 		Out:      &output,
 		LookPath: func(string) (string, error) { return "/bin/tool", nil },
 	})
-	cmd.SetArgs([]string{"--json", "version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+[[else]]	cmd := New(version.Info{Version: "v0.1.0", Commit: "abc123", Date: "today"}, Dependencies{
+		Out:      &output,
+		LookPath: func(string) (string, error) { return "/bin/tool", nil },
+	})
+[[end]]	cmd.SetArgs([]string{"--json", "version"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +546,7 @@ func TestVersionJSON(t *testing.T) {
 func TestDoctorReportsMissingDependency(t *testing.T) {
 	t.Parallel()
 	var output bytes.Buffer
-	cmd := New(version.Info{}, Dependencies{
+[[if ge .RecipeVersion 4]]	cmd, err := New(version.Info{}, Dependencies{
 		Out: &output,
 		LookPath: func(name string) (string, error) {
 			if name == "go" {
@@ -525,7 +555,19 @@ func TestDoctorReportsMissingDependency(t *testing.T) {
 			return "/bin/" + name, nil
 		},
 	})
-	cmd.SetArgs([]string{"doctor"})
+	if err != nil {
+		t.Fatal(err)
+	}
+[[else]]	cmd := New(version.Info{}, Dependencies{
+		Out: &output,
+		LookPath: func(name string) (string, error) {
+			if name == "go" {
+				return "", errors.New("missing")
+			}
+			return "/bin/" + name, nil
+		},
+	})
+[[end]]	cmd.SetArgs([]string{"doctor"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected missing dependency error")
 	}
@@ -534,7 +576,7 @@ func TestDoctorReportsMissingDependency(t *testing.T) {
 func TestDoctorAllowsMissingOptionalTool(t *testing.T) {
 	t.Parallel()
 	var output bytes.Buffer
-	cmd := New(version.Info{}, Dependencies{
+[[if ge .RecipeVersion 4]]	cmd, err := New(version.Info{}, Dependencies{
 		Out: &output,
 		LookPath: func(name string) (string, error) {
 			if name != "go" {
@@ -543,9 +585,186 @@ func TestDoctorAllowsMissingOptionalTool(t *testing.T) {
 			return "/bin/go", nil
 		},
 	})
-	cmd.SetArgs([]string{"doctor"})
+	if err != nil {
+		t.Fatal(err)
+	}
+[[else]]	cmd := New(version.Info{}, Dependencies{
+		Out: &output,
+		LookPath: func(name string) (string, error) {
+			if name != "go" {
+				return "", errors.New("missing")
+			}
+			return "/bin/go", nil
+		},
+	})
+[[end]]	cmd.SetArgs([]string{"doctor"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("optional dependency made doctor fail: %v", err)
+	}
+}
+`
+
+const goAgentRegistryTemplate = `package cli
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/spf13/cobra"
+)
+
+type commandBuilder func(*options, Dependencies) *cobra.Command
+
+type commandFactory struct {
+	id    string
+	build commandBuilder
+}
+
+var extensionFactories []commandFactory
+
+// registerCommand declares one human-owned command factory. Registration is
+// collected during package initialization and validated when New constructs a
+// command tree. Bob-owned composition files must not be edited to add commands.
+func registerCommand(id string, build commandBuilder) {
+	extensionFactories = append(extensionFactories, commandFactory{id: id, build: build})
+}
+
+func addExtensionCommands(root *cobra.Command, opts *options, deps Dependencies, registrations []commandFactory) error {
+	factories := append([]commandFactory(nil), registrations...)
+	sort.SliceStable(factories, func(i, j int) bool { return factories[i].id < factories[j].id })
+
+	seenIDs := make(map[string]struct{}, len(factories))
+	for _, factory := range factories {
+		if !validCommandID(factory.id) {
+			return fmt.Errorf("invalid extension command id %q", factory.id)
+		}
+		if _, exists := seenIDs[factory.id]; exists {
+			return fmt.Errorf("duplicate extension command id %q", factory.id)
+		}
+		seenIDs[factory.id] = struct{}{}
+		if factory.build == nil {
+			return fmt.Errorf("extension command %q has a nil builder", factory.id)
+		}
+	}
+
+	// Cobra adds its help command lazily during execution, so it is not present
+	// in root.Commands while this registry is validated. Reserve the name here
+	// to make the extension contract independent of Cobra's initialization
+	// timing.
+	commandNames := map[string]string{"help": "Cobra help command"}
+	for _, command := range root.Commands() {
+		commandNames[command.Name()] = "built-in command"
+	}
+	for _, factory := range factories {
+		command := factory.build(opts, deps)
+		if command == nil {
+			return fmt.Errorf("extension command %q returned a nil command", factory.id)
+		}
+		name := command.Name()
+		if name == "" {
+			return fmt.Errorf("extension command %q returned a command without a name", factory.id)
+		}
+		if owner, exists := commandNames[name]; exists {
+			return fmt.Errorf("extension command %q duplicates command name %q owned by %s", factory.id, name, owner)
+		}
+		commandNames[name] = fmt.Sprintf("extension %q", factory.id)
+		root.AddCommand(command)
+	}
+	return nil
+}
+
+func validCommandID(id string) bool {
+	if id == "" || id[0] < 'a' || id[0] > 'z' || id[len(id)-1] == '-' {
+		return false
+	}
+	previousHyphen := false
+	for _, char := range id {
+		if char == '-' {
+			if previousHyphen {
+				return false
+			}
+			previousHyphen = true
+			continue
+		}
+		if char < 'a' || char > 'z' {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+		previousHyphen = false
+	}
+	return true
+}
+`
+
+const goAgentRegistryTestTemplate = `package cli
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/spf13/cobra"
+)
+
+func TestExtensionFactoriesBuildInStableIDOrder(t *testing.T) {
+	var order []string
+	factory := func(id, name string) commandFactory {
+		return commandFactory{id: id, build: func(*options, Dependencies) *cobra.Command {
+			order = append(order, id)
+			return &cobra.Command{Use: name}
+		}}
+	}
+	root := &cobra.Command{Use: "test"}
+	if err := addExtensionCommands(root, &options{}, Dependencies{}, []commandFactory{
+		factory("zeta", "last"),
+		factory("alpha", "first"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"alpha", "zeta"}; !reflect.DeepEqual(order, want) {
+		t.Fatalf("build order = %v, want %v", order, want)
+	}
+}
+
+func TestExtensionFactoriesRejectInvalidRegistrations(t *testing.T) {
+	valid := func(name string) commandBuilder {
+		return func(*options, Dependencies) *cobra.Command { return &cobra.Command{Use: name} }
+	}
+	tests := []struct {
+		name          string
+		registrations []commandFactory
+		want          string
+	}{
+		{name: "invalid id", registrations: []commandFactory{{id: "Bad", build: valid("bad")}}, want: "invalid extension command id"},
+		{name: "duplicate id", registrations: []commandFactory{{id: "same", build: valid("one")}, {id: "same", build: valid("two")}}, want: "duplicate extension command id"},
+		{name: "nil builder", registrations: []commandFactory{{id: "nil-builder"}}, want: "nil builder"},
+		{name: "nil command", registrations: []commandFactory{{id: "nil-command", build: func(*options, Dependencies) *cobra.Command { return nil }}}, want: "nil command"},
+		{name: "reserved Cobra help name", registrations: []commandFactory{{id: "custom-help", build: valid("help")}}, want: "Cobra help command"},
+		{name: "duplicate command name", registrations: []commandFactory{{id: "one", build: valid("same")}, {id: "two", build: valid("same")}}, want: "duplicates command name"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := &cobra.Command{Use: "test"}
+			err := addExtensionCommands(root, &options{}, Dependencies{}, test.registrations)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestExtensionFactoryCannotShadowBuiltInCommand(t *testing.T) {
+	root := &cobra.Command{Use: "test"}
+	root.AddCommand(&cobra.Command{Use: "doctor"})
+	err := addExtensionCommands(root, &options{}, Dependencies{}, []commandFactory{{
+		id: "custom-doctor",
+		build: func(*options, Dependencies) *cobra.Command {
+			return &cobra.Command{Use: "doctor"}
+		},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "built-in command") {
+		t.Fatalf("error = %v, want built-in command collision", err)
 	}
 }
 `
@@ -587,7 +806,22 @@ task build
 
 The JSON surface writes structured data to stdout. Diagnostics and failures go
 to stderr so shell pipelines can parse stdout safely.
+[[if ge .RecipeVersion 4]]
+## Adding commands
 
+Create an internal/cli/<command>.go file and its test beside it. Keep the file
+in package cli and register one deterministic factory from init:
+
+~~~go
+func init() {
+	registerCommand("hello", newHelloCommand)
+}
+~~~
+
+Do not edit Bob-owned internal/cli/root.go or internal/cli/registry.go. The
+registry validates stable IDs, builders, returned commands, and command-name
+collisions whenever the command tree is constructed.
+[[end]]
 ## Development
 
 ~~~bash
@@ -622,7 +856,14 @@ This file is the source of truth for agents and contributors working on [[.Produ
 - ` + "`internal/cli`" + ` owns Cobra commands and depends on explicit process capabilities.
 - ` + "`internal/version`" + ` owns build metadata.
 - Add domain behavior in a focused package and inject it into the CLI layer.
+[[if ge .RecipeVersion 4]]
+## Command extensions
 
+- Add a command by creating internal/cli/<command>.go and internal/cli/<command>_test.go.
+- Keep extension files in package cli and call registerCommand("stable-id", builder) from init.
+- Do not edit Bob-owned internal/cli/root.go or internal/cli/registry.go.
+- Registration IDs use lowercase kebab form. Duplicate IDs, nil builders, nil commands, and duplicate command names fail command-tree construction.
+[[end]]
 ## Commands
 
 ~~~bash
@@ -1226,7 +1467,8 @@ go install [[.Product.Module]]/cmd/[[.Product.Name]]@latest
 - Treat stdout as the data channel and stderr as the diagnostics channel.
 - Run ` + "`[[.Product.Name]] doctor --json`" + ` before relying on optional tools.
 - Inspect ` + "`AGENTS.md`" + ` before changing the repository.
-
+[[if ge .RecipeVersion 4]]- Add commands in human-owned internal/cli/<command>.go files through registerCommand; do not edit the generated root or registry.
+[[end]]
 ## Development
 
 Run ` + "`task check`" + ` before opening a pull request.

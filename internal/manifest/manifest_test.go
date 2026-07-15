@@ -1,8 +1,10 @@
 package manifest
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -200,6 +202,31 @@ func TestValidateFilesRecipeAllowsOptionalModuleVisibilityAndLicense(t *testing.
 	m.Product.License = "MIT"
 	if err := m.Validate(); err != nil {
 		t.Fatalf("expected optional product fields to validate, got %v", err)
+	}
+}
+
+func TestLoadWithSourceReturnsExactValidatedManifestBytes(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m := filesManifest()
+	if err := WriteFile(filepath.Join(root, Filename), m, false); err != nil {
+		t.Fatal(err)
+	}
+	wantSource, err := os.ReadFile(filepath.Join(root, Filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, source, err := LoadWithSource(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, m) || !bytes.Equal(source, wantSource) {
+		t.Fatalf("LoadWithSource() manifest=%#v source=%q", got, source)
+	}
+	source[0] = 'x'
+	after, err := os.ReadFile(filepath.Join(root, Filename))
+	if err != nil || !bytes.Equal(after, wantSource) {
+		t.Fatalf("returned source aliases file state: %v", err)
 	}
 }
 

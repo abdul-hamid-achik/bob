@@ -59,4 +59,19 @@ outcomes:
       verify:
         screen:
             contains: studio
-contractHash: sha256:f3561232101d332e66a13c311f90e87a6bb3dd76a7d5d6e514d49c9ae983b33b
+    - id: lists_context
+      description: help lists the bounded workspace contract command
+      verify:
+        screen:
+            contains: context
+    - id: lists_path
+      description: help lists exact path ownership guidance
+      verify:
+        screen:
+            contains: path
+    - id: lists_playbook
+      description: help lists deterministic procedural guidance
+      verify:
+        screen:
+            contains: playbook
+contractHash: sha256:42d913aa1d0fd4e68a7bc42220cfa887d966c33fa9781154db1fad9fd73f60ef

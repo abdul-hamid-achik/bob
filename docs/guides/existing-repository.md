@@ -54,12 +54,15 @@ which system owns the path, then let the plan reflect that decision.
 When the complete plan is conflict-free:
 
 ```bash
-bob apply
+bob plan --json
+bob apply --expect-plan-digest sha256:<64-lowercase-hex> --json
 bob check
 git diff --stat
 ```
 
-Review the resulting repository before committing. Future recipe upgrades can
+The guarded apply fresh-plans while holding Bob's apply lock and writes nothing
+if the reviewed identity is stale. Review the resulting repository before
+committing. Future recipe upgrades can
 use the hashes in `bob.lock` to update untouched managed files and leave human
 changes alone. Bob remembers what it built. It does not remember what you
 promise you'll clean up later.

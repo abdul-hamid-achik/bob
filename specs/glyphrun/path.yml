@@ -1,0 +1,44 @@
+version: 1
+name: bob_path
+intent: |
+    bob path explains one exact repository path using Bob's ownership rules
+    without returning file content or mutating the workspace.
+target:
+    cmd:
+        - ./bin/bob
+        - path
+        - internal/cli/root.go
+        - examples/integrated
+    cwd: .
+terminal:
+    cols: 140
+    rows: 30
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 5000
+    - snapshot: path
+outcomes:
+    - id: identifies_managed_path
+      description: the recipe-desired composition root is classified as managed
+      verify:
+        screen:
+            contains: "internal/cli/root.go: managed"
+    - id: predicts_create
+      description: the absent desired root reports the exact next plan action
+      verify:
+        screen:
+            contains: "next plan: create [missing]"
+    - id: warns_about_human_edit
+      description: Bob explains the ownership consequence without a global safety claim
+      verify:
+        screen:
+            contains: "human edit effect: will_conflict"
+    - id: relates_playbook
+      description: the output advertises the stable command playbook ID
+      verify:
+        screen:
+            contains: add-cli-command
+contractHash: sha256:6297fab8cde573c3311d15cf6f7de49fa3c911f63b311b20e44e84bb9fe49a6b

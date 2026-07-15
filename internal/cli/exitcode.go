@@ -11,6 +11,7 @@ const (
 	ExitConflicts    = 2
 	ExitDrift        = 3
 	ExitInvalidInput = 4
+	ExitPlanMismatch = 5
 )
 
 // exitError attaches one of the exit codes above to an error without

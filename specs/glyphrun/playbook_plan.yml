@@ -1,0 +1,57 @@
+version: 1
+name: bob_playbook_plan
+intent: |
+    bob playbook plan reports all named missing inputs and deterministically
+    resolves valid typed inputs into human-owned paths without executing steps.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-playbook.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+            ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+            ./bin/bob apply "$root" >/dev/null
+            set +e
+            missing_output="$(./bin/bob playbook plan add-cli-command "$root" --json)"
+            missing_status=$?
+            set -e
+            valid_output="$(./bin/bob playbook plan add-cli-command "$root" --set command_name=hello --json)"
+            printf 'missing_message=%s\n' "$(printf '%s' "$missing_output" | jq -r '.data.error.message')"
+            printf 'missing_exit=%s\n' "$missing_status"
+            printf 'create_path=%s\n' "$(printf '%s' "$valid_output" | jq -r '.data.playbook.boundary.create[0]')"
+            printf 'step_effect=%s\n' "$(printf '%s' "$valid_output" | jq -r '.data.playbook.steps[0].effect')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 100
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: playbook_plan
+outcomes:
+    - id: lists_missing_input
+      description: the failed resolution names the exact required input
+      verify:
+        screen:
+            contains: 'missing required inputs: command_name'
+    - id: invalid_input_exit
+      description: missing typed input uses the stable invalid-input exit code
+      verify:
+        screen:
+            contains: missing_exit=4
+    - id: resolves_human_command_file
+      description: the valid input resolves to the v4 human-owned command path
+      verify:
+        screen:
+            contains: internal/cli/hello.go
+    - id: does_not_execute_steps
+      description: resolution describes repository mutation authority rather than performing it
+      verify:
+        screen:
+            contains: repository_mutation
+contractHash: sha256:6a6f1111ec18e9cd030ae09a9e96511077ea6ad7b0c7b18684a337d80858a5cf

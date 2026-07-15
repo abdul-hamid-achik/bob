@@ -1,0 +1,50 @@
+version: 1
+name: bob_apply_digest_mismatch
+intent: |
+    bob apply refuses a stale reviewed plan with exit code 5 and leaves no
+    ownership lock when the workspace changes after review.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-mismatch.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          digest="$(./bin/bob plan "$root" --json | jq -r '.data.plan_digest')"
+          printf 'changed after review\n' >"$root/README.md"
+          set +e
+          ./bin/bob apply "$root" --expect-plan-digest "$digest" --json
+          status=$?
+          set -e
+          printf 'exit_code=%s\n' "$status"
+          if [ ! -e "$root/bob.lock" ]; then printf 'lock_absent=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: apply_digest_mismatch
+outcomes:
+    - id: stable_error_code
+      description: stale review uses the dedicated machine error code
+      verify:
+        screen:
+            contains: plan_digest_mismatch
+    - id: stable_exit_code
+      description: stale review exits the Bob apply process with code 5
+      verify:
+        screen:
+            contains: exit_code=5
+    - id: zero_lock_writes
+      description: refusal occurs before Bob publishes its ownership lock
+      verify:
+        screen:
+            contains: lock_absent=true
+contractHash: sha256:64b6f9575ae62a977d2f09dc57195234f3fb686b4397c65b2a13960a7eb3cbb1

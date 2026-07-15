@@ -1,0 +1,47 @@
+version: 1
+name: bob_apply_digest_success
+intent: |
+    bob apply accepts the exact freshly reviewed plan digest, returns a bounded
+    reconciliation receipt, and leaves the temporary workspace converged.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-success.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          digest="$(./bin/bob plan "$root" --json | jq -r '.data.plan_digest')"
+          receipt="$(./bin/bob apply "$root" --expect-plan-digest "$digest" --json)"
+          printf 'applied_plan_digest=%s\n' "$(printf '%s' "$receipt" | jq -r '.data.applied_plan_digest')"
+          printf 'lock_written=%s\n' "$(printf '%s' "$receipt" | jq -r '.data.lock_written')"
+          printf 'converged_after_apply=%s\n' "$(printf '%s' "$receipt" | jq -r '.data.converged_after_apply')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: apply_digest_success
+outcomes:
+    - id: binds_reviewed_digest
+      description: the apply receipt echoes the exact reviewed digest identity
+      verify:
+        screen:
+            contains: applied_plan_digest
+    - id: writes_lock_last
+      description: the bounded receipt confirms that Bob published its ownership lock
+      verify:
+        screen:
+            contains: lock_written=true
+    - id: reports_convergence
+      description: Bob distinguishes post-apply repository convergence from behavior verification
+      verify:
+        screen:
+            contains: converged_after_apply=true
+contractHash: sha256:02f38aa605256f1e15fe2e39627771762588a2078388699c608eaf6df8ff7300

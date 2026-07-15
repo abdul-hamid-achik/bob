@@ -21,7 +21,7 @@ type Artifact struct {
 // goAgentToolRecipeVersion is the current go-agent-tool recipe contract
 // version. engine.RecipeVersion mirrors this value as a deprecated
 // compatibility alias; recipe.Version is the source of truth.
-const goAgentToolRecipeVersion = 3
+const goAgentToolRecipeVersion = 4
 
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
@@ -53,6 +53,18 @@ func didYouMeanRecipe(id string) string {
 
 // Render compiles a manifest into the complete set of Bob-owned artifacts.
 func Render(m manifest.Manifest) ([]Artifact, error) {
+	version, err := Version(m.Recipe)
+	if err != nil {
+		return nil, err
+	}
+	return RenderVersion(m, version)
+}
+
+// RenderVersion reproduces one supported immutable built-in recipe contract.
+// Normal callers should use Render, which always selects the current version.
+// Keeping the immediately previous go-agent-tool contract renderable lets the
+// migration suite prove byte-for-byte compatibility and safe lock upgrades.
+func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}
@@ -60,8 +72,14 @@ func Render(m manifest.Manifest) ([]Artifact, error) {
 	var err error
 	switch m.Recipe {
 	case "go-agent-tool":
-		artifacts, err = renderGoAgentTool(m)
+		if version != 3 && version != goAgentToolRecipeVersion {
+			return nil, fmt.Errorf("unsupported go-agent-tool recipe version %d", version)
+		}
+		artifacts, err = renderGoAgentTool(m, version)
 	case "files":
+		if version != FilesRecipeVersion {
+			return nil, fmt.Errorf("unsupported files recipe version %d", version)
+		}
 		artifacts, err = renderFiles(m)
 	default:
 		return nil, fmt.Errorf("unsupported recipe %q%s", m.Recipe, didYouMeanRecipe(m.Recipe))

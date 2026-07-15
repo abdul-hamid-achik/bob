@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
@@ -16,11 +17,12 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const instructions = `Bob is a deterministic repository factory. Use bob_inspect or bob_check to
+const instructions = `Bob is a deterministic repository contract compiler and factory. Use bob_context to orient to a workspace,
+bob_path to classify one exact path, bob_playbook to select a closed procedure, and bob_inspect or bob_check to
 read Bob-managed state, bob_validate_manifest to validate a workspace manifest or bounded inline
 YAML, bob_recipe_describe to inspect the embedded recipe contract, bob_stats to summarize opt-in
-local usage, and bob_plan to review proposed file actions. These MCP tools never mutate repositories; opt-in telemetry may update Bob's local XDG state. To apply a conflict-free plan, use the normal approved
-shell path with "bob apply <workspace>", then call bob_check again. Codemap and Vecgrep search,
+local usage, and bob_plan to review proposed file actions. These MCP tools never mutate repositories; opt-in telemetry may update Bob's local XDG state. To apply a conflict-free reviewed plan, use the normal approved
+shell path with "bob apply <workspace> --expect-plan-digest sha256:<digest>", then call bob_check again. Codemap and Vecgrep search,
 impact analysis, indexing, and verification remain owned by those tools and Cortex.`
 
 type Server struct {
@@ -28,6 +30,7 @@ type Server struct {
 	runner    inspectpkg.Runner
 	recorder  telemetry.Recorder
 	telemetry *telemetry.Store
+	lookPath  func(string) (string, error)
 	srv       *sdkmcp.Server
 }
 
@@ -38,6 +41,7 @@ type ServerOptions struct {
 	AllowAnyWorkspace bool
 	Recorder          telemetry.Recorder
 	Telemetry         *telemetry.Store
+	lookPath          func(string) (string, error)
 }
 
 // NewServer constructs the compact read-only MCP surface.
@@ -65,6 +69,9 @@ func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, opt
 	if options.Recorder == nil {
 		options.Recorder = telemetry.Noop{}
 	}
+	if options.lookPath == nil {
+		options.lookPath = exec.LookPath
+	}
 	authority, err := newWorkspaceAuthority(canonical, options.AllowedWorkspaces, options.AllowAnyWorkspace)
 	if err != nil {
 		return nil, err
@@ -72,6 +79,7 @@ func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, opt
 	s := &Server{
 		authority: authority, runner: runner,
 		recorder: telemetry.BestEffort(options.Recorder), telemetry: options.Telemetry,
+		lookPath: options.lookPath,
 	}
 	s.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "bob", Version: version.Version},
@@ -91,6 +99,18 @@ func (s *Server) serve(ctx context.Context, transport sdkmcp.Transport) error {
 }
 
 func (s *Server) register() {
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_context", "Describe a Bob workspace contract",
+		"Return bounded deterministic recipe, capability, ownership, invariant, playbook-summary, and current-plan context. Defaults to compact and never runs specialist tools or mutates.",
+	), s.handleContext)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_path", "Classify one repository path",
+		"Explain Bob's exact desired, locked, reserved, unmanaged, or human-extension relationship to one repository-relative path without returning file bodies.",
+	), s.handlePath)
+	sdkmcp.AddTool(s.srv, readOnlyTool(
+		"bob_playbook", "Resolve a deterministic repository playbook",
+		"List, show, or resolve a closed recipe-versioned procedure with typed inputs and argv-shaped steps. Never executes a step or mutates.",
+	), s.handlePlaybook)
 	sdkmcp.AddTool(s.srv, readOnlyTool(
 		"bob_inspect", "Inspect a Bob workspace",
 		"Summarize Bob manifest and drift state plus offline availability of selected Codemap and Vecgrep binaries. Does not run specialist status commands, search, index, verify, or mutate.",

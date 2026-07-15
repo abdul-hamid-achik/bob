@@ -3,6 +3,7 @@ package recipe_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -66,18 +67,14 @@ func TestPublishedRecipeV2PreservesEveryPublishedV1ManagedPath(t *testing.T) {
 
 func TestRecipeV3UpgradeRetainsV2PathsAndRaisesGoSecurityPatch(t *testing.T) {
 	t.Parallel()
-	goAgentToolVersion, err := recipe.Version("go-agent-tool")
-	if err != nil || goAgentToolVersion != 3 {
-		t.Fatalf("recipe version = %d, %v, want 3", goAgentToolVersion, err)
-	}
-	v2, v2LockData := loadPublishedLock(t, 2)
+	v2, _ := loadPublishedLock(t, 2)
 	v2Files := publishedFiles(v2)
 
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "examples", "integrated", manifest.Filename))
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifacts, err := recipe.Render(m)
+	artifacts, err := recipe.RenderVersion(m, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,49 +116,151 @@ func TestRecipeV3UpgradeRetainsV2PathsAndRaisesGoSecurityPatch(t *testing.T) {
 		t.Fatalf("published v2 go.mod fixture hash = %s, reconstructed baseline = %s", want, got)
 	}
 
+}
+
+func TestGoAgentToolV3LockUpgradesSafelyToV4(t *testing.T) {
+	t.Parallel()
+	m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	root, _, v4 := installGoAgentV3Workspace(t, m)
+	humanPath := filepath.Join(root, "internal", "cli", "hello.go")
+	humanContent := []byte("package cli\n")
+	if err := os.WriteFile(humanPath, humanContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := engine.Plan(root, m, v4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.HasConflicts() || !plan.LockChanged || plan.Recipe.Version != 4 {
+		t.Fatalf("v3 to v4 plan = %#v", plan)
+	}
+	actions := make(map[string]engine.Action, len(plan.Actions))
+	for _, action := range plan.Actions {
+		actions[action.Path] = action
+	}
+	if actions["internal/cli/root.go"].Kind != engine.ActionUpdate || actions["internal/cli/registry.go"].Kind != engine.ActionCreate || actions["internal/cli/registry_test.go"].Kind != engine.ActionCreate {
+		t.Fatalf("v4 composition actions = root:%#v registry:%#v registry_test:%#v", actions["internal/cli/root.go"], actions["internal/cli/registry.go"], actions["internal/cli/registry_test.go"])
+	}
+	if _, err := engine.Apply(root, m, v4); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := engine.LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Recipe.Version != 4 {
+		t.Fatalf("upgraded lock version = %d, want 4", lock.Recipe.Version)
+	}
+	preserved, err := os.ReadFile(humanPath)
+	if err != nil || !reflect.DeepEqual(preserved, humanContent) {
+		t.Fatalf("v4 upgrade changed unmanaged command file: %q, %v", preserved, err)
+	}
+	converged, err := engine.Plan(root, m, v4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if converged.HasConflicts() || converged.LockChanged {
+		t.Fatalf("second v4 plan is not converged: %#v", converged)
+	}
+	for _, action := range converged.Actions {
+		if action.Kind != engine.ActionUnchanged {
+			t.Fatalf("second plan action = %#v", action)
+		}
+	}
+
+	withExtension, err := engine.Plan(root, m, v4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withExtension.HasConflicts() || withExtension.LockChanged {
+		t.Fatalf("human extension dirtied Bob state: %#v", withExtension)
+	}
+	for _, action := range withExtension.Actions {
+		if action.Path == "internal/cli/hello.go" {
+			t.Fatalf("human extension was adopted into Bob ownership: %#v", action)
+		}
+	}
+}
+
+func TestGoAgentToolV3ModifiedRootBlocksV4WithoutWrites(t *testing.T) {
+	t.Parallel()
+	m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	root, _, v4 := installGoAgentV3Workspace(t, m)
+	rootPath := filepath.Join(root, "internal", "cli", "root.go")
+	before, err := os.ReadFile(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	human := append(append([]byte(nil), before...), []byte("\n// human command registration\n")...)
+	if err := os.WriteFile(rootPath, human, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lockBefore, err := os.ReadFile(filepath.Join(root, engine.LockFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := engine.Plan(root, m, v4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rootAction engine.Action
+	for _, action := range plan.Actions {
+		if action.Path == "internal/cli/root.go" {
+			rootAction = action
+			break
+		}
+	}
+	if rootAction.Kind != engine.ActionConflict || rootAction.Code != engine.CodeManagedHashMismatch {
+		t.Fatalf("modified v3 root action = %#v", rootAction)
+	}
+	if _, err := engine.Apply(root, m, v4); !errors.Is(err, engine.ErrPlanConflicts) {
+		t.Fatalf("conflicted upgrade error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "internal", "cli", "registry.go")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("conflicted upgrade created registry: %v", err)
+	}
+	rootAfter, err := os.ReadFile(rootPath)
+	if err != nil || !reflect.DeepEqual(rootAfter, human) {
+		t.Fatalf("modified root changed: %v", err)
+	}
+	lockAfter, err := os.ReadFile(filepath.Join(root, engine.LockFilename))
+	if err != nil || !reflect.DeepEqual(lockAfter, lockBefore) {
+		t.Fatalf("conflicted upgrade changed lock: %v", err)
+	}
+}
+
+func installGoAgentV3Workspace(t *testing.T, m manifest.Manifest) (string, []recipe.Artifact, []recipe.Artifact) {
+	t.Helper()
 	root := t.TempDir()
 	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), m, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, artifact := range artifacts {
-		content := artifact.Content
-		if artifact.Path == "go.mod" {
-			content = []byte(v2GoMod)
-		}
-		if got, want := contentHash(content), v2Files[artifact.Path]; got != want {
-			t.Fatalf("reconstructed v2 %s hash = %s, fixture = %s", artifact.Path, got, want)
-		}
-		path := filepath.Join(root, filepath.FromSlash(artifact.Path))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, content, artifact.Mode); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(root, engine.LockFilename), v2LockData, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	plan, err := engine.Plan(root, m, artifacts)
+	v3, err := recipe.RenderVersion(m, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !plan.LockChanged || plan.Recipe.Version != 3 || len(plan.Actions) != len(v2.Files) {
-		t.Fatalf("unexpected v2 to v3 plan: %#v", plan)
+	v4, err := recipe.Render(m)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, action := range plan.Actions {
-		want := engine.ActionUnchanged
-		if action.Path == "go.mod" {
-			want = engine.ActionUpdate
-			if action.CurrentSHA256 != v2Files[action.Path] || action.DesiredSHA256 != v3Files[action.Path] {
-				t.Fatalf("go.mod security update hashes do not match fixture/current recipe: %#v", action)
-			}
-		}
-		if action.Kind != want {
-			t.Errorf("v2 to v3 action for %s = %s, want %s", action.Path, action.Kind, want)
-		}
+	if _, err := engine.Apply(root, m, v3); err != nil {
+		t.Fatal(err)
 	}
+	lockPath := filepath.Join(root, engine.LockFilename)
+	lock, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(lock), "  version: 4\n", "  version: 3\n", 1)
+	if updated == string(lock) {
+		t.Fatal("temporary v3 workspace lock did not contain current recipe version")
+	}
+	if err := os.WriteFile(lockPath, []byte(updated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root, v3, v4
 }
 
 func loadPublishedLock(t *testing.T, version int) (publishedLock, []byte) {

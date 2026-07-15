@@ -9,9 +9,9 @@ is a feature: an agent gets the exact same deterministic contract a human
 does, no special pleading, no hidden mode. This page is the fast path to using
 that contract well.
 
-If you are an agent reading this to decide what to do next: run `bob learn --json`
-before you plan anything. It is one read-only call and it will save you from
-guessing at flags this page also documents.
+If you are an agent reading this to decide what to do next: run
+`bob learn --json`, then `bob context --json`, before you plan anything. The
+first call describes Bob; the second describes the repository contract.
 
 ## `bob learn`
 
@@ -38,15 +38,16 @@ bob learn --json
 
 | Field | Contents |
 |---|---|
-| `product` | What Bob is: a deterministic repository factory and lifecycle reconciler. |
+| `product` | What Bob is: a deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler. |
 | `summary` | A short prose description of the product contract. |
 | `lifecycle` | The ordered workflow: `init`/`new` preview → `plan` → `apply` → `check`. |
 | `commands` | One entry per command: name, purpose, whether it mutates, whether it supports `--json`. |
+| `recommended_agent_bootstrap` | Ordered `learn`, `context`, `plan`, and `check` argv guidance. |
 | `json_envelope` | A field guide to the envelope itself — what `ok`, `data`, `warnings`, and `next_actions` mean. |
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
-| `mcp` | The `bob mcp serve` command and the six read-only tools it exposes. |
+| `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@3`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@4`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |
@@ -62,13 +63,51 @@ Then drive the actual work with the normal read-only commands:
 
 ```bash
 bob learn --json          # once, at session start
-bob plan --json            # before proposing or reviewing any change
-bob check --json            # to confirm convergence, exits non-zero on drift
+bob context --json        # recipe, capability, ownership, and digest context
+bob path <relative-path> --json  # before editing a path whose ownership is unclear
+bob playbook list --json   # discover stable procedures; select by ID, never prose
+bob plan --json           # before proposing or reviewing any change
+bob check --json          # to confirm convergence, exits non-zero on drift
 ```
 
+Context is bounded, read-only, and offline. Branch on its stable capability
+facets and action codes; never treat `verification: not_assessed` as success.
+For a converged `go-agent-tool@4` workspace, add commands through the advertised
+`cli.command_files` extension point. If `add-cli-command` reports
+`extension_contract_not_materialized`, reconcile the version-4 root and
+registry contract before creating an extension. Those composition files remain
+Bob-owned; editing either creates an ownership conflict. See the [workspace
+context schema](./reference/context.md).
+
+Before editing a path, branch on `bob path` codes. `will_conflict` means the
+current Bob contract owns or intends to own the complete file;
+`outside_bob_ownership` is not a global safety claim. When a related playbook
+is advertised, select its exact ID and supply only its named inputs:
+
+```bash
+bob path internal/cli/root.go --json
+bob playbook show add-cli-command --json
+bob playbook plan resolve-ownership-conflict \
+  --set path=internal/cli/root.go \
+  --set action_code=managed_hash_mismatch --json
+```
+
+Playbook steps are guidance. Route each effect through the normal approval
+policy; never auto-execute the first mutation step. See the
+[path](./reference/path.md) and [playbook](./reference/playbooks.md) contracts.
+
 Only call `bob apply` after a human or an explicit policy has approved a
-conflict-free plan. Bob will refuse an unsafe apply regardless, but an agent
-should not treat that refusal as the review step.
+conflict-free plan. Approval-aware callers should copy the reviewed CLI
+`plan_digest`, MCP `plan_digest_qualified`, or the qualified digest from
+context into the guarded apply:
+
+```bash
+bob apply . --expect-plan-digest sha256:<64-lowercase-hex> --json
+```
+
+Bob fresh-plans while holding its apply lock. A stale digest exits `5` with
+`plan_digest_mismatch` and writes nothing. A successful apply receipt proves
+which reconciliation Bob performed; it does not verify generated behavior.
 
 ## The `--json` envelope contract
 
@@ -108,6 +147,7 @@ envelope above.
 | `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), or a bad flag or argument. |
+| `5` | Guarded apply refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
 
 `bob check` is the deliberate special case: it exits non-zero when the
 repository or lock *would* change, even though its JSON body is a normal,
@@ -129,6 +169,7 @@ Every failure envelope carries `data.error.code`, one of:
 | `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely. |
+| `plan_digest_mismatch` | The fresh apply plan differs from the explicitly reviewed plan digest; review a new plan before applying. |
 | `command_failed` | An unclassified failure; read the message for detail. |
 
 Validation errors echo the offending value and, when one exists, the nearest
@@ -216,6 +257,7 @@ Map the error code straight to a corrective command — this is exactly what
 | `conflicts` | Inspect `data.conflicts` (apply) or actions with `kind: conflict` (plan/check), resolve each path deliberately, then rerun `bob apply`. |
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |
+| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply. |
 | `command_failed` | Read the message; it is the whole diagnosis. If it looks like a bug, `bob learn --json` won't help further — that's a report, not a retry loop. |
 
 Every failure envelope's `next_actions` array already contains this same
@@ -224,11 +266,14 @@ can branch on the code without parsing prose.
 
 ## The read-only MCP surface
 
-`bob mcp serve` runs Bob's MCP server over stdio. It exposes six tools, and
+`bob mcp serve` runs Bob's MCP server over stdio. It exposes nine tools, and
 none of them mutate a repository:
 
 | Tool | Result |
 |---|---|
+| `bob_context` | Bounded recipe, capability, ownership, invariant, playbook-summary, and current-plan context. |
+| `bob_path` | Exact Bob ownership relationship for one repository-relative path, without file bodies. |
+| `bob_playbook` | Closed `list`, `show`, or `plan` guidance with typed values and no execution. |
 | `bob_plan` | Bounded plan actions, counts, truncation metadata, and a deterministic plan digest. |
 | `bob_check` | Convergence, conflict, and lock-drift state, sharing the same plan digest. |
 | `bob_inspect` | Bob state and offline binary availability, without running specialist probes. |
@@ -238,8 +283,9 @@ none of them mutate a repository:
 
 A computed conflict from `bob_plan` or `bob_check` is still a successful,
 read-only result. It carries no mutation authority. Apply always goes through
-the normal approved shell path: `bob apply <workspace>`, reviewed like any
-other command, then plan again to confirm convergence.
+the normal approved shell path. Prefer
+`bob apply <workspace> --expect-plan-digest sha256:<digest>` after review, then
+call `bob_check` to confirm convergence.
 
 ### Workspace allowlist
 
@@ -294,9 +340,9 @@ describes but never operates on your behalf.
 These hold across the CLI and MCP surfaces, and an agent can build on them
 without re-verifying each session:
 
-- `plan`, `check`, plain `inspect`, `stats`, `learn`, and Studio never mutate a
+- `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, `learn`, and Studio never mutate a
   repository.
-- All six MCP tools are read-only; none of them run specialist probes or
+- All nine MCP tools are read-only; none of them run specialist probes or
   write to the target repository.
 - `apply` preflights the complete plan first and writes nothing if any single
   action is a conflict.
@@ -315,7 +361,7 @@ without re-verifying each session:
   the second embedded recipe, for anything that isn't a Go/Cobra CLI — with an
   agent-focused section on looping `check --json --conflicts-only`.
 - [MCPHub & local-agent](./guides/mcphub-local-agent.md) for wiring the same
-  six tools through MCPHub and scoping them to a local-agent gateway.
+  nine tools through MCPHub and scoping them to a local-agent gateway.
 - [Ownership & Safety](./ownership-and-safety.md) for the full plan-state
   vocabulary (`create`, `adopt`, `unchanged`, `update`, `conflict`).
 - [CLI Reference](./reference/cli.md) for every command's flags in one table.

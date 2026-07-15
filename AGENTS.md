@@ -2,8 +2,8 @@
 
 This is the source of truth for people and coding agents working on Bob.
 `CLAUDE.md` defers here. Public product behavior is defined by the reference
-pages under `docs/reference/` (published at <https://bobcli.dev>); design
-decisions live in `docs/adr/`.
+pages under `docs/reference/` (published at <https://bobcli.dev>); private
+design notes live outside this published repository.
 
 ## Product boundary
 
@@ -23,6 +23,9 @@ internal/cli       Cobra commands and human/JSON rendering
 internal/manifest  schema, strict YAML loading, validation, atomic writes
 internal/recipe    deterministic desired-artifact generation
 internal/engine    ownership lock, plan, conflict detection, safe apply
+internal/context   bounded offline workspace-contract composition
+internal/pathinfo  exact path ownership and extension-point projection
+internal/playbook  deterministic typed guidance resolution
 internal/doctor    bounded optional-tool capability probes
 internal/inspect   offline workspace inventory and explicit specialist probes
 internal/paths     side-effect-free XDG path resolution
@@ -39,11 +42,11 @@ Keep command handlers thin. Filesystem ownership and mutation rules belong in
 
 ## Invariants
 
-- `plan`, `check`, plain `inspect`, `stats`, `studio`, `explain`, and `learn`
+- `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, `studio`, `explain`, and `learn`
   do not mutate repositories.
 - `inspect --probe-integrations` is explicit subprocess authority. It never
   initializes, indexes, resets, searches, or repairs a specialist tool.
-- The six MCP tools never mutate repositories or run specialist probes.
+- The nine MCP tools never mutate repositories or run specialist probes.
 - MCP defaults to an exact startup workspace allowlist. Broader read authority
   requires `--allow-workspace` or explicit `--allow-any-workspace`.
 - Telemetry is disabled by default, has no network transport, and never stores
@@ -91,8 +94,9 @@ file should not appear on bobcli.dev, it does not belong under `docs/`.
 
 User-facing tutorials, how-to guides, and reference pages belong in `docs/`.
 Normative product behavior belongs in the reference pages under
-`docs/reference/`; architecture decisions belong in `docs/adr/`. `README.md` stays an orientation page rather than a
-second complete manual. Do not commit VitePress build output or dependencies.
+`docs/reference/`; private design notes stay outside the repository. `README.md`
+stays an orientation page rather than a second complete manual. Do not commit
+VitePress build output or dependencies.
 Coding agents should run `bob learn --json` (or read
 <https://bobcli.dev/agents>) before driving Bob.
 

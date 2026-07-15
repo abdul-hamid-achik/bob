@@ -58,12 +58,14 @@ mid-apply; it just tells you exactly where the truck stopped.
 
 ## Commands and authority
 
-- `plan`, `check`, plain `inspect`, `stats`, and Studio do not mutate the
+- `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, and Studio do not mutate the
   repository.
 - `inspect --probe-integrations` explicitly launches selected status commands;
   current Codemap may open tool-owned state and Vecgrep may contact its provider.
-- `apply` is the explicit repository mutation command.
-- All six MCP tools have read-only repository effects. Manifest validation may
+- `apply` is the explicit repository mutation command. Optional
+  `--expect-plan-digest` binds it to a freshly recomputed reviewed plan before
+  staging or writing.
+- All nine MCP tools have read-only repository effects. Manifest validation may
   also operate on bounded inline YAML; recipe description needs no workspace.
 - MCP starts with an exact workspace allowlist. `--allow-workspace` adds exact
   paths and `--allow-any-workspace` deliberately broadens read authority.

@@ -35,7 +35,11 @@ func TestMCPHubLocalAgentScopeRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"bob__bob_inspect": false, "bob__bob_plan": false}
+	want := map[string]bool{
+		"bob__bob_context": false,
+		"bob__bob_plan":    false,
+		"bob__bob_check":   false,
+	}
 	for _, tool := range listed.Tools {
 		if _, ok := want[tool.Name]; ok {
 			want[tool.Name] = true
@@ -46,7 +50,7 @@ func TestMCPHubLocalAgentScopeRoute(t *testing.T) {
 			t.Fatalf("local-agent gateway omitted pinned tool %s", name)
 		}
 	}
-	for _, name := range []string{"bob__bob_inspect", "bob__bob_plan"} {
+	for _, name := range []string{"bob__bob_context", "bob__bob_plan", "bob__bob_check"} {
 		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
 			Name: name, Arguments: map[string]any{"workspace": root},
 		})

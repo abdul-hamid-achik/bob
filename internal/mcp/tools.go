@@ -3,8 +3,6 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,35 +95,40 @@ type TruncationInfo struct {
 }
 
 type PlanOutput struct {
-	SchemaVersion int                        `json:"schema_version"`
-	OK            bool                       `json:"ok"`
-	Workspace     string                     `json:"workspace,omitempty"`
-	Authority     AuthorityInfo              `json:"authority"`
-	PlanDigest    string                     `json:"plan_digest,omitempty"`
-	Clean         bool                       `json:"clean"`
-	LockChanged   bool                       `json:"lock_changed"`
-	ConflictCount int                        `json:"conflict_count"`
-	Counts        inspectpkg.ActionCounts    `json:"counts"`
-	Actions       []PlanAction               `json:"actions"`
-	Truncation    TruncationInfo             `json:"truncation"`
-	Warnings      []string                   `json:"warnings"`
-	NextActions   []inspectpkg.CommandAction `json:"next_actions"`
-	Error         *ErrorInfo                 `json:"error,omitempty"`
+	SchemaVersion int           `json:"schema_version"`
+	OK            bool          `json:"ok"`
+	Workspace     string        `json:"workspace,omitempty"`
+	Authority     AuthorityInfo `json:"authority"`
+	PlanDigest    string        `json:"plan_digest,omitempty"`
+	// PlanDigestQualified is additive: PlanDigest preserves the original MCP
+	// v1 raw hexadecimal value while this field can be copied directly to
+	// bob apply --expect-plan-digest.
+	PlanDigestQualified string                     `json:"plan_digest_qualified,omitempty"`
+	Clean               bool                       `json:"clean"`
+	LockChanged         bool                       `json:"lock_changed"`
+	ConflictCount       int                        `json:"conflict_count"`
+	Counts              inspectpkg.ActionCounts    `json:"counts"`
+	Actions             []PlanAction               `json:"actions"`
+	Truncation          TruncationInfo             `json:"truncation"`
+	Warnings            []string                   `json:"warnings"`
+	NextActions         []inspectpkg.CommandAction `json:"next_actions"`
+	Error               *ErrorInfo                 `json:"error,omitempty"`
 }
 
 type CheckOutput struct {
-	SchemaVersion int                        `json:"schema_version"`
-	OK            bool                       `json:"ok"`
-	Workspace     string                     `json:"workspace,omitempty"`
-	Authority     AuthorityInfo              `json:"authority"`
-	PlanDigest    string                     `json:"plan_digest,omitempty"`
-	Clean         bool                       `json:"clean"`
-	LockChanged   bool                       `json:"lock_changed"`
-	ConflictCount int                        `json:"conflict_count"`
-	Counts        inspectpkg.ActionCounts    `json:"counts"`
-	Warnings      []string                   `json:"warnings"`
-	NextActions   []inspectpkg.CommandAction `json:"next_actions"`
-	Error         *ErrorInfo                 `json:"error,omitempty"`
+	SchemaVersion       int                        `json:"schema_version"`
+	OK                  bool                       `json:"ok"`
+	Workspace           string                     `json:"workspace,omitempty"`
+	Authority           AuthorityInfo              `json:"authority"`
+	PlanDigest          string                     `json:"plan_digest,omitempty"`
+	PlanDigestQualified string                     `json:"plan_digest_qualified,omitempty"`
+	Clean               bool                       `json:"clean"`
+	LockChanged         bool                       `json:"lock_changed"`
+	ConflictCount       int                        `json:"conflict_count"`
+	Counts              inspectpkg.ActionCounts    `json:"counts"`
+	Warnings            []string                   `json:"warnings"`
+	NextActions         []inspectpkg.CommandAction `json:"next_actions"`
+	Error               *ErrorInfo                 `json:"error,omitempty"`
 }
 
 type RecipeRef struct {
@@ -278,9 +281,10 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 	} else if !clean {
 		outcome, reason = telemetry.OutcomeDrift, telemetry.ReasonOwnershipConflict
 	}
+	digest := engine.DigestPlan(plan)
 	out := &CheckOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Workspace: root, Authority: s.authority.info(root),
-		PlanDigest: digestPlan(plan), Clean: clean, LockChanged: plan.LockChanged,
+		PlanDigest: digest.SHA256, PlanDigestQualified: digest.Qualified(), Clean: clean, LockChanged: plan.LockChanged,
 		ConflictCount: plan.ConflictCount, Counts: counts, Warnings: warnings, NextActions: nextActions,
 	}
 	return &sdkmcp.CallToolResult{}, out, nil
@@ -504,9 +508,10 @@ func (s *Server) projectPlan(root string, plan engine.PlanResult, includeUnchang
 	if returned > maxActions {
 		returned = maxActions
 	}
+	digest := engine.DigestPlan(plan)
 	out := &PlanOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Workspace: root, Authority: s.authority.info(root),
-		PlanDigest: digestPlan(plan), Clean: clean, LockChanged: plan.LockChanged,
+		PlanDigest: digest.SHA256, PlanDigestQualified: digest.Qualified(), Clean: clean, LockChanged: plan.LockChanged,
 		ConflictCount: plan.ConflictCount, Counts: counts,
 		Actions:  append([]PlanAction(nil), eligible[:returned]...),
 		Warnings: warnings, NextActions: nextActions,
@@ -565,26 +570,6 @@ func summarizePlan(root string, plan engine.PlanResult) (inspectpkg.ActionCounts
 		})
 	}
 	return counts, clean, warnings, nextActions
-}
-
-func digestPlan(plan engine.PlanResult) string {
-	actions := make([]PlanAction, 0, len(plan.Actions))
-	for _, action := range plan.Actions {
-		actions = append(actions, projectAction(action))
-	}
-	identity := struct {
-		SchemaVersion int               `json:"schema_version"`
-		Recipe        engine.LockRecipe `json:"recipe"`
-		LockChanged   bool              `json:"lock_changed"`
-		DesiredLock   engine.LockFile   `json:"desired_lock"`
-		Actions       []PlanAction      `json:"actions"`
-	}{
-		SchemaVersion: plan.SchemaVersion, Recipe: plan.Recipe, LockChanged: plan.LockChanged,
-		DesiredLock: plan.DesiredLock, Actions: actions,
-	}
-	data, _ := json.Marshal(identity)
-	digest := sha256.Sum256(data)
-	return hex.EncodeToString(digest[:])
 }
 
 func decodeManifest(data []byte) (manifest.Manifest, error) {

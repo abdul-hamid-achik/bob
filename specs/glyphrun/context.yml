@@ -1,0 +1,45 @@
+version: 1
+name: bob_context
+intent: |
+    bob context gives a person or coding agent a bounded workspace contract
+    without mutating the example repository or invoking specialist tools.
+target:
+    cmd:
+        - ./bin/bob
+        - context
+        - examples/integrated
+        - --profile
+        - compact
+    cwd: .
+terminal:
+    cols: 180
+    rows: 60
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 5000
+    - snapshot: context
+outcomes:
+    - id: identifies_recipe
+      description: context reports the exact built-in recipe contract
+      verify:
+        screen:
+            contains: go-agent-tool@4
+    - id: reports_drift
+      description: the unapplied example is reported as drifted
+      verify:
+        screen:
+            contains: "repository: drifted"
+    - id: separates_verification
+      description: capability rows never claim behavioral verification
+      verify:
+        screen:
+            contains: verification=not_assessed
+    - id: advertises_command_extension
+      description: recipe v4 advertises the human-owned command extension contract
+      verify:
+        screen:
+            contains: cli.command_files
+contractHash: sha256:75d4a8990d68fc4adf5740dcb39bcfd8e8334d446c84906d1ff04a2dcac4ef20

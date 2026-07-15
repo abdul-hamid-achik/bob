@@ -28,7 +28,7 @@ const (
 	// managed whole file.
 	//
 	// Deprecated: use recipe.Version("go-agent-tool") instead.
-	RecipeVersion = 3
+	RecipeVersion = 4
 )
 
 // ActionKind is the planner's decision for one desired artifact.
@@ -86,27 +86,37 @@ type Action struct {
 // PlanResult is a read-only projection of desired and observed repository
 // state. Actions are sorted by path.
 type PlanResult struct {
-	SchemaVersion int        `json:"schema_version" yaml:"schema_version"`
-	Recipe        LockRecipe `json:"recipe" yaml:"recipe"`
-	Actions       []Action   `json:"actions" yaml:"actions"`
-	ConflictCount int        `json:"conflict_count" yaml:"conflict_count"`
-	LockChanged   bool       `json:"lock_changed" yaml:"lock_changed"`
-	DesiredLock   LockFile   `json:"desired_lock" yaml:"desired_lock"`
-	lockExists    bool
-	lockSHA256    string
+	SchemaVersion  int        `json:"schema_version" yaml:"schema_version"`
+	Recipe         LockRecipe `json:"recipe" yaml:"recipe"`
+	Actions        []Action   `json:"actions" yaml:"actions"`
+	ConflictCount  int        `json:"conflict_count" yaml:"conflict_count"`
+	LockChanged    bool       `json:"lock_changed" yaml:"lock_changed"`
+	DesiredLock    LockFile   `json:"desired_lock" yaml:"desired_lock"`
+	lockExists     bool
+	lockSHA256     string
+	observedRecipe LockRecipe
+	observedLock   LockFile
+	canonicalRoot  string
 }
 
 // HasConflicts reports whether Apply must refuse the plan.
 func (p PlanResult) HasConflicts() bool { return p.ConflictCount > 0 }
 
+// ObservedRecipe reports the recipe identity recorded by the coherent lock
+// snapshot used to calculate this plan. The boolean is false when no lock
+// exists. It is observation metadata and is intentionally excluded from plan
+// wire formats and the version-1 plan digest.
+func (p PlanResult) ObservedRecipe() (LockRecipe, bool) { return p.observedRecipe, p.lockExists }
+
 // ApplyResult reports exactly what Apply changed. Written and Adopted are
 // sorted because they follow the deterministic plan order.
 type ApplyResult struct {
-	Plan        PlanResult `json:"plan" yaml:"plan"`
-	Written     []string   `json:"written,omitempty" yaml:"written,omitempty"`
-	Adopted     []string   `json:"adopted,omitempty" yaml:"adopted,omitempty"`
-	Unchanged   []string   `json:"unchanged,omitempty" yaml:"unchanged,omitempty"`
-	LockWritten bool       `json:"lock_written" yaml:"lock_written"`
+	Plan        PlanResult   `json:"plan" yaml:"plan"`
+	Written     []string     `json:"written,omitempty" yaml:"written,omitempty"`
+	Adopted     []string     `json:"adopted,omitempty" yaml:"adopted,omitempty"`
+	Unchanged   []string     `json:"unchanged,omitempty" yaml:"unchanged,omitempty"`
+	LockWritten bool         `json:"lock_written" yaml:"lock_written"`
+	Receipt     ApplyReceipt `json:"receipt" yaml:"receipt"`
 }
 
 type desiredArtifact struct {
@@ -161,9 +171,12 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 		Actions:       make([]Action, 0, len(desired)),
 		DesiredLock:   desiredLock(m, recipeVersion, desired),
 		lockExists:    lockExists,
+		canonicalRoot: canonicalRoot,
 	}
 	if lockExists {
 		result.lockSHA256 = hashBytes(lockBytes)
+		result.observedRecipe = lock.Recipe
+		result.observedLock = lock
 	}
 	desiredLockBytes, err := encodeLock(result.DesiredLock)
 	if err != nil {
@@ -299,6 +312,18 @@ func contentPreview(content []byte) string {
 // any conflict, rechecks every precondition, writes each changed artifact by
 // atomic replacement, and publishes bob.lock last. It never executes commands.
 func Apply(root string, m manifest.Manifest, artifacts []recipe.Artifact) (ApplyResult, error) {
+	return ApplyWithOptions(root, m, artifacts, ApplyOptions{})
+}
+
+// ApplyWorkspaceWithOptions loads and renders the human-owned workspace
+// contract only after acquiring the apply lock. The exact manifest source is
+// rechecked before staging and again before publication. This is the public
+// mutation path for digest-gated callers: a pre-lock manifest snapshot can
+// never select what gets applied.
+func ApplyWorkspaceWithOptions(root string, options ApplyOptions) (ApplyResult, error) {
+	if err := validateApplyOptions(options); err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: %w", err)
+	}
 	canonicalRoot, err := validateRoot(root)
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("apply: %w", err)
@@ -309,14 +334,56 @@ func Apply(root string, m manifest.Manifest, artifacts []recipe.Artifact) (Apply
 	}
 	defer release()
 
+	m, manifestSource, err := manifest.LoadWithSource(canonicalRoot)
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: %w: %w", ErrWorkspaceContract, err)
+	}
+	artifacts, err := recipe.Render(m)
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: %w: render recipe: %w", ErrWorkspaceContract, err)
+	}
+	return applyLocked(canonicalRoot, m, artifacts, options, manifestSource)
+}
+
+// ApplyWithOptions is Apply with an optional reviewed-plan constraint. The
+// expected digest is validated before lock acquisition. Under the workspace
+// lock Bob fresh-plans and compares the identity before conflict handling,
+// directory creation, staging, artifact publication, or lock publication.
+// Callers that derive desired state from bob.yaml should use
+// ApplyWorkspaceWithOptions so manifest loading also occurs under this lock.
+func ApplyWithOptions(root string, m manifest.Manifest, artifacts []recipe.Artifact, options ApplyOptions) (ApplyResult, error) {
+	if err := validateApplyOptions(options); err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: %w", err)
+	}
+	canonicalRoot, err := validateRoot(root)
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: %w", err)
+	}
+	release, err := acquireApplyLock(canonicalRoot)
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("apply: acquire workspace lock: %w", err)
+	}
+	defer release()
+	return applyLocked(canonicalRoot, m, artifacts, options, nil)
+}
+
+func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.Artifact, options ApplyOptions, manifestSource []byte) (ApplyResult, error) {
 	plan, err := Plan(canonicalRoot, m, artifacts)
 	result := ApplyResult{Plan: plan}
 	if err != nil {
 		return result, err
 	}
+	digest := DigestPlan(plan)
+	if options.ExpectedPlanDigest != "" && options.ExpectedPlanDigest != digest.Qualified() {
+		return result, &PlanDigestMismatchError{
+			ExpectedPlanDigest: options.ExpectedPlanDigest,
+			ActualPlanDigest:   digest.Qualified(),
+		}
+	}
 	if plan.HasConflicts() {
 		return result, fmt.Errorf("apply: %w", ErrPlanConflicts)
 	}
+	result.Receipt = newApplyReceipt(canonicalRoot, options.ExpectedPlanDigest, digest)
 	desired, err := normalizeArtifacts(canonicalRoot, artifacts)
 	if err != nil {
 		return result, fmt.Errorf("apply: %w", err)
@@ -324,6 +391,9 @@ func Apply(root string, m manifest.Manifest, artifacts []recipe.Artifact) (Apply
 	byPath := make(map[string]desiredArtifact, len(desired))
 	for _, artifact := range desired {
 		byPath[artifact.path] = artifact
+	}
+	if err := recheckManifestSource(canonicalRoot, manifestSource); err != nil {
+		return result, fmt.Errorf("apply: stale manifest before staging: %w", err)
 	}
 
 	// Directory creation and staging occur only after the complete plan is known
@@ -355,6 +425,9 @@ func Apply(root string, m manifest.Manifest, artifacts []recipe.Artifact) (Apply
 	if err := recheckLock(canonicalRoot, plan); err != nil {
 		return result, fmt.Errorf("apply: stale lock: %w", err)
 	}
+	if err := recheckManifestSource(canonicalRoot, manifestSource); err != nil {
+		return result, fmt.Errorf("apply: stale manifest before publication: %w", err)
+	}
 
 	for _, action := range plan.Actions {
 		switch action.Kind {
@@ -385,6 +458,8 @@ func Apply(root string, m manifest.Manifest, artifacts []recipe.Artifact) (Apply
 		}
 		result.LockWritten = true
 	}
+	convergedPlan, convergeErr := Plan(canonicalRoot, m, artifacts)
+	result.finalizeReceipt(convergeErr == nil && planIsConverged(convergedPlan))
 	return result, nil
 }
 

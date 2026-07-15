@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/abdul-hamid-achik/bob/internal/engine"
+	"github.com/abdul-hamid-achik/bob/internal/guidance"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
 
@@ -22,6 +23,21 @@ func classifyErrorCode(err error) string {
 		return ""
 	}
 	msg := err.Error()
+	if errors.Is(err, engine.ErrPlanDigestMismatch) {
+		return "plan_digest_mismatch"
+	}
+	// Preserve precise transport-neutral guidance codes. Missing bob.yaml is
+	// the one intentional refinement of manifest_invalid because it has a
+	// distinct established CLI recovery branch.
+	if errors.Is(err, os.ErrNotExist) && strings.Contains(msg, manifest.Filename) {
+		return "missing_manifest"
+	}
+	if code, ok := guidance.ErrorCode(err); ok {
+		switch code {
+		case guidance.ErrorInputInvalid, guidance.ErrorWorkspaceInvalid, guidance.ErrorManifestInvalid:
+			return code
+		}
+	}
 	switch ExitCode(err) {
 	case ExitConflicts:
 		return "conflicts"
@@ -31,7 +47,7 @@ func classifyErrorCode(err error) string {
 			return "missing_manifest"
 		case strings.Contains(msg, "validate manifest"), strings.Contains(msg, "decode manifest"), strings.Contains(msg, "read manifest"):
 			return "manifest_invalid"
-		case strings.Contains(msg, "workspace"):
+		case strings.Contains(msg, "resolve workspace"), strings.Contains(msg, "workspace root"), strings.Contains(msg, "workspace path"):
 			return "workspace_invalid"
 		default:
 			return "input_invalid"
@@ -88,6 +104,11 @@ func nextActionsForCode(code, workspace string) []string {
 		return []string{
 			"fix the invalid argument or flag noted in the message",
 			"run: bob learn --json",
+		}
+	case "plan_digest_mismatch":
+		return []string{
+			"run: " + withWorkspaceArg("bob plan", workspace) + " --json",
+			"review the new plan before applying it",
 		}
 	default:
 		return []string{"run: bob learn --json"}

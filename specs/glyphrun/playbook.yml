@@ -1,0 +1,49 @@
+version: 1
+name: bob_playbook
+intent: |
+    bob playbook shows the closed recipe-v4 procedure for adding a command
+    through human-owned files without executing any step.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-playbook-show.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          ./bin/bob playbook show add-cli-command "$root"
+    cwd: .
+terminal:
+    cols: 160
+    rows: 30
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 5000
+    - snapshot: playbook
+outcomes:
+    - id: names_stable_id
+      description: the selected stable playbook ID is displayed
+      verify:
+        screen:
+            contains: "add-cli-command: Add a CLI command"
+    - id: available_on_v4
+      description: the current v4 recipe exposes the tested human command seam
+      verify:
+        screen:
+            contains: available=true
+    - id: creates_human_file
+      description: the first mutation step creates a human-owned command file
+      verify:
+        screen:
+            contains: create_command_file
+    - id: keeps_bob_convergence_separate
+      description: the procedure ends with Bob convergence after repository tests
+      verify:
+        screen:
+            contains: check_bob_convergence
+contractHash: sha256:e426c8997532eb87494b1dfa83e5ba3f929052855d8638faa6494871e9fb0529

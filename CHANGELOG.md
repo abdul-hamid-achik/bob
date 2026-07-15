@@ -5,6 +5,59 @@ All notable changes to Bob will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning after the first tagged release.
 
+## [Unreleased]
+
+## [0.4.0] - 2026-07-15
+
+### Added
+
+- `bob context [workspace]` with deterministic compact, standard, and full
+  workspace-contract profiles, typed capability facets, recipe-owned entry
+  points, honest human extension points, invariants, notices, structured
+  continuation actions, and explicit byte-budget truncation.
+- Versioned recipe metadata for `go-agent-tool@4` and `files@1`, including
+  stable artifact IDs and cross-reference validation without workspace
+  inspection.
+- Contract and context digests for workspace context.
+- `bob path` exact path classification using the planner's real desired,
+  locked, symlink, special-file, reserved-path, and extension metadata rules.
+- Closed, typed, non-executing `bob playbook list|show|plan` guidance with seven
+  stable initial IDs, argv-shaped steps, deterministic risk/scope, honest
+  extension-contract materialization blockers, and bounded outputs.
+- Shared structured guidance types for notices, actions, and truncation.
+- Immutable `go-agent-tool@4` with deterministic command registration from
+  human-owned extension files, visible duplicate-ID/name failures, stable
+  command ordering, and safe upgrades from clean version-3 locks.
+- `bob apply --expect-plan-digest sha256:<digest>` and a bounded immediate apply
+  receipt. A stale reviewed plan now fails with `plan_digest_mismatch`, exit
+  code 5, and zero repository writes. Apply loads and renders `bob.yaml` under
+  the workspace lock, rechecks its exact source before publication, and returns
+  complete change counts with deterministic path-list truncation instead of
+  echoing an unbounded second copy of the plan.
+- Read-only `bob_context`, `bob_path`, and `bob_playbook` MCP tools using the
+  existing exact workspace authority model and the shared service layer.
+- Versioned consumer JSON fixtures generated from real context, path,
+  playbook, missing-input, and unsupported-future-schema structured contracts.
+- A deterministic identity/state text projection for `bob_context` avoids a
+  redundant full JSON copy and keeps the complete compact MCP response below
+  the 8 KiB gateway threshold.
+
+### Changed
+
+- Plan digest version 1 now has one engine implementation shared by CLI plan
+  and check and the existing MCP plan/check tools. CLI JSON adds
+  `plan_digest_version` and `plan_digest` without replacing plan actions.
+- CLI plan digests are directly consumable `sha256:` values; MCP preserves its
+  raw v1 digest and adds `plan_digest_qualified` additively.
+- `bob learn` now catalogs `context`, `path`, and `playbook`, and publishes the recommended agent
+  bootstrap sequence: learn, context, plan, check.
+- The stdio MCP surface now contains nine typed read-only tools. The recommended
+  weak-model pins are `bob_context`, `bob_plan`, and `bob_check`; path and
+  playbook guidance remain available through lazy discovery.
+- Private design notes no longer ship as public documentation; the published
+  site keeps normative contracts in `docs/reference/` and product architecture
+  in its dedicated public pages.
+
 ## [0.3.0] - 2026-07-13
 
 ### Added
@@ -85,5 +138,7 @@ and the project uses semantic versioning after the first tagged release.
   upgrades from older same-recipe locks.
 - Completed the Homebrew cask metadata and install guidance.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.3.0
 [0.2.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.2.0

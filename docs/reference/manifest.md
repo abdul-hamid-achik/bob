@@ -53,7 +53,7 @@ distribution:
 | `schema_version` | `1` | Selects the strict manifest schema. |
 | `recipe` | `go-agent-tool`, `files` | Selects the embedded repository recipe. |
 
-Two recipes are embedded: `go-agent-tool@3`, documented below, and `files@1`,
+Two recipes are embedded: `go-agent-tool@4`, documented below, and `files@1`,
 a plain file-tree recipe documented in its own section further down. `bob
 recipe list` prints both; an unrecognized recipe id fails manifest validation
 and suggests the nearest match rather than guessing.

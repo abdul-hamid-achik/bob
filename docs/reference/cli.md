@@ -1,5 +1,5 @@
 ---
-description: Complete, verified reference for every Bob command, its flags, its repository effect, and its JSON envelope.
+description: Normative reference for every Bob command, its flags, its repository effect, and its JSON envelope.
 ---
 
 # CLI Reference
@@ -13,8 +13,11 @@ uses the current directory. Bob does not ask where you are; it checks.
 |---|---|---|
 | `bob new <name>` | Preview by default; writes with `--write` | Create a new repository contract and initial files. |
 | `bob init [path]` | Preview by default; writes `bob.yaml` with `--write` | Initialize Bob in an existing directory without generating files yet. |
+| `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
+| `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
+| `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts. |
-| `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; a refusal reports `data.conflicts` directly. |
+| `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |
@@ -24,10 +27,10 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob studio [path]` | Repository-read-only interactive UI | Monitor Overview, Plan, and aggregate Stats. |
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
-| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@3`). |
+| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@4`). |
 | `bob recipe show <id>` | Read-only | Describe one recipe's schema and print a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
-| `bob mcp serve` | Long-running stdio server | Expose six typed repository-read-only tools. |
+| `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
 
 `bob inspect --probe-integrations` is an explicit exception to the plain
 read-only inventory: it launches selected Codemap and Vecgrep status commands.
@@ -38,7 +41,7 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 ```text
 $ bob recipe list
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
-go-agent-tool@3  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
+go-agent-tool@4  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
 ```
 
 `bob recipe show <id>` describes one recipe's manifest schema and prints an
@@ -66,6 +69,67 @@ bootstrap sequence.
 bob learn
 bob learn --json
 ```
+
+## `bob context`
+
+`bob context [workspace]` is the workspace counterpart to `bob learn`. It
+loads and validates `bob.yaml`, renders recipe metadata, computes one plan, and
+projects the repository contract without writing files, launching subprocesses,
+or contacting a network provider.
+
+```bash
+bob context .
+bob context . --json
+bob context . --profile full --json
+```
+
+Human output defaults to `standard`. JSON defaults to `compact`; an explicit
+`--profile compact|standard|full` overrides either default. Compact data has a
+6,144-byte limit, standard 24 KiB, and full 64 KiB. Every result carries a
+`truncation` object and never truncates recipe identity, repository state,
+conflict count, digests, or continuation actions.
+
+The command distinguishes capability `selection`, `materialization`, local
+binary `availability`, and `verification`. Verification is always
+`not_assessed`: Bob does not turn a selected integration or a discovered
+binary into a behavioral claim. The complete schema and closed vocabularies
+are normative in [Workspace Context](./context.md).
+
+## `bob path`
+
+`bob path <repository-relative-path> [workspace]` answers what Bob owns and
+what its next plan will do for one exact path. `--workspace <workspace>` is an
+equivalent workspace form; do not supply both forms. It returns no file body
+and does not claim an unmanaged path is globally safe.
+
+```bash
+bob path internal/cli/root.go . --json
+bob path internal/domain/service.go --workspace .
+```
+
+Absolute paths, parent traversal, empty paths, and invalid UTF-8 fail as
+`input_invalid`. `.git`, `bob.yaml`, `bob.lock`, and `.bob.apply.lock` are
+classified explicitly as reserved. Symlinks and special files are observed
+without following them. See [Path Classification](./path.md) for the schema
+and closed vocabularies.
+
+## `bob playbook`
+
+Playbooks are deterministic recipe metadata, not a task runner and not
+natural-language routing:
+
+```bash
+bob playbook list . --json
+bob playbook show add-cli-command . --json
+bob playbook plan resolve-ownership-conflict . \
+  --set path=internal/cli/root.go \
+  --set action_code=managed_hash_mismatch --json
+```
+
+The caller chooses a stable ID. `plan` validates a closed input schema and
+returns ordered, argv-shaped steps; Bob executes none of them. Unknown keys,
+duplicate keys, invalid values, and all missing required keys are reported as
+input errors. See [Deterministic Playbooks](./playbooks.md).
 
 `stats`, Studio, and MCP never mutate repositories. When local telemetry is
 explicitly enabled, normal CLI and MCP operations may append privacy-bounded
@@ -140,6 +204,7 @@ recovery path a script would parse.
 | `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely (for example, a symlink at the workspace boundary). |
+| `plan_digest_mismatch` | A guarded apply fresh-planned a different repository state than the caller reviewed. |
 | `command_failed` | An unclassified failure — read the message for detail. |
 
 An `apply` refused by conflicts skips the round-trip back through `plan`: its
@@ -198,6 +263,47 @@ previews to `create`, `update`, and `conflict` actions:
 }
 ```
 
+## Plan identity
+
+`plan --json` adds `plan_digest_version` and `plan_digest` to the complete plan.
+`check --json` exposes the same fields both beside `clean` and inside its plan.
+Version 1 is the unchanged identity previously used by MCP `bob_plan` and
+`bob_check`: it covers recipe identity, lock drift, desired lock, and every
+complete action without previews or output filtering. The digest is lowercase
+hexadecimal with a `sha256:` prefix in CLI plan/check and workspace context.
+For wire compatibility, MCP keeps its original raw `plan_digest` and adds the
+directly consumable `plan_digest_qualified` field.
+
+## Digest-gated apply
+
+`bob apply [workspace] --expect-plan-digest sha256:<64-lowercase-hex>` binds
+explicit mutation authority to one reviewed complete plan. CLI and MCP
+plan/check expose a qualified value that can be copied directly: CLI uses
+`plan_digest`, while MCP uses `plan_digest_qualified`. Bob accepts no
+whitespace, uppercase, or unqualified form.
+
+While holding the existing workspace apply lock, Bob loads and renders the
+current `bob.yaml`, computes a fresh plan, and compares its identity before
+conflict preflight, staging, or repository writes. The exact manifest source is
+rechecked before staging and publication. A mismatch exits `5`, emits
+`plan_digest_mismatch` with both the expected and actual qualified digests, and
+leaves no staged paths, lock change, or apply-lock file behind.
+
+Successful JSON apply output contains an apply receipt with schema version,
+plan-digest version, expected and applied digests, written/adopted/unchanged
+paths and complete counts, `lock_written`, `converged_after_apply`, an
+argv-shaped `next_check`, and explicit truncation metadata. The encoded receipt
+is capped at 16 KiB and retains at most 256 path entries, prioritizing written,
+then adopted, then unchanged paths; omitted suffix counts are deterministic.
+Identity, digests, complete counts, convergence, and `next_check` are never
+omitted.
+
+Apply JSON now returns this receipt directly in `data`; it does not echo the
+complete plan a second time. Callers that need actions retain the separately
+reviewed `plan --json` result identified by `applied_plan_digest`. The receipt
+is returned once and is not persisted. It proves which Bob reconciliation ran,
+not that generated application behavior passed.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -207,6 +313,7 @@ previews to `create`, `update`, and `conflict` actions:
 | `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), or a bad flag or argument. |
+| `5` | `apply --expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read
 `data.error.code` for detail — do not infer success from the mere presence of
@@ -241,6 +348,9 @@ suggested actions are inert text.
 
 | Tool | Result |
 |---|---|
+| `bob_context` | Bounded workspace contract; defaults to the compact profile. |
+| `bob_path` | Exact Bob relationship to one repository-relative path, with no file body. |
+| `bob_playbook` | Closed `list`, `show`, or `plan` procedure projection; never executes a step. |
 | `bob_inspect` | Repository state, drift summary, and offline selected-binary availability. |
 | `bob_plan` | Bounded actions, exact counts, truncation metadata, and deterministic plan digest. |
 | `bob_check` | Convergence, conflict, and lock-drift summary using the same plan digest. |
@@ -253,3 +363,11 @@ actions, and also enforces a transport byte budget. `bob_validate_manifest`
 accepts exactly one of `workspace` and `manifest_yaml`; inline YAML is limited
 to 64 KiB. `bob_stats` accepts a one-to-365-day window and never exposes
 individual events.
+
+`bob_context` accepts only `compact`, `standard`, or `full` and defaults to
+compact. `bob_path.path` is repository-relative and limited to 4 KiB.
+`bob_playbook.operation` is `list`, `show`, or `plan`; IDs are limited to 128
+bytes and a plan accepts at most 32 values with 128-byte keys and 4-KiB values.
+Each guidance request is limited to 64 KiB. Context targets less than 8 KiB
+end-to-end in compact mode, path and playbook-list results are capped at 8 KiB,
+and playbook show/plan results are capped at 24 KiB with explicit truncation.

@@ -359,42 +359,72 @@ func Load(root string) (Manifest, error) {
 	return LoadFile(filepath.Join(root, Filename))
 }
 
+// LoadWithSource loads and validates root/bob.yaml and returns the exact
+// bounded bytes that were decoded. Mutation callers can retain the source
+// bytes transiently and prove that the human-owned contract did not change
+// between planning and publication.
+func LoadWithSource(root string) (Manifest, []byte, error) {
+	return LoadFileWithSource(filepath.Join(root, Filename))
+}
+
 func LoadFile(path string) (Manifest, error) {
+	m, _, err := LoadFileWithSource(path)
+	return m, err
+}
+
+// LoadFileWithSource is LoadFile plus the exact validated source snapshot.
+// The returned byte slice is owned by the caller and is never persisted by
+// this package.
+func LoadFileWithSource(path string) (Manifest, []byte, error) {
 	var m Manifest
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return m, fmt.Errorf("no %s found in %s; run: bob init --module <module> --write to create one: %w", Filename, filepath.Dir(path), os.ErrNotExist)
+			return m, nil, fmt.Errorf("no %s found in %s; run: bob init --module <module> --write to create one: %w", Filename, filepath.Dir(path), os.ErrNotExist)
 		}
-		return m, fmt.Errorf("read manifest: %w", err)
+		return m, nil, fmt.Errorf("read manifest: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return m, fmt.Errorf("read manifest: %s is not a regular file", path)
+		return m, nil, fmt.Errorf("read manifest: %s is not a regular file", path)
 	}
 	if info.Size() > maxBytes {
-		return m, fmt.Errorf("read manifest: file exceeds %d bytes", maxBytes)
+		return m, nil, fmt.Errorf("read manifest: file exceeds %d bytes", maxBytes)
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return m, fmt.Errorf("read manifest: %w", err)
+		return m, nil, fmt.Errorf("read manifest: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	dec := yaml.NewDecoder(io.LimitReader(f, maxBytes+1))
+	openedInfo, err := f.Stat()
+	if err != nil {
+		return m, nil, fmt.Errorf("read manifest: %w", err)
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return m, nil, errors.New("read manifest: file changed while it was being opened")
+	}
+	source, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return m, nil, fmt.Errorf("read manifest: %w", err)
+	}
+	if len(source) > maxBytes {
+		return m, nil, fmt.Errorf("read manifest: file exceeds %d bytes", maxBytes)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(source))
 	dec.KnownFields(true)
 	if err := dec.Decode(&m); err != nil {
-		return m, fmt.Errorf("decode manifest: %w", err)
+		return m, nil, fmt.Errorf("decode manifest: %w", err)
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
 		if err == nil {
-			return m, errors.New("decode manifest: multiple YAML documents are not supported")
+			return m, nil, errors.New("decode manifest: multiple YAML documents are not supported")
 		}
-		return m, fmt.Errorf("decode manifest: %w", err)
+		return m, nil, fmt.Errorf("decode manifest: %w", err)
 	}
 	if err := m.Validate(); err != nil {
-		return m, fmt.Errorf("validate manifest: %w", err)
+		return m, nil, fmt.Errorf("validate manifest: %w", err)
 	}
-	return m, nil
+	return m, source, nil
 }
 
 func Encode(m Manifest) ([]byte, error) {

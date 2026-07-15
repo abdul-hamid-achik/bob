@@ -127,6 +127,9 @@ func New(deps Dependencies) *cobra.Command {
 	root.AddCommand(
 		newNewCommand(opts),
 		newInitCommand(opts),
+		newContextCommand(opts),
+		newPathCommand(opts),
+		newPlaybookCommand(opts),
 		newPlanCommand(opts),
 		newApplyCommand(opts),
 		newCheckCommand(opts),
@@ -276,10 +279,11 @@ func newPlanCommand(opts *options) *cobra.Command {
 			}
 			capturePlanMetrics(opts, root, plan)
 			if opts.json {
-				data := any(plan)
+				displayed := plan
 				if conflictsOnly {
-					data = filterConflictsOnly(plan, showContent)
+					displayed = filterConflictsOnly(plan, showContent)
 				}
+				data := planJSONProjection(displayed, plan)
 				return emitJSON(cmd.OutOrStdout(), "plan", data, conflictWarnings(plan), planNextActions(plan, root))
 			}
 			return printPlan(cmd.OutOrStdout(), plan, showContent, conflictsOnly)
@@ -291,23 +295,45 @@ func newPlanCommand(opts *options) *cobra.Command {
 }
 
 func newApplyCommand(opts *options) *cobra.Command {
-	return &cobra.Command{
+	var expectedPlanDigest string
+	cmd := &cobra.Command{
 		Use:   "apply [path]",
 		Short: "Apply one complete conflict-free repository plan",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
-			m, err := manifest.Load(root)
-			captureWorkspaceMetrics(opts, root, m.Recipe == "go-agent-tool")
-			if err != nil {
-				return fmt.Errorf("apply: %w", classifyInvalidInput(err))
+			opts.trackWorkspace(root)
+			result, err := engine.ApplyWorkspaceWithOptions(root, engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest})
+			if result.Plan.Recipe.ID != "" {
+				captureWorkspaceMetrics(opts, root, result.Plan.Recipe.ID == manifest.RecipeGoAgentTool)
 			}
-			artifacts, err := recipe.Render(m)
 			if err != nil {
-				return fmt.Errorf("apply: %w", classifyInvalidInput(err))
-			}
-			result, err := engine.Apply(root, m, artifacts)
-			if err != nil {
+				var mismatch *engine.PlanDigestMismatchError
+				if errors.As(err, &mismatch) {
+					failure := newExitError(ExitPlanMismatch, fmt.Errorf("apply: %w", mismatch))
+					if opts.json {
+						data := map[string]any{
+							"expected_plan_digest": mismatch.ExpectedPlanDigest,
+							"actual_plan_digest":   mismatch.ActualPlanDigest,
+							"error": map[string]string{
+								"code":    "plan_digest_mismatch",
+								"message": mismatch.Error(),
+							},
+						}
+						next := nextActionsForFailure(failure, root)
+						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "apply", data, nil, next); emitErr != nil {
+							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+						}
+						return reportedError{err: failure}
+					}
+					return failure
+				}
+				if errors.Is(err, engine.ErrInvalidPlanDigest) {
+					return classifyInvalidInput(err)
+				}
+				if errors.Is(err, engine.ErrWorkspaceContract) {
+					return classifyInvalidInput(err)
+				}
 				if errors.Is(err, engine.ErrPlanConflicts) {
 					failure := newExitError(ExitConflicts, errors.New("apply: plan contains conflicts; run bob plan for details"))
 					conflicts := conflictSummaries(result.Plan.Actions)
@@ -330,12 +356,14 @@ func newApplyCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("apply: %w", err)
 			}
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "apply", result, nil, []string{"review the repository diff", withWorkspaceArg("run bob check", root)})
+				return emitJSON(cmd.OutOrStdout(), "apply", result.Receipt, nil, []string{"review the repository diff", withWorkspaceArg("run bob check", root)})
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "applied: %d written, %d adopted, %d unchanged; lock written: %t\n", len(result.Written), len(result.Adopted), len(result.Unchanged), result.LockWritten)
 			return err
 		},
 	}
+	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
+	return cmd
 }
 
 func newCheckCommand(opts *options) *cobra.Command {
@@ -367,11 +395,17 @@ func newCheckCommand(opts *options) *cobra.Command {
 				}
 				failure = newExitError(code, errors.New("check: repository drift detected"))
 			}
-			reportPlan := any(plan)
+			displayed := plan
 			if conflictsOnly {
-				reportPlan = filterConflictsOnly(plan, false)
+				displayed = filterConflictsOnly(plan, false)
 			}
-			data := map[string]any{"clean": clean, "plan": reportPlan}
+			reportPlan := planJSONProjection(displayed, plan)
+			digest := engine.DigestPlan(plan)
+			data := map[string]any{
+				"clean": clean, "plan": reportPlan,
+				"plan_digest_version": digest.Version,
+				"plan_digest":         digest.Qualified(),
+			}
 			if opts.json {
 				var next []string
 				if failure != nil {
@@ -453,8 +487,8 @@ func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
 func newExplainCommand(opts *options) *cobra.Command {
 	data := map[string]any{
 		"schema_version": 1,
-		"product":        "deterministic repository factory and lifecycle reconciler",
-		"owns":           []string{"manifest validation", "recipe rendering", "repository plan", "generated-file ownership", "safe apply", "drift detection"},
+		"product":        "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
+		"owns":           []string{"manifest validation", "recipe rendering", "workspace context", "path classification", "bounded playbooks", "repository plan", "generated-file ownership", "safe apply", "drift detection"},
 		"does_not_own":   []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
 		"recipe":         recipe.IDs(),
 	}
@@ -466,7 +500,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 			if opts.json {
 				return emitJSON(cmd.OutOrStdout(), "explain", data, nil, []string{"run bob recipe list"})
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Bob owns deterministic repository construction: manifest → plan → explicit apply → drift check.\nIt does not run models, schedule agents, manage secrets, or declare behavioral verification.")
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Bob compiles repository intent into context, path guidance, closed playbooks, and a deterministic plan: manifest → review → explicit apply → drift check.\nIt does not run models, schedule agents, manage secrets, or declare behavioral verification.")
 			return err
 		},
 	}
@@ -476,6 +510,9 @@ func newLearnCommand(opts *options) *cobra.Command {
 	commands := []map[string]any{
 		{"name": "new", "purpose": "preview or create a new repository from the go-agent-tool recipe; --write authorizes creation", "mutates": true, "json": true},
 		{"name": "init", "purpose": "preview or write a Bob manifest in an existing repository; --write authorizes creation", "mutates": true, "json": true},
+		{"name": "context", "purpose": "describe the bounded workspace-specific repository contract without writing or probing specialists", "mutates": false, "json": true},
+		{"name": "path", "purpose": "classify one exact path through Bob's real ownership and extension contracts", "mutates": false, "json": true},
+		{"name": "playbook", "purpose": "list, show, or resolve a closed recipe procedure without executing its steps", "mutates": false, "json": true},
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
@@ -484,7 +521,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "config", "purpose": "inspect or initialize XDG user settings; init previews unless --write", "mutates": true, "json": true},
 		{"name": "stats", "purpose": "summarize privacy-bounded local usage aggregates", "mutates": false, "json": true},
 		{"name": "studio", "purpose": "interactive read-only repository and usage board; rejects --json", "mutates": false, "json": false},
-		{"name": "mcp", "purpose": "serve six repository-read-only MCP tools over stdio", "mutates": false, "json": false},
+		{"name": "mcp", "purpose": "serve nine repository-read-only MCP tools over stdio", "mutates": false, "json": false},
 		{"name": "explain", "purpose": "describe Bob's product contract and boundaries", "mutates": false, "json": true},
 		{"name": "learn", "purpose": "emit this onboarding brief for coding agents", "mutates": false, "json": true},
 		{"name": "recipe", "purpose": "inspect the embedded recipe catalog", "mutates": false, "json": true},
@@ -498,7 +535,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 	}
 	data := map[string]any{
 		"schema_version": 1,
-		"product":        "deterministic repository factory and lifecycle reconciler",
+		"product":        "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
 		"summary":        "Bob compiles bob.yaml through a versioned recipe, compares desired artifacts with the working tree and bob.lock, and applies only changes whose ownership is proven.",
 		"lifecycle": []string{
 			"bob new|init previews by default; --write authorizes creation",
@@ -508,13 +545,19 @@ func newLearnCommand(opts *options) *cobra.Command {
 		},
 		"commands": commands,
 		"recipes":  recipes,
+		"recommended_agent_bootstrap": []string{
+			"bob learn --json",
+			"bob context --json",
+			"bob plan --json",
+			"bob check --json",
+		},
 		"json_envelope": map[string]any{
 			"flag":   "--json",
 			"fields": []string{"schema_version", "ok", "command", "data", "warnings", "next_actions"},
 			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
 		},
 		"invariants": []string{
-			"plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
+			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
 			"apply preflights the complete plan and writes nothing when any conflict exists",
 			"Bob never overwrites an unmanaged differing file",
 			"a managed file updates only when its current hash matches the prior lock",
@@ -526,19 +569,24 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"2": "apply refused a conflicted plan, or check found an ownership conflict",
 			"3": "check found drift with no ownership conflict",
 			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, or an unrecognized recipe id",
+			"5": "apply refused because the fresh plan differs from the reviewed plan digest",
 		},
 		"error_codes": map[string]string{
-			"missing_manifest":  "no bob.yaml was found at the resolved workspace path",
-			"manifest_invalid":  "bob.yaml failed to parse or failed Validate; the message lists every problem",
-			"input_invalid":     "a flag, argument, or recipe id was invalid",
-			"conflicts":         "the plan contains one or more ownership conflicts; apply refused every write",
-			"workspace_invalid": "the workspace path could not be resolved safely",
-			"command_failed":    "an unclassified failure; read the message for detail",
+			"missing_manifest":     "no bob.yaml was found at the resolved workspace path",
+			"manifest_invalid":     "bob.yaml failed to parse or failed Validate; the message lists every problem",
+			"input_invalid":        "a flag, argument, or recipe id was invalid",
+			"conflicts":            "the plan contains one or more ownership conflicts; apply refused every write",
+			"workspace_invalid":    "the workspace path could not be resolved safely",
+			"plan_digest_mismatch": "the fresh apply plan differs from the explicitly reviewed plan digest; no repository writes occurred",
+			"command_failed":       "an unclassified failure; read the message for detail",
 		},
 		"mcp": map[string]any{
 			"serve":     "bob mcp serve <workspace>",
 			"authority": "repository read-only; defaults to an exact startup workspace allowlist",
-			"tools":     []string{"bob_plan", "bob_check", "bob_inspect", "bob_stats", "bob_recipe_describe", "bob_validate_manifest"},
+			"tools": []string{
+				"bob_context", "bob_path", "bob_playbook", "bob_plan", "bob_check",
+				"bob_inspect", "bob_stats", "bob_recipe_describe", "bob_validate_manifest",
+			},
 		},
 		"boundaries": []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
 		"docs": map[string]any{
@@ -553,19 +601,20 @@ func newLearnCommand(opts *options) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "learn", data, nil, []string{"run bob doctor", "run bob plan <workspace> --json"})
+				return emitJSON(cmd.OutOrStdout(), "learn", data, nil, []string{"run bob context <workspace> --json", "run bob plan <workspace> --json"})
 			}
 			var b strings.Builder
-			b.WriteString("Bob: deterministic repository factory and lifecycle reconciler.\n")
+			b.WriteString("Bob: deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler.\n")
 			b.WriteString("Lifecycle: new|init (preview; --write creates) -> plan (read-only) -> apply (explicit, conflict-free only) -> check (CI drift gate).\n")
-			b.WriteString("Guarantees: plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
+			b.WriteString("Guarantees: context/path/playbook/plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
+			b.WriteString("Guidance: context describes the workspace contract; path classifies one exact repository path; playbook resolves a closed typed procedure but never executes it.\n")
 			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")
-			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
+			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
-			b.WriteString("MCP: bob mcp serve <workspace> exposes six read-only tools (bob_plan, bob_check, bob_inspect, bob_stats, bob_recipe_describe, bob_validate_manifest).\n")
+			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
 			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold) or files (declare any file tree inline; bob materializes it with plan/apply safety).\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
-			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json\n")
+			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())
 			return err
 		},

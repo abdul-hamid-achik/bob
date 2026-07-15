@@ -1,0 +1,46 @@
+version: 1
+name: bob_context_states
+intent: |
+    bob context distinguishes clean convergence from an ownership conflict
+    without mutating or behaviorally verifying the repository.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-context.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          ./bin/bob context "$root" --profile compact
+          printf 'package cli\n' >"$root/internal/cli/root.go"
+          ./bin/bob context "$root" --profile compact
+    cwd: .
+terminal:
+    cols: 180
+    rows: 120
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: context_states
+outcomes:
+    - id: reports_clean_state
+      description: a converged v4 workspace is reported as clean
+      verify:
+        screen:
+            contains: 'repository: clean'
+    - id: reports_conflicted_state
+      description: a hand-edited Bob-owned root is reported as conflicted
+      verify:
+        screen:
+            contains: 'repository: conflicted'
+    - id: keeps_verification_unassessed
+      description: both states remain separate from behavioral verification
+      verify:
+        screen:
+            contains: verification=not_assessed
+contractHash: sha256:5eb580e5bcea168d066c6b66a77943526da36ec9ce54c502b9bb37fc1df7ec99

@@ -207,19 +207,26 @@ Identical to every other recipe, because it's the same engine underneath:
 ## For agents
 
 1. Run `bob learn --json` once, at session start. It lists both recipes
-   (`files@1`, `go-agent-tool@3`), the exit-code and error-code maps, and the
+   (`files@1`, `go-agent-tool@4`), the exit-code and error-code maps, and the
    action-code vocabulary — the brief you're about to need.
-2. Plan before proposing anything: `bob plan --json`. Prefer
+2. Run `bob context --json` for the active `files@1` contract. Its generic
+   capability and artifact metadata deliberately does not infer language,
+   framework, commands, or business meaning from declared content.
+3. Plan before proposing anything: `bob plan --json`. Prefer
    `bob plan --content --json` when you need to show a human or another agent
    what would actually change.
-3. In a polling or retry loop, use `bob check --json --conflicts-only`. It
+4. In a polling or retry loop, use `bob check --json --conflicts-only`. It
    trims the response to the paths that would actually block an apply,
    instead of hauling the full unchanged-action list back every iteration.
-4. Branch on the stable `code` field (`missing`, `content_update`,
+5. Branch on the stable `code` field (`missing`, `content_update`,
    `mode_drift`, `in_sync`, `identical_content`, or a conflict code like
    `unmanaged_differs`), never on the prose `reason` — the reason string is
    for a human's screen, the code is the contract.
-5. If `bob apply` refuses, its failure `data.conflicts` array already lists
+6. When authority is tied to a reviewed plan, call
+   `bob apply --expect-plan-digest sha256:<digest> --json`; Bob recomputes the
+   complete plan under its apply lock and refuses a stale digest with zero
+   repository writes.
+7. If `bob apply` refuses, its failure `data.conflicts` array already lists
    every blocked path and code — no need to replan just to find out why.
 
 See [Bob for coding agents](../agents.md) for the full exit-code table,

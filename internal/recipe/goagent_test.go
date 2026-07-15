@@ -2,6 +2,8 @@ package recipe
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -85,11 +87,43 @@ func TestRenderGoAgentToolIsDeterministicAndSafe(t *testing.T) {
 		"go.sum",
 		"internal/cli/root.go",
 		"internal/cli/root_test.go",
+		"internal/cli/registry.go",
+		"internal/cli/registry_test.go",
 		"internal/version/version.go",
 		"specs/help.yml",
 	} {
 		if _, ok := seen[path]; !ok {
 			t.Errorf("missing required artifact %s", path)
+		}
+	}
+}
+
+func TestPublishedGoAgentToolV3RemainsByteIdentical(t *testing.T) {
+	t.Parallel()
+	artifacts, err := RenderVersion(fullGoAgentManifest(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.New()
+	for _, artifact := range artifacts {
+		_, _ = fmt.Fprintf(digest, "%s\x00%o\x00", artifact.Path, artifact.Mode)
+		_, _ = digest.Write(artifact.Content)
+		_, _ = digest.Write([]byte{0})
+	}
+	if got, want := fmt.Sprintf("%x", digest.Sum(nil)), "9509914e038b6975bd4c22f51772238a0c9163b472e7e09eb835cd1dca88af2a"; got != want {
+		t.Fatalf("go-agent-tool@3 digest = %s, want immutable %s", got, want)
+	}
+	if len(artifacts) != 28 {
+		t.Fatalf("go-agent-tool@3 artifacts = %d, want 28", len(artifacts))
+	}
+}
+
+func TestRenderVersionRejectsUnsupportedContracts(t *testing.T) {
+	t.Parallel()
+	m := fullGoAgentManifest()
+	for _, version := range []int{0, 2, 5} {
+		if _, err := RenderVersion(m, version); err == nil || !strings.Contains(err.Error(), "unsupported go-agent-tool recipe version") {
+			t.Fatalf("version %d error = %v", version, err)
 		}
 	}
 }
@@ -195,7 +229,7 @@ func TestRenderGoAgentToolProducesSyntacticGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := artifactContentByPath(artifacts)
-	for _, path := range []string{"cmd/acme-tool/main.go", "internal/cli/root.go", "internal/cli/root_test.go", "internal/version/version.go"} {
+	for _, path := range []string{"cmd/acme-tool/main.go", "internal/cli/registry.go", "internal/cli/registry_test.go", "internal/cli/root.go", "internal/cli/root_test.go", "internal/version/version.go"} {
 		if _, err := parser.ParseFile(token.NewFileSet(), path, files[path], parser.AllErrors); err != nil {
 			t.Errorf("generated %s is not valid Go: %v", path, err)
 		}
@@ -256,14 +290,148 @@ func TestRenderedGoAgentToolBuildsWithLockedModules(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	cache := t.TempDir()
 	for _, args := range [][]string{{"test", "./..."}, {"mod", "tidy", "-diff"}} {
 		cmd := exec.Command("go", args...)
 		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly")
+		cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly", "GOCACHE="+cache)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, output)
 		}
+	}
+}
+
+func TestRenderedGoAgentToolBuildsWithHumanCommandExtension(t *testing.T) {
+	if testing.Short() {
+		t.Skip("generated-project extension subprocess smoke")
+	}
+	m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	artifacts, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	for _, artifact := range artifacts {
+		path := filepath.Join(root, filepath.FromSlash(artifact.Path))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, artifact.Content, artifact.Mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	extension := `package cli
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+func init() {
+	registerCommand("hello", newHelloCommand)
+}
+
+func newHelloCommand(opts *options, _ Dependencies) *cobra.Command {
+	return &cobra.Command{
+		Use:  "hello",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if opts.json {
+				return writeJSON(cmd.OutOrStdout(), struct {
+					SchemaVersion int    ` + "`json:\"schema_version\"`" + `
+					Message       string ` + "`json:\"message\"`" + `
+				}{1, "hello"})
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "hello")
+			return err
+		},
+	}
+}
+`
+	extensionTest := `package cli
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/acme/acme-tool/internal/version"
+)
+
+func TestHelloCommandAppearsAndRuns(t *testing.T) {
+	var output bytes.Buffer
+	cmd, err := New(version.Info{}, Dependencies{Out: &output})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetArgs([]string{"hello"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(output.String()) != "hello" {
+		t.Fatalf("output = %q", output.String())
+	}
+}
+`
+	for path, content := range map[string]string{
+		"internal/cli/hello.go":      extension,
+		"internal/cli/hello_test.go": extensionTest,
+	} {
+		destination := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.WriteFile(destination, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := t.TempDir()
+	binary := filepath.Join(t.TempDir(), "acme-tool")
+	for _, command := range []*exec.Cmd{
+		exec.Command("go", "test", "./..."),
+		exec.Command("go", "build", "-o", binary, "./cmd/acme-tool"),
+	} {
+		command.Dir = root
+		command.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly", "GOCACHE="+cache)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v\n%s", strings.Join(command.Args, " "), err, output)
+		}
+	}
+	command := exec.Command(binary, "--help")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("extension help: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "hello") {
+		t.Fatalf("extension command missing from help:\n%s", output)
+	}
+
+	// Cobra materializes its built-in help command lazily, after New validates
+	// extension registrations. A human extension must not be able to shadow it.
+	helpExtension := `package cli
+
+import "github.com/spf13/cobra"
+
+func init() {
+	registerCommand("custom-help", newCustomHelpCommand)
+}
+
+func newCustomHelpCommand(*options, Dependencies) *cobra.Command {
+	return &cobra.Command{Use: "help"}
+}
+`
+	if err := os.WriteFile(filepath.Join(root, "internal", "cli", "custom_help.go"), []byte(helpExtension), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.Command("go", "build", "-o", binary, "./cmd/acme-tool")
+	build.Dir = root
+	build.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly", "GOCACHE="+cache)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build with reserved help extension: %v\n%s", err, output)
+	}
+	command = exec.Command(binary, "--help")
+	output, err = command.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), `duplicates command name "help" owned by Cobra help command`) {
+		t.Fatalf("reserved help extension error = %v, output = %q", err, output)
 	}
 }
 

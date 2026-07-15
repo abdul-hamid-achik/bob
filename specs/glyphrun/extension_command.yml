@@ -1,0 +1,59 @@
+version: 1
+name: bob_v4_extension_command
+intent: |
+    a go-agent-tool@4 repository accepts a human-owned Cobra command file
+    without editing Bob-owned composition files or dirtying Bob convergence.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-extension.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          printf '%s\n' \
+            'package cli' \
+            '' \
+            'import "github.com/spf13/cobra"' \
+            '' \
+            'func init() { registerCommand("hello", newHelloCommand) }' \
+            '' \
+            'func newHelloCommand(_ *options, _ Dependencies) *cobra.Command {' \
+            '    return &cobra.Command{Use: "hello", Short: "Say hello"}' \
+            '}' >"$root/internal/cli/hello.go"
+          help_output="$(cd "$root" && go run ./cmd/acme --help)"
+          check_output="$(./bin/bob check "$root" --json)"
+          context_output="$(./bin/bob context "$root" --json)"
+          printf 'hello_visible=%s\n' "$(printf '%s' "$help_output" | grep -q hello && printf true || printf false)"
+          printf 'clean=%s\n' "$(printf '%s' "$check_output" | jq -r '.data.clean')"
+          printf 'recipe_version=%s\n' "$(printf '%s' "$context_output" | jq -r '.data.recipe.version')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 100
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 30000
+    - snapshot: extension_command
+outcomes:
+    - id: command_appears_in_help
+      description: static human registration mounts the command in the generated tree
+      verify:
+        screen:
+            contains: hello_visible=true
+    - id: command_file_remains_human_owned
+      description: adding the extension file does not create Bob ownership drift
+      verify:
+        screen:
+            contains: clean=true
+    - id: recipe_remains_v4
+      description: the convergence plan retains the immutable v4 recipe identity
+      verify:
+        screen:
+            contains: recipe_version=4
+contractHash: sha256:14924433be42eebd9f2ba6519f122e70e3ba90cb63bf9c3f0a9727a6bb28f6f7

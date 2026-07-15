@@ -21,9 +21,9 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract supports one recipe,
-> `go-agent-tool`, plus a read-only Studio and six typed MCP tools. Review every
-> plan and resulting diff before publishing.
+> **Status: early alpha.** The current contract embeds `go-agent-tool` and
+> `files`, plus a read-only Studio and nine typed MCP tools. Review every plan
+> and resulting diff before publishing.
 
 ## Why Bob exists
 
@@ -116,6 +116,25 @@ bob inspect .
 bob inspect . --json
 ```
 
+For a bounded workspace contract aimed at coding agents, use one call before
+planning edits:
+
+```bash
+bob context . --json
+```
+
+It reports recipe identity, ownership-relevant entry and extension points,
+capability state facets, invariants, and the exact current plan digest without
+running a specialist tool. See the [workspace context reference](docs/reference/context.md).
+
+For a specific edit, ask Bob about the exact path, then choose a closed
+procedure by stable ID when one applies:
+
+```bash
+bob path internal/cli/root.go . --json
+bob playbook show add-cli-command . --json
+```
+
 Add `--probe-integrations` only when you explicitly want Bob to call the public
 Codemap and Vecgrep status commands. Those commands may open their tool-owned
 stores, and Vecgrep may contact its configured embedding provider. Bob never
@@ -157,8 +176,11 @@ file.cheap    durable evidence artifacts
 Monitor       bounded runtime observations
 ```
 
-Bob exposes a typed stdio MCP projection with six repository-read-only tools:
+Bob exposes a typed stdio MCP projection with nine repository-read-only tools:
 
+- `bob_context` returns the bounded workspace contract and current plan identity;
+- `bob_path` classifies one exact repository-relative path;
+- `bob_playbook` lists, shows, or resolves a closed procedure without executing it;
 - `bob_inspect` returns Bob drift plus offline Codemap and Vecgrep availability;
 - `bob_plan` returns a bounded plan and deterministic digest;
 - `bob_check` returns a compact convergence and drift result;
@@ -166,11 +188,18 @@ Bob exposes a typed stdio MCP projection with six repository-read-only tools:
 - `bob_recipe_describe` reports the embedded recipe contract;
 - `bob_stats` returns aggregate opt-in local usage without individual events.
 
-Mutation deliberately remains on the normal approved command path:
-`bob apply <workspace>`. This avoids hiding filesystem effects behind a generic
-MCP proxy before Bob has digest-gated apply receipts. Cortex remains the owner of
-semantic investigation and verification; Bob does not duplicate its
-Vecgrep-to-Codemap routing.
+Mutation deliberately remains on the normal approved command path. Approval-aware
+callers can bind it to the exact reviewed plan:
+
+```bash
+bob plan <workspace> --json
+bob apply <workspace> --expect-plan-digest sha256:<64-lowercase-hex> --json
+bob check <workspace> --json
+```
+
+Bob returns an immediate apply receipt but does not persist it or treat it as
+behavioral verification. Cortex remains the owner of semantic investigation and
+verification; Bob does not duplicate its Vecgrep-to-Codemap routing.
 
 ### MCPHub and local-agent
 
@@ -184,10 +213,14 @@ mcphub add bob "$BOB_BIN/bob" \
   --description "Deterministic agent-ready repository builder" \
   --tag builder --tag code -- \
   mcp serve --workspace /absolute/path/to/repository
-mcphub pin bob__bob_inspect bob__bob_plan bob__bob_check \
-  bob__bob_validate_manifest bob__bob_recipe_describe bob__bob_stats
+mcphub pin bob__bob_context bob__bob_plan bob__bob_check
 mcphub doctor --server bob --probe
 ```
+
+This minimal pin set keeps orientation, review, and convergence visible to a
+small model. `bob_path` and `bob_playbook` remain available through lazy
+discovery until a task needs them; pinning never grants authority or executes a
+tool.
 
 That registration gives the selected repository as the server's exact
 workspace allowlist. A trusted local gateway that intentionally serves many
@@ -205,12 +238,12 @@ probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local
 - [Configuration & local telemetry](docs/configuration.md)
 - [Studio](docs/studio.md)
 - [Manifest reference](docs/reference/manifest.md)
+- [Workspace context reference](docs/reference/context.md)
+- [Path classification reference](docs/reference/path.md)
+- [Deterministic playbooks reference](docs/reference/playbooks.md)
 - [CLI reference](docs/reference/cli.md)
 - [Product direction](docs/product-direction.md)
 - [Architecture](docs/architecture.md)
-- [ADR-0001: choose a repository factory](docs/adr/0001-repository-factory.md)
-- [ADR-0002: compact read-only MCP surface](docs/adr/0002-read-only-mcp.md)
-- [ADR-0003: local operator surfaces and rich MCP](docs/adr/0003-local-operator-surfaces.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)

@@ -39,7 +39,7 @@ func (r *offlineRunner) calls() int {
 	return r.runCalls
 }
 
-func TestServerExposesSixTypedReadOnlyTools(t *testing.T) {
+func TestServerExposesNineTypedReadOnlyTools(t *testing.T) {
 	t.Parallel()
 	root := mcpWorkspace(t)
 	runner := &offlineRunner{}
@@ -48,10 +48,11 @@ func TestServerExposesSixTypedReadOnlyTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tools) != 6 {
-		t.Fatalf("tool count = %d, want 6", len(listed.Tools))
+	if len(listed.Tools) != 9 {
+		t.Fatalf("tool count = %d, want 9", len(listed.Tools))
 	}
 	want := map[string]bool{
+		"bob_context": true, "bob_path": true, "bob_playbook": true,
 		"bob_inspect": true, "bob_plan": true, "bob_check": true,
 		"bob_validate_manifest": true, "bob_recipe_describe": true,
 		"bob_stats": true,
@@ -95,7 +96,7 @@ func TestPlanReturnsCompactActionsAndStructuredFailure(t *testing.T) {
 	}
 	var output PlanOutput
 	decodeStructured(t, result, &output)
-	if !output.OK || output.Clean || output.Counts.Create == 0 || len(output.Actions) == 0 || len(output.PlanDigest) != 64 {
+	if !output.OK || output.Clean || output.Counts.Create == 0 || len(output.Actions) == 0 || len(output.PlanDigest) != 64 || output.PlanDigestQualified != "sha256:"+output.PlanDigest {
 		t.Fatalf("unexpected plan: %#v", output)
 	}
 	if output.Truncation.IncludeUnchanged || output.Truncation.Truncated || output.Truncation.ReturnedActions != len(output.Actions) || output.Truncation.OutputByteLimit != planOutputByteLimit {
@@ -142,9 +143,14 @@ func TestMCPStdioSubprocessHasCleanNewlineFraming(t *testing.T) {
 		t.Fatalf("stdio handshake: %v (stderr: %s)", err, stderr.String())
 	}
 	listed, err := session.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 6 {
+	if err != nil || len(listed.Tools) != 9 {
 		t.Fatalf("list tools: count=%d err=%v stderr=%s", len(listed.Tools), err, stderr.String())
 	}
+	contextResult, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "bob_context", Arguments: map[string]any{}})
+	if err != nil || contextResult.IsError {
+		t.Fatalf("stdio context: result=%#v err=%v stderr=%s", contextResult, err, stderr.String())
+	}
+	assertCallToolResponseBound(t, "stdio compact context", contextResult, 8<<10)
 	if err := session.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}

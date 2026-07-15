@@ -2,11 +2,16 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/abdul-hamid-achik/bob/internal/engine"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -29,6 +34,20 @@ func TestPlanFilteringDigestCheckAndReadOnlyContract(t *testing.T) {
 	decodeStructured(t, result, &compact)
 	if !compact.Clean || compact.PlanDigest == "" || len(compact.Actions) != 0 {
 		t.Fatalf("default plan should filter converged actions: %#v", compact)
+	}
+	completePlan, _, err := buildPlan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharedDigest := engine.DigestPlan(completePlan)
+	if compact.PlanDigest != sharedDigest.SHA256 {
+		t.Fatalf("MCP digest differs from engine: mcp=%s engine=%d:%s", compact.PlanDigest, sharedDigest.Version, sharedDigest.SHA256)
+	}
+	if compact.PlanDigestQualified != sharedDigest.Qualified() {
+		t.Fatalf("qualified MCP digest differs from engine: mcp=%s engine=%s", compact.PlanDigestQualified, sharedDigest.Qualified())
+	}
+	if legacyDigest(completePlan) != sharedDigest.SHA256 {
+		t.Fatalf("engine digest changed legacy v1 identity: legacy=%s engine=%s", legacyDigest(completePlan), sharedDigest.SHA256)
 	}
 	if compact.Truncation.FilteredUnchanged != compact.Truncation.TotalActions || compact.Truncation.Truncated {
 		t.Fatalf("filtered actions were reported as truncation: %#v", compact.Truncation)
@@ -58,7 +77,7 @@ func TestPlanFilteringDigestCheckAndReadOnlyContract(t *testing.T) {
 	}
 	var check CheckOutput
 	decodeStructured(t, result, &check)
-	if !check.Clean || check.PlanDigest != compact.PlanDigest || check.Counts != compact.Counts {
+	if !check.Clean || check.PlanDigest != compact.PlanDigest || check.PlanDigestQualified != compact.PlanDigestQualified || check.Counts != compact.Counts {
 		t.Fatalf("check and plan disagree: check=%#v plan=%#v", check, compact)
 	}
 
@@ -77,6 +96,25 @@ func TestPlanFilteringDigestCheckAndReadOnlyContract(t *testing.T) {
 	if runner.calls() != 0 {
 		t.Fatalf("plan/check invoked subprocess runner %d time(s)", runner.calls())
 	}
+}
+
+// legacyDigest is the exact pre-Phase-1 MCP implementation retained in the
+// compatibility test so moving the function cannot silently change v1.
+func legacyDigest(plan engine.PlanResult) string {
+	actions := make([]PlanAction, 0, len(plan.Actions))
+	for _, action := range plan.Actions {
+		actions = append(actions, projectAction(action))
+	}
+	identity := struct {
+		SchemaVersion int               `json:"schema_version"`
+		Recipe        engine.LockRecipe `json:"recipe"`
+		LockChanged   bool              `json:"lock_changed"`
+		DesiredLock   engine.LockFile   `json:"desired_lock"`
+		Actions       []PlanAction      `json:"actions"`
+	}{plan.SchemaVersion, plan.Recipe, plan.LockChanged, plan.DesiredLock, actions}
+	data, _ := json.Marshal(identity)
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
 }
 
 func TestValidateManifestStrictXORAndBound(t *testing.T) {
@@ -309,6 +347,41 @@ func TestFilesRecipeWorkspacePlanCheckValidateAndDescribe(t *testing.T) {
 	decodeStructured(t, describeResult, &describe)
 	if describe.Recipe == nil || describe.Recipe.ID != "files" || describe.Recipe.Version != 1 {
 		t.Fatalf("unexpected files recipe description: %#v", describe)
+	}
+
+	contextResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_context", Arguments: map[string]any{}})
+	if err != nil || contextResult.IsError {
+		t.Fatalf("context: result=%#v err=%v", contextResult, err)
+	}
+	var contract ContextOutput
+	decodeStructured(t, contextResult, &contract)
+	if contract.Context == nil || contract.Context.Recipe.ID != "files" || len(contract.Context.EntryPoints) != 0 {
+		t.Fatalf("files context inferred application semantics: %#v", contract.Context)
+	}
+	for _, capability := range contract.Context.Capabilities {
+		if capability.Category != "" && capability.Category != "repository" {
+			t.Fatalf("files context inferred capability %#v", capability)
+		}
+	}
+
+	pathResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_path", Arguments: map[string]any{"path": "a.txt"}})
+	if err != nil || pathResult.IsError {
+		t.Fatalf("path: result=%#v err=%v", pathResult, err)
+	}
+	var path PathOutput
+	decodeStructured(t, pathResult, &path)
+	if path.Path == nil || path.Path.Artifact == nil || !reflect.DeepEqual(path.Path.Artifact.Roles, []string{"declared_file"}) {
+		t.Fatalf("files path semantics = %#v", path.Path)
+	}
+
+	playbookResult, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_playbook", Arguments: map[string]any{"operation": "list"}})
+	if err != nil || playbookResult.IsError {
+		t.Fatalf("playbook: result=%#v err=%v", playbookResult, err)
+	}
+	var catalog PlaybookOutput
+	decodeStructured(t, playbookResult, &catalog)
+	if catalog.List == nil || len(catalog.List.Playbooks) != 2 || catalog.List.Playbooks[0].ID != "resolve-ownership-conflict" || catalog.List.Playbooks[1].ID != "upgrade-recipe" {
+		t.Fatalf("files playbooks = %#v", catalog.List)
 	}
 
 	assertSnapshotEqual(t, before, fileSnapshot(t, root))
