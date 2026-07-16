@@ -7,6 +7,16 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-16
+
+### Added
+
+- **`bob new --recipe <id>`** — scaffold any catalog recipe from `bob new` (go-agent-tool, files,
+  and all eight stack recipes), with stack auto-detection as the default on non-empty targets and
+  the go-agent-tool default preserved for greenfield directories. `--module` is required for
+  go-agent-tool and rejected for non-Go recipes; an explicit stack recipe that mismatches the
+  detected stack warns on preview and refuses `--write` (exit 4), mirroring `bob init`.
+
 ## [0.5.1] - 2026-07-16
 
 ### Fixed

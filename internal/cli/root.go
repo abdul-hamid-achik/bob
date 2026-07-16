@@ -149,17 +149,14 @@ func New(deps Dependencies) *cobra.Command {
 }
 
 func newNewCommand(opts *options) *cobra.Command {
-	var module, description, target string
+	var module, description, target, recipeID string
 	var write bool
 	cmd := &cobra.Command{
 		Use:   "new <name>",
-		Short: "Preview or create a new repository from the go-agent-tool recipe",
+		Short: "Preview or create a new repository from a built-in recipe",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if module == "" {
-				return classifyInvalidInput(errors.New("new: --module is required"))
-			}
 			if target == "" {
 				target = name
 			}
@@ -168,8 +165,32 @@ func newNewCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("new: validate target: %w", err)
 			}
 			target = canonicalTarget
-			m := manifest.Default(name, module, description)
-			captureWorkspaceMetrics(opts, target, true)
+			detection := detect.Detect(target)
+			chosen, err := chooseNewRecipe(recipeID, detection)
+			if err != nil {
+				return classifyInvalidInput(fmt.Errorf("new: %w", err))
+			}
+			m, err := buildNewManifest(chosen, name, module, description, detection)
+			if err != nil {
+				return classifyInvalidInput(fmt.Errorf("new: %w", err))
+			}
+			// Mirror init's stack-mismatch guard for the one case new can
+			// write into an existing repository: an explicit stack --recipe
+			// whose claimed stacks were not detected in the target.
+			// Auto-detected recipes match by construction.
+			var warnings []string
+			if manifest.IsStackRecipe(chosen) {
+				if mismatch := initStackMismatch(target, chosen, detection); mismatch != "" {
+					if write {
+						return classifyInvalidInput(fmt.Errorf("new: %s; run bob init --recipe %s --force to seed it anyway", mismatch, chosen))
+					}
+					warnings = append(warnings, mismatch)
+					if !opts.json {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", mismatch)
+					}
+				}
+			}
+			captureWorkspaceMetrics(opts, target, chosen == manifest.RecipeGoAgentTool)
 			artifacts, err := recipe.Render(m)
 			if err != nil {
 				return fmt.Errorf("new: %w", classifyInvalidInput(err))
@@ -177,14 +198,20 @@ func newNewCommand(opts *options) *cobra.Command {
 			paths := artifactPaths(artifacts)
 			if !write {
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "new", map[string]any{"target": target, "manifest": m, "artifacts": paths, "written": false}, nil, []string{"rerun with --write to create the repository"})
+					return emitJSON(cmd.OutOrStdout(), "new", map[string]any{"target": target, "manifest": m, "detection": detection, "artifacts": paths, "written": false}, warnings, []string{"rerun with --write to create the repository"})
 				}
 				data, _ := manifest.Encode(m)
 				_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n# %d files would be created under %s\n", data, len(paths), target)
 				return err
 			}
-			if err := ensureEmptyTarget(target); err != nil {
-				return fmt.Errorf("new: %w", err)
+			// Stack hygiene recipes only seed create-once files, so they may
+			// scaffold into the non-empty repository whose content selected
+			// them; the full go-agent-tool and files scaffolds still require
+			// a greenfield target.
+			if !manifest.IsStackRecipe(chosen) {
+				if err := ensureEmptyTarget(target); err != nil {
+					return fmt.Errorf("new: %w", err)
+				}
 			}
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return fmt.Errorf("new: create target: %w", err)
@@ -203,11 +230,78 @@ func newNewCommand(opts *options) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&module, "module", "", "Go module path (required)")
+	cmd.Flags().StringVar(&module, "module", "", "Go module path (required by recipe go-agent-tool; rejected by every other recipe)")
 	cmd.Flags().StringVar(&description, "description", "", "one-line product description")
 	cmd.Flags().StringVar(&target, "dir", "", "target directory (defaults to the project name)")
+	cmd.Flags().StringVar(&recipeID, "recipe", "", "recipe id (defaults to the recipe matching the target's detected stack, else go-agent-tool; see bob recipe list)")
 	cmd.Flags().BoolVar(&write, "write", false, "create the manifest and repository files")
 	return cmd
+}
+
+// chooseNewRecipe resolves the recipe bob new should scaffold: an explicit
+// --recipe value when given, otherwise the recipe matching the stack detected
+// in a target directory that already has content, otherwise the historical
+// go-agent-tool default for greenfield (missing or empty) targets.
+func chooseNewRecipe(explicit string, detection detect.Result) (string, error) {
+	if explicit != "" {
+		if _, err := recipe.Version(explicit); err != nil {
+			return "", err
+		}
+		return explicit, nil
+	}
+	if detection.Detected() {
+		if id, ok := recipe.ForStack(detection.Primary); ok {
+			return id, nil
+		}
+		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
+	}
+	return manifest.RecipeGoAgentTool, nil
+}
+
+// buildNewManifest constructs the manifest bob new scaffolds for the chosen
+// recipe. go-agent-tool requires its Go module path; every other recipe
+// rejects --module because it does not scaffold a Go module.
+func buildNewManifest(recipeID, name, module, description string, detection detect.Result) (manifest.Manifest, error) {
+	if recipeID == manifest.RecipeGoAgentTool {
+		if module == "" {
+			return manifest.Manifest{}, errors.New("--module is required for recipe go-agent-tool")
+		}
+		return manifest.Default(name, module, description), nil
+	}
+	if module != "" {
+		return manifest.Manifest{}, fmt.Errorf("--module is only used by recipe go-agent-tool; recipe %s does not scaffold a Go module (drop --module)", recipeID)
+	}
+	if recipeID == manifest.RecipeFiles {
+		return defaultFilesManifest(name, description), nil
+	}
+	kind := ""
+	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
+		for _, candidate := range runtime.Kinds {
+			if candidate == detection.KindHint {
+				kind = detection.KindHint
+				break
+			}
+		}
+	}
+	return manifest.DefaultStack(recipeID, name, "", description, kind)
+}
+
+// defaultFilesManifest is the starter contract bob new scaffolds for the
+// files recipe: one README declaration proving the shape, with bob.yaml as
+// the place the human or agent declares the real file tree.
+func defaultFilesManifest(name, description string) manifest.Manifest {
+	if description == "" {
+		description = "A local-first, agent-ready repository."
+	}
+	return manifest.Manifest{
+		SchemaVersion: manifest.SchemaVersion,
+		Recipe:        manifest.RecipeFiles,
+		Product:       manifest.Product{Name: name, Description: description},
+		Files: []manifest.FileDecl{{
+			Path:    "README.md",
+			Content: fmt.Sprintf("# %s\n\n%s\n", name, description),
+		}},
+	}
 }
 
 func newInitCommand(opts *options) *cobra.Command {
@@ -598,7 +692,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 
 func newLearnCommand(opts *options) *cobra.Command {
 	commands := []map[string]any{
-		{"name": "new", "purpose": "preview or create a new repository from the go-agent-tool recipe; --write authorizes creation", "mutates": true, "json": true},
+		{"name": "new", "purpose": "preview or create a new repository from a built-in recipe (--recipe selects one; a target with detected content auto-selects its stack recipe, a greenfield target defaults to go-agent-tool); --write authorizes creation", "mutates": true, "json": true},
 		{"name": "init", "purpose": "preview or write a Bob manifest in an existing repository; --write authorizes creation", "mutates": true, "json": true},
 		{"name": "context", "purpose": "describe the bounded workspace-specific repository contract without writing or probing specialists", "mutates": false, "json": true},
 		{"name": "path", "purpose": "classify one exact path through Bob's real ownership and extension contracts", "mutates": false, "json": true},
@@ -702,7 +796,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
-			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob init auto-selects the recipe matching the detected repository stack.\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())

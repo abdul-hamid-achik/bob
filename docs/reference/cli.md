@@ -11,7 +11,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 
 | Command | Repository effect | Purpose |
 |---|---|---|
-| `bob new <name>` | Preview by default; writes with `--write` | Create a new repository contract and initial files. |
+| `bob new <name>` | Preview by default; writes with `--write` | Create a new repository contract and initial files from any catalog recipe (`--recipe <id>`, auto-detected for targets with content). |
 | `bob init [path]` | Preview by default; writes `bob.yaml` with `--write` | Initialize Bob in an existing directory without generating files yet. |
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
@@ -54,7 +54,16 @@ vue-app@1  Seed-once hygiene for a Vue application: docs presence, .gitignore, a
 
 `bob recipe show <id>` describes one recipe: `files` prints its manifest
 schema and a copyable example, and each stack hygiene recipe prints its stack
-and the exact seed-once artifact paths. `bob new` scaffolds `go-agent-tool` only.
+and the exact seed-once artifact paths. `bob new` scaffolds any catalog
+recipe via `--recipe <id>`. When `--recipe` is omitted, a target directory
+whose content matches a detected stack auto-selects that stack's recipe (a
+stack recipe may then scaffold into the non-empty target because it only
+seeds create-once files), and a greenfield (missing or empty) target keeps
+the historical `go-agent-tool` default. An explicit stack `--recipe` that
+does not match the target's detected stack warns on preview and refuses
+`--write` (run `bob init --recipe <id> --force` to seed it anyway). For
+`bob new`, `--module` is required by `go-agent-tool` and rejected by every
+other recipe, which does not scaffold a Go module.
 `bob init` detects the repository's stack (Go, TypeScript/Bun, JavaScript,
 Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. When the chosen
