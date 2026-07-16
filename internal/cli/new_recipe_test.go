@@ -92,6 +92,17 @@ func TestNewRecipeSelection(t *testing.T) {
 			wantStderr: []string{"looks like python", "--recipe python-app"},
 		},
 		{
+			name: "write into an already bob-managed target is refused",
+			seed: map[string]string{
+				"package.json":  `{"workspaces":["apps/*"]}`,
+				"tsconfig.json": "{}",
+				"bun.lock":      "",
+				"bob.yaml":      "schema_version: 1\nrecipe: ts-app\nproduct:\n    name: demo\n",
+			},
+			args:    []string{"--write"},
+			wantErr: "already has bob.yaml",
+		},
+		{
 			name:    "unknown recipe suggests a close id",
 			args:    []string{"--recipe", "ts-apps"},
 			wantErr: "did you mean",
@@ -129,8 +140,16 @@ func TestNewRecipeSelection(t *testing.T) {
 				if ExitCode(err) != ExitInvalidInput {
 					t.Fatalf("expected exit code %d, got %d for %v", ExitInvalidInput, ExitCode(err), err)
 				}
-				if _, statErr := os.Stat(filepath.Join(target, "bob.yaml")); !os.IsNotExist(statErr) {
-					t.Fatalf("failed new must not write bob.yaml: %v", statErr)
+				if _, seeded := tc.seed["bob.yaml"]; !seeded {
+					if _, statErr := os.Stat(filepath.Join(target, "bob.yaml")); !os.IsNotExist(statErr) {
+						t.Fatalf("failed new must not write bob.yaml: %v", statErr)
+					}
+				}
+				for path, content := range tc.seed {
+					current, readErr := os.ReadFile(filepath.Join(target, filepath.FromSlash(path)))
+					if readErr != nil || string(current) != content {
+						t.Fatalf("seeded %s must never be touched by a failed new: %q err=%v", path, current, readErr)
+					}
 				}
 				return
 			}

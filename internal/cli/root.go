@@ -212,6 +212,8 @@ func newNewCommand(opts *options) *cobra.Command {
 				if err := ensureEmptyTarget(target); err != nil {
 					return fmt.Errorf("new: %w", err)
 				}
+			} else if _, statErr := os.Lstat(filepath.Join(target, manifest.Filename)); statErr == nil {
+				return classifyInvalidInput(fmt.Errorf("new: target %s already has %s; it is already bob-managed, run bob plan or bob check there instead", target, manifest.Filename))
 			}
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return fmt.Errorf("new: create target: %w", err)

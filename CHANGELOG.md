@@ -7,6 +7,15 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-16
+
+### Fixed
+
+- **`bob new --write` into an already bob-managed target is refused up front** with
+  `input_invalid` (exit 4) and guidance toward `bob plan`/`bob check`, instead of failing
+  mid-write with a raw "bob.yaml already exists" at exit 1 — a path newly reachable since
+  stack recipes scaffold into non-empty targets.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
