@@ -40,17 +40,21 @@ implemented.
 
 ### Manifest
 
-The human-owned `bob.yaml` declares project identity, the `go-agent-tool` recipe,
-CLI/JSON surfaces, optional integration seams, and distribution choices. Schema
-version 1 is strict: unknown fields and unsupported combinations fail
-validation. MCP and Studio must be disabled.
+The human-owned `bob.yaml` declares project identity, an embedded recipe
+(`go-agent-tool`, `files`, or a stack hygiene recipe), CLI/JSON surfaces,
+optional integration seams, and distribution choices. Schema version 1 is
+strict: unknown fields and unsupported combinations fail validation. MCP and
+Studio must be disabled.
 
-### Embedded recipe
+### Embedded recipes
 
-The `go-agent-tool` recipe renders the complete desired artifact set in memory.
-It is deterministic and versioned. The current `go-agent-tool@4` recipe has a
-static human-owned command extension contract and no third-party recipe or
-plugin runtime.
+Every recipe renders its complete desired artifact set in memory,
+deterministically and under a version. Three kinds are embedded: the current
+`go-agent-tool@4` recipe has a static human-owned command extension contract;
+`files@1` materializes an arbitrary manifest-declared file tree; and the eight
+stack hygiene recipes (`ts-app@1` through `static-web@1`) render only
+seed-once hygiene artifacts and never own application source. There is no
+third-party recipe or plugin runtime.
 
 Every artifact has a repository-relative path, complete content, and file mode.
 Recipe output cannot own `.git`, `bob.yaml`, or `bob.lock`.

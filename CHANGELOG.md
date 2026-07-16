@@ -5,7 +5,7 @@ All notable changes to Bob will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning after the first tagged release.
 
-## [Unreleased]
+## [0.5.0] - 2026-07-15
 
 ### Added
 

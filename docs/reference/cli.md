@@ -28,7 +28,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
 | `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@4`, and the stack hygiene recipes). |
-| `bob recipe show <id>` | Read-only | Describe one recipe's schema and print a copyable example. |
+| `bob recipe show <id>` | Read-only | Describe one recipe; `files` includes its schema and a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
 | `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
 
@@ -52,13 +52,20 @@ ts-app@1  Seed-once hygiene for a TypeScript app or Bun/Turborepo monorepo: docs
 vue-app@1  Seed-once hygiene for a Vue application: docs presence, .gitignore, and a Vite-oriented CI stub; never owns application source
 ```
 
-`bob recipe show <id>` describes one recipe's manifest schema and prints a
-copyable example where one exists. `bob new` scaffolds `go-agent-tool` only.
+`bob recipe show <id>` describes one recipe: `files` prints its manifest
+schema and a copyable example, and each stack hygiene recipe prints its stack
+and the exact seed-once artifact paths. `bob new` scaffolds `go-agent-tool` only.
 `bob init` detects the repository's stack (Go, TypeScript/Bun, JavaScript,
 Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. When the chosen
 recipe does not match the detected stack, the preview prints a prominent
-warning and `--write` refuses unless `--force` is passed. A `files` manifest
+warning and `--write` refuses with exit code `4` (`input_invalid`) unless
+`--force` is passed. `--module` is required only by `go-agent-tool`; for the
+stack hygiene recipes it is optional repository identity. `bob init --json`
+carries the full detection result in `data.detection` — `stacks` (each with
+its proving marker files), `primary`, `monorepo`, `kind_hint`,
+`package_manager`, and `signals` — alongside the previewed or written
+manifest. A `files` manifest
 is hand- or agent-authored. Stack hygiene recipes render only seed-once
 artifacts: each file is created when missing, never recorded in `bob.lock`,
 and never updated or overwritten afterwards — application source is never
@@ -75,7 +82,7 @@ briefing; `--json` emits Bob's standard envelope with `command: "learn"` and a
 (init/new preview → plan → apply → check), every command's name, purpose,
 mutation status, and JSON support, a field guide to the envelope itself, the
 safety invariants, the MCP surface, the boundaries Bob refuses to own, the
-recipe catalog (id, version, description for both embedded recipes), the
+recipe catalog (id, version, description for every embedded recipe), the
 `exit_codes` and `error_codes` maps documented below, and the docs URLs. See
 [Bob for coding agents](../agents.md) for the full contract and a worked
 bootstrap sequence.
@@ -327,7 +334,7 @@ not that generated application behavior passed.
 | `1` | Unclassified command failure (`command_failed`), or a workspace path that could not be resolved (`workspace_invalid`). |
 | `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
 | `3` | `check` found drift with no ownership conflict. |
-| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), or a bad flag or argument. |
+| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, or `bob init --write` refusing a recipe that does not match the detected stack without `--force`. |
 | `5` | `apply --expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read

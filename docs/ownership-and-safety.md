@@ -30,6 +30,16 @@ credentials, environment values, or execution history.
 One conflict blocks every planned write. Bob never partially applies a plan it
 already knows is conflicted. It would rather do nothing than do half a job.
 
+## Seed-once artifacts
+
+The stack hygiene recipes render only **seed-once** artifacts, a deliberate
+second ownership class: a missing destination plans as `create` and is written
+exactly once; any existing destination — whatever its content, and even a
+symlink or directory — plans as `unchanged` with code `seed_exists`. Seeds are
+never recorded in `bob.lock`, never updated, never overwritten, and never
+conflict. Human edits keep `bob check` clean, and deleting a seeded file is
+ordinary drift the next apply re-seeds.
+
 ## Files Bob refuses to own
 
 Recipe output cannot target:

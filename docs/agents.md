@@ -47,7 +47,7 @@ bob learn --json
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
 | `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@4`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@4`, and the eight stack hygiene recipes `ts-app@1`, `js-app@1`, `vue-app@1`, `python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`, `static-web@1`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |
@@ -253,7 +253,7 @@ Map the error code straight to a corrective command — this is exactly what
 | Error code | Corrective command |
 |---|---|
 | `missing_manifest` | `bob init --module <module> --write` |
-| `manifest_invalid` | Fix every problem the message lists, then rerun `bob plan --json`. `bob recipe show <recipe-id>` prints the schema you're validating against. |
+| `manifest_invalid` | Fix every problem the message lists, then rerun `bob plan --json`. `bob recipe show <recipe-id>` describes the recipe, and the [Manifest Reference](./reference/manifest.md) documents the schema you're validating against. |
 | `conflicts` | Inspect `data.conflicts` (apply) or actions with `kind: conflict` (plan/check), resolve each path deliberately, then rerun `bob apply`. |
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |

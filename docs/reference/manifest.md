@@ -210,12 +210,14 @@ watching Bob report `content_update` on the next plan.
 `ts-app@1`, `js-app@1`, `vue-app@1`, `python-app@1`, `ruby-app@1`,
 `lua-lib@1`, `rust-cli@1`, and `static-web@1` share one deliberately small
 contract for repositories whose application source Bob must never own. Each
-renders exactly five **seed-once** artifacts: `README.md`, `AGENTS.md`,
-`SECURITY.md`, `.gitignore`, and — while `distribution.github_actions: true`
-— a stack-appropriate `.github/workflows/ci.yml` stub.
+renders four **seed-once** artifacts — `README.md`, `AGENTS.md`,
+`SECURITY.md`, and `.gitignore` — plus, while
+`distribution.github_actions: true`, a stack-appropriate
+`.github/workflows/ci.yml` stub.
 
 A seed-once artifact is created only when its destination is missing. Any
-existing destination satisfies it, whatever its content, and it is never
+existing destination satisfies it — whatever its content, and even a symlink,
+directory, or special file: Bob reads nothing through it. It is never
 recorded in `bob.lock`, never updated, and never overwritten. The human owns
 every seeded file from the moment it exists; later edits keep `bob check`
 clean, and deleting one is ordinary drift that `bob apply` re-seeds.
@@ -225,10 +227,25 @@ Schema, relative to `go-agent-tool`:
 - `product.module` is **optional** repository identity (same shape rules as a
   Go module path when present).
 - `product.visibility` and `product.license` are optional.
-- `runtime.language` and `runtime.kind` must match the recipe's contract
-  (for example `ts-app` requires `language: typescript` and `kind: app` or
-  `kind: monorepo`; `rust-cli` requires `language: rust`, `kind: cli`).
+- `runtime.language` and `runtime.kind` must match the recipe's contract,
+  below. Validation names the allowed values when either is wrong, and
   `bob recipe show <id>` prints each recipe's stack.
+
+  | Recipe | `runtime.language` | `runtime.kind` |
+  |---|---|---|
+  | `ts-app` | `typescript` | `app` or `monorepo` |
+  | `js-app` | `javascript` | `app` or `monorepo` |
+  | `vue-app` | `typescript` or `javascript` | `web-app` |
+  | `python-app` | `python` | `app` |
+  | `ruby-app` | `ruby` | `app` or `gem` |
+  | `lua-lib` | `lua` | `lib` or `plugin` |
+  | `rust-cli` | `rust` | `cli` |
+  | `static-web` | `html` | `site` |
+
+  `bob init` picks the kind from detection where the recipe supports the
+  detected hint (a workspace monorepo selects `monorepo`, a `.gemspec` selects
+  `gem`, a Neovim plugin layout selects `plugin`); otherwise it defaults to
+  the recipe's first kind.
 - `surfaces` and `integrations` are unused and must stay zero-valued.
 - `distribution.github_actions` is the only supported distribution toggle;
   `goreleaser`, `homebrew`, and `docs` are not supported.
