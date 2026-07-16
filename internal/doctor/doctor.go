@@ -116,7 +116,7 @@ func Run(ctx context.Context, m manifest.Manifest, prober Prober) Result {
 }
 
 func selectedTools(m manifest.Manifest) []tool {
-	if manifest.IsStackRecipe(m.Recipe) {
+	if manifest.IsStackRecipe(m.Recipe) || m.Recipe == manifest.RecipeFiles {
 		return stackTools(m)
 	}
 	tools := []tool{
@@ -160,9 +160,9 @@ func selectedTools(m manifest.Manifest) []tool {
 }
 
 // stackTools probes Git as the only required tool for stack hygiene recipes
-// plus the language toolchain as optional checks. Bob does not build these
-// stacks itself, so a missing toolchain degrades the report without failing
-// readiness.
+// and the files recipe, plus the language toolchain as optional checks. Bob
+// does not build these stacks itself, so a missing toolchain degrades the
+// report without failing readiness.
 func stackTools(m manifest.Manifest) []tool {
 	tools := []tool{
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},

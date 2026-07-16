@@ -655,7 +655,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		},
 		"exit_codes": map[string]string{
 			"0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
-			"1": "unclassified command failure",
+			"1": "unclassified command failure, or doctor reporting required tools missing",
 			"2": "apply refused a conflicted plan, or check found an ownership conflict",
 			"3": "check found drift with no ownership conflict",
 			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, or an unrecognized recipe id",

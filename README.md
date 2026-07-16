@@ -21,9 +21,11 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds `go-agent-tool` and
-> `files`, plus a read-only Studio and nine typed MCP tools. Review every plan
-> and resulting diff before publishing.
+> **Status: early alpha.** The current contract embeds ten recipes —
+> `go-agent-tool`, `files`, and eight stack hygiene recipes (`ts-app`,
+> `js-app`, `vue-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`,
+> `static-web`) — plus a read-only Studio and nine typed MCP tools. Review
+> every plan and resulting diff before publishing.
 
 ## Why Bob exists
 

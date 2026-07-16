@@ -331,7 +331,7 @@ not that generated application behavior passed.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), or a workspace path that could not be resolved (`workspace_invalid`). |
+| `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
 | `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, or `bob init --write` refusing a recipe that does not match the detected stack without `--force`. |

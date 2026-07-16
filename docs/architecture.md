@@ -152,8 +152,10 @@ action is `unchanged`. It is suitable for CI drift detection.
 
 ### Doctor
 
-`doctor` probes Go and Git plus selected optional tools using bounded direct
-version commands. Missing required tools make the result not ready. Missing or
+`doctor` probes the recipe's required tools — Go and Git for `go-agent-tool`,
+Git only for `files` and the stack hygiene recipes — plus selected optional
+tools using bounded direct version commands. Missing required tools make the
+result not ready. Missing or
 failed optional probes produce an explicit degraded result.
 
 ### Workspace inspection

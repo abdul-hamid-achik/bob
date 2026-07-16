@@ -5,6 +5,15 @@ All notable changes to Bob will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning after the first tagged release.
 
+## [Unreleased]
+
+## [0.5.1] - 2026-07-16
+
+### Fixed
+
+- `bob doctor` no longer requires Go for files-recipe workspaces; it probes
+  Git only, matching stack recipes.
+
 ## [0.5.0] - 2026-07-15
 
 ### Added
@@ -160,7 +169,8 @@ and the project uses semantic versioning after the first tagged release.
   upgrades from older same-recipe locks.
 - Completed the Homebrew cask metadata and install guidance.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.3.0
 [0.2.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.2.0

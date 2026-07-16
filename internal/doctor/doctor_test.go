@@ -100,6 +100,35 @@ func TestCappedBufferBoundsOutput(t *testing.T) {
 	}
 }
 
+func TestRunFilesRecipeRequiresOnlyGit(t *testing.T) {
+	t.Parallel()
+	m := manifest.Manifest{
+		SchemaVersion: 1,
+		Recipe:        manifest.RecipeFiles,
+		Product:       manifest.Product{Name: "files", Description: "Files"},
+		Files:         []manifest.FileDecl{{Path: "notes/readme.md", Content: "hello\n"}},
+	}
+	// Bob never builds files-recipe output, so a missing Go toolchain must
+	// not affect readiness.
+	result := Run(context.Background(), m, fakeProber{missing: map[string]bool{"go": true}})
+	if !result.Ready {
+		t.Fatalf("expected ready files doctor without Go, got %#v", result)
+	}
+	for _, check := range result.Checks {
+		if check.Name == "Go" {
+			t.Fatalf("files recipe must not probe Go: %#v", result.Checks)
+		}
+	}
+	if len(result.Checks) != 1 || result.Checks[0].Name != "Git" {
+		t.Fatalf("expected Git-only checks for files recipe: %#v", result.Checks)
+	}
+	// A missing Git still fails readiness.
+	result = Run(context.Background(), m, fakeProber{missing: map[string]bool{"git": true}})
+	if result.Ready {
+		t.Fatalf("missing git must make the files doctor unready: %#v", result)
+	}
+}
+
 func TestRunStackRecipesRequireOnlyGit(t *testing.T) {
 	t.Parallel()
 	m, err := manifest.DefaultStack(manifest.RecipeTSApp, "demo", "", "A demo.", "")
