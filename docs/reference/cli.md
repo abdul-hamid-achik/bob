@@ -27,7 +27,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob studio [path]` | Repository-read-only interactive UI | Monitor Overview, Plan, and aggregate Stats. |
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
-| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@4`). |
+| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@4`, and the stack hygiene recipes). |
 | `bob recipe show <id>` | Read-only | Describe one recipe's schema and print a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
 | `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
@@ -36,20 +36,35 @@ uses the current directory. Bob does not ask where you are; it checks.
 read-only inventory: it launches selected Codemap and Vecgrep status commands.
 See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 
-## Two recipes
+## The recipe catalog
 
 ```text
 $ bob recipe list
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
 go-agent-tool@4  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
+js-app@1  Seed-once hygiene for a plain JavaScript Node app or workspace: docs presence, .gitignore, and a CI stub; never owns application source
+lua-lib@1  Seed-once hygiene for a Lua library or Neovim plugin: docs presence, .gitignore, and a busted CI stub; never owns application source
+python-app@1  Seed-once hygiene for a Python project: docs presence, .gitignore, and a pytest CI stub; never owns application source
+ruby-app@1  Seed-once hygiene for a Ruby app or gem: docs presence, .gitignore, and a bundler/rake CI stub; never owns application source
+rust-cli@1  Seed-once hygiene for a Rust CLI: docs presence, .gitignore, and a cargo CI stub; never owns application source
+static-web@1  Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content
+ts-app@1  Seed-once hygiene for a TypeScript app or Bun/Turborepo monorepo: docs presence, .gitignore, and a CI stub; never owns application source
+vue-app@1  Seed-once hygiene for a Vue application: docs presence, .gitignore, and a Vite-oriented CI stub; never owns application source
 ```
 
-`bob recipe show <id>` describes one recipe's manifest schema and prints an
-example manifest verbatim — copy it, don't retype it. `bob new`/`bob init`
-still scaffold `go-agent-tool` only; a `files` manifest is hand- or
-agent-authored. See the [Manifest Reference](./manifest.md) for both schemas
-and the [any-repository guide](../guides/any-repository.md) for a worked
-`files` example.
+`bob recipe show <id>` describes one recipe's manifest schema and prints a
+copyable example where one exists. `bob new` scaffolds `go-agent-tool` only.
+`bob init` detects the repository's stack (Go, TypeScript/Bun, JavaScript,
+Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults to the
+matching recipe; pass `--recipe <id>` to choose explicitly. When the chosen
+recipe does not match the detected stack, the preview prints a prominent
+warning and `--write` refuses unless `--force` is passed. A `files` manifest
+is hand- or agent-authored. Stack hygiene recipes render only seed-once
+artifacts: each file is created when missing, never recorded in `bob.lock`,
+and never updated or overwritten afterwards — application source is never
+touched. See the [Manifest Reference](./manifest.md) for the schemas and the
+[any-repository guide](../guides/any-repository.md) for a worked `files`
+example.
 
 ## `bob learn`
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdul-hamid-achik/bob/internal/detect"
 	"github.com/abdul-hamid-achik/bob/internal/doctor"
 	"github.com/abdul-hamid-achik/bob/internal/engine"
 	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
@@ -210,8 +211,8 @@ func newNewCommand(opts *options) *cobra.Command {
 }
 
 func newInitCommand(opts *options) *cobra.Command {
-	var name, module, description string
-	var write bool
+	var name, module, description, recipeID string
+	var write, force bool
 	cmd := &cobra.Command{
 		Use:   "init [path]",
 		Short: "Preview or write a Bob manifest in an existing repository",
@@ -231,16 +232,34 @@ func newInitCommand(opts *options) *cobra.Command {
 				}
 				name = filepath.Base(absolute)
 			}
-			if module == "" {
-				return classifyInvalidInput(errors.New("init: --module is required"))
+
+			detection := detect.Detect(root)
+			chosen, err := chooseInitRecipe(recipeID, detection)
+			if err != nil {
+				return classifyInvalidInput(fmt.Errorf("init: %w", err))
 			}
-			m := manifest.Default(name, module, description)
+			mismatch := initStackMismatch(root, chosen, detection)
+			if mismatch != "" && write && !force {
+				return classifyInvalidInput(fmt.Errorf("init: %s; pass --force to write anyway", mismatch))
+			}
+			var warnings []string
+			if mismatch != "" {
+				warnings = append(warnings, mismatch)
+				if !opts.json {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", mismatch)
+				}
+			}
+
+			m, err := buildInitManifest(chosen, name, module, description, detection)
+			if err != nil {
+				return classifyInvalidInput(fmt.Errorf("init: %w", err))
+			}
 			if err := m.Validate(); err != nil {
 				return fmt.Errorf("init: %w", classifyInvalidInput(err))
 			}
 			if !write {
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": filepath.Join(root, manifest.Filename), "manifest": m, "written": false}, nil, []string{"rerun with --write", "review with bob plan"})
+					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": filepath.Join(root, manifest.Filename), "manifest": m, "detection": detection, "written": false}, warnings, []string{"rerun with --write", "review with bob plan"})
 				}
 				data, _ := manifest.Encode(m)
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), string(data))
@@ -251,17 +270,88 @@ func newInitCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("init: %w", err)
 			}
 			if opts.json {
-				return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": path, "manifest": m, "written": true}, nil, []string{"run bob plan", "review conflicts before bob apply"})
+				return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": path, "manifest": m, "detection": detection, "written": true}, warnings, []string{"run bob plan", "review conflicts before bob apply"})
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nnext: bob plan %s\n", path, root)
 			return err
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "project name (defaults to directory name)")
-	cmd.Flags().StringVar(&module, "module", "", "Go module path (required)")
+	cmd.Flags().StringVar(&module, "module", "", "module path; required by go-agent-tool, optional repository identity for stack recipes")
 	cmd.Flags().StringVar(&description, "description", "", "one-line product description")
+	cmd.Flags().StringVar(&recipeID, "recipe", "", "recipe id (defaults to the recipe matching the detected stack; see bob recipe list)")
 	cmd.Flags().BoolVar(&write, "write", false, "write bob.yaml")
+	cmd.Flags().BoolVar(&force, "force", false, "write even when the chosen recipe does not match the detected stack")
 	return cmd
+}
+
+// chooseInitRecipe resolves the recipe init should use: an explicit --recipe
+// value when given, otherwise the recipe matching the detected primary stack,
+// otherwise the historical go-agent-tool default for empty or unrecognized
+// repositories.
+func chooseInitRecipe(explicit string, detection detect.Result) (string, error) {
+	if explicit != "" {
+		if explicit == manifest.RecipeFiles {
+			return "", errors.New("recipe files declares its file tree inline; write bob.yaml by hand instead of using bob init")
+		}
+		if _, err := recipe.Version(explicit); err != nil {
+			return "", err
+		}
+		return explicit, nil
+	}
+	if detection.Detected() {
+		if id, ok := recipe.ForStack(detection.Primary); ok {
+			return id, nil
+		}
+		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
+	}
+	return manifest.RecipeGoAgentTool, nil
+}
+
+// initStackMismatch reports a non-empty human-readable mismatch description
+// when the chosen recipe claims stacks and none of them were detected in the
+// repository. Recipes with no stack claim and repositories with no detected
+// stack never mismatch.
+func initStackMismatch(root, recipeID string, detection detect.Result) string {
+	claimed := recipe.Stacks(recipeID)
+	if len(claimed) == 0 || !detection.Detected() {
+		return ""
+	}
+	for _, stack := range claimed {
+		if detection.Has(stack) {
+			return ""
+		}
+	}
+	message := fmt.Sprintf("repository at %s looks like %s, but recipe %s targets %s", root, detection.Describe(), recipeID, strings.Join(claimed, ", "))
+	if id, ok := recipe.ForStack(detection.Primary); ok {
+		message += fmt.Sprintf("; recipe %s matches the detected stack (rerun with --recipe %s)", id, id)
+	} else {
+		message += fmt.Sprintf("; available recipes: %s", strings.Join(recipe.IDs(), ", "))
+	}
+	return message
+}
+
+// buildInitManifest constructs the default manifest for the chosen recipe.
+// go-agent-tool keeps its required Go module path; stack recipes treat the
+// module as optional repository identity and take their runtime kind from
+// detection where the recipe supports the detected hint.
+func buildInitManifest(recipeID, name, module, description string, detection detect.Result) (manifest.Manifest, error) {
+	if recipeID == manifest.RecipeGoAgentTool {
+		if module == "" {
+			return manifest.Manifest{}, errors.New("--module is required for recipe go-agent-tool")
+		}
+		return manifest.Default(name, module, description), nil
+	}
+	kind := ""
+	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
+		for _, candidate := range runtime.Kinds {
+			if candidate == detection.KindHint {
+				kind = detection.KindHint
+				break
+			}
+		}
+	}
+	return manifest.DefaultStack(recipeID, name, module, description, kind)
 }
 
 func newPlanCommand(opts *options) *cobra.Command {
@@ -612,7 +702,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
-			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold) or files (declare any file tree inline; bob materializes it with plan/apply safety).\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob init auto-selects the recipe matching the detected repository stack.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())
@@ -669,12 +759,27 @@ func recipeCatalogEntry(id string) map[string]any {
 			"ownership_note": "Bob owns file existence, mode, and byte-for-byte convergence for every declared path; it does not maintain file content over time. The person or agent editing bob.yaml owns what the content means and how it evolves.",
 			"example":        filesRecipeExampleManifest,
 		}
-	default:
+	case "go-agent-tool":
 		return map[string]any{
 			"id":          "go-agent-tool",
 			"version":     version,
 			"description": "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",
 			"surfaces":    []string{"cli", "json"},
+		}
+	default:
+		info, ok := recipe.StackInfoFor(id)
+		if !ok {
+			return nil
+		}
+		return map[string]any{
+			"id":             info.ID,
+			"version":        version,
+			"description":    info.Description,
+			"language":       info.LanguageLabel,
+			"stacks":         info.Stacks,
+			"seeded_paths":   info.SeededPaths,
+			"ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+			"surfaces":       []string{"cli", "json"},
 		}
 	}
 }
@@ -733,7 +838,13 @@ func newRecipeCommand(opts *options) *cobra.Command {
 					)
 					return err
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.\n", entry["version"])
+				if args[0] == "go-agent-tool" {
+					_, err := fmt.Fprintf(cmd.OutOrStdout(), "go-agent-tool@%d\n  Generates a public-ready Go/Cobra CLI with machine output, diagnostics, docs, CI, release configuration, and selected integration seams.\n", entry["version"])
+					return err
+				}
+				info, _ := recipe.StackInfoFor(args[0])
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s@%d\n  %s\n\n  Stack: %s\n  Seeded paths (created once when missing, never updated or lock-owned):\n    - %s\n\n  Ownership: Bob never owns application source for this recipe; every artifact is a one-time hygiene seed the human owns from the moment it exists.\n",
+					info.ID, entry["version"], info.Description, info.LanguageLabel, strings.Join(info.SeededPaths, "\n    - "))
 				return err
 			},
 		},

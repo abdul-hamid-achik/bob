@@ -99,3 +99,31 @@ func TestCappedBufferBoundsOutput(t *testing.T) {
 		t.Fatalf("buffer was not bounded: %d", len(b.buf.String()))
 	}
 }
+
+func TestRunStackRecipesRequireOnlyGit(t *testing.T) {
+	t.Parallel()
+	m, err := manifest.DefaultStack(manifest.RecipeTSApp, "demo", "", "A demo.", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A missing toolchain degrades the report without failing readiness.
+	result := Run(context.Background(), m, fakeProber{missing: map[string]bool{"bun": true, "node": true, "go": true}})
+	if !result.Ready || !result.Degraded {
+		t.Fatalf("expected ready but degraded stack doctor, got %#v", result)
+	}
+	names := make([]string, 0, len(result.Checks))
+	for _, check := range result.Checks {
+		names = append(names, check.Name)
+		if check.Name == "Go" {
+			t.Fatalf("stack recipes must not probe Go: %#v", result.Checks)
+		}
+	}
+	if len(names) != 3 || names[0] != "Git" {
+		t.Fatalf("unexpected stack checks: %v", names)
+	}
+	// A missing Git still fails readiness.
+	result = Run(context.Background(), m, fakeProber{missing: map[string]bool{"git": true}})
+	if result.Ready {
+		t.Fatalf("missing git must make the stack doctor unready: %#v", result)
+	}
+}

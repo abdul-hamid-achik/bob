@@ -57,7 +57,7 @@ func renderGoAgentTool(m manifest.Manifest, version int) ([]Artifact, error) {
 
 	var artifacts []Artifact
 	add := func(path, source string) error {
-		content, err := executeGoAgentTemplate(path, source, data)
+		content, err := executeRecipeTemplate(path, source, data)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func renderGoAgentTool(m manifest.Manifest, version int) ([]Artifact, error) {
 	return artifacts, nil
 }
 
-func executeGoAgentTemplate(name, source string, data goAgentTemplateData) ([]byte, error) {
+func executeRecipeTemplate(name, source string, data any) ([]byte, error) {
 	tmpl, err := template.New(name).
 		Delims("[[", "]]").
 		Option("missingkey=error").

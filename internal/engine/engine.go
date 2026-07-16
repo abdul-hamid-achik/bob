@@ -63,6 +63,10 @@ const (
 	CodeContentUpdate    = "content_update"
 	CodeInSync           = "in_sync"
 	CodeIdenticalContent = "identical_content"
+	// CodeSeedExists reports a seed-once artifact whose destination already
+	// exists. Any existing destination satisfies a seed artifact; Bob never
+	// compares, updates, or lock-owns its content.
+	CodeSeedExists = "seed_exists"
 )
 
 // Action describes the complete, deterministic decision for one artifact.
@@ -228,6 +232,23 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 			CurrentSHA256:  observation.hash,
 			CurrentMode:    observation.mode,
 			expectedExists: observation.exists,
+		}
+		if artifact.Seed {
+			// A seed-once artifact is satisfied by any existing destination,
+			// including one whose content differs and even a symlink or
+			// special file: Bob reads nothing through it and never owns it.
+			if observation.exists {
+				action.Kind = ActionUnchanged
+				action.Code = CodeSeedExists
+				action.Reason = "seed file exists; Bob seeds it once and never manages its content"
+				action.DesiredPreview = ""
+			} else {
+				action.Kind = ActionCreate
+				action.Code = CodeMissing
+				action.Reason = "seed file does not exist; Bob will create it once and never update it"
+			}
+			result.Actions = append(result.Actions, action)
+			continue
 		}
 		entry, managed := locked[artifact.path]
 		if managed {
@@ -487,7 +508,7 @@ func normalizeArtifacts(root string, artifacts []recipe.Artifact) ([]desiredArti
 		}
 		copyContent := append([]byte(nil), artifact.Content...)
 		normalized = append(normalized, desiredArtifact{
-			Artifact: recipe.Artifact{Path: path, Mode: mode, Content: copyContent},
+			Artifact: recipe.Artifact{Path: path, Mode: mode, Seed: artifact.Seed, Content: copyContent},
 			path:     path,
 			hash:     hashBytes(copyContent),
 			mode:     mode,
@@ -504,6 +525,12 @@ func desiredLock(m manifest.Manifest, recipeVersion int, artifacts []desiredArti
 		Files:         make([]LockEntry, 0, len(artifacts)),
 	}
 	for _, artifact := range artifacts {
+		if artifact.Seed {
+			// Seed-once artifacts are never lock-owned: the human owns the
+			// file from the moment it exists, so recording a hash would turn
+			// every later human edit into a managed_hash_mismatch conflict.
+			continue
+		}
 		lock.Files = append(lock.Files, LockEntry{Path: artifact.path, SHA256: artifact.hash})
 	}
 	return lock

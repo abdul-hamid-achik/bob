@@ -12,9 +12,16 @@ import (
 )
 
 // Artifact is one deterministic file produced by a recipe.
+//
+// Seed marks a create-once artifact: the engine creates it when the
+// destination is missing, treats any existing destination as satisfied, never
+// records it in bob.lock, and never updates or overwrites it. Stack hygiene
+// recipes use seed artifacts so an existing repository is never conflicted by
+// its own README, .gitignore, or CI workflow.
 type Artifact struct {
 	Path    string      `json:"path"`
 	Mode    fs.FileMode `json:"mode"`
+	Seed    bool        `json:"seed,omitempty"`
 	Content []byte      `json:"-"`
 }
 
@@ -25,11 +32,13 @@ const goAgentToolRecipeVersion = 4
 
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
-	switch recipeID {
-	case "go-agent-tool":
+	switch {
+	case recipeID == "go-agent-tool":
 		return goAgentToolRecipeVersion, nil
-	case "files":
+	case recipeID == "files":
 		return FilesRecipeVersion, nil
+	case manifest.IsStackRecipe(recipeID):
+		return StackRecipeVersion, nil
 	default:
 		return 0, fmt.Errorf("unsupported recipe %q%s", recipeID, didYouMeanRecipe(recipeID))
 	}
@@ -37,7 +46,23 @@ func Version(recipeID string) (int, error) {
 
 // IDs returns the sorted set of built-in recipe identifiers.
 func IDs() []string {
-	return []string{"files", "go-agent-tool"}
+	ids := append([]string{"files", "go-agent-tool"}, manifest.StackRecipeIDs()...)
+	sort.Strings(ids)
+	return ids
+}
+
+// ForStack maps a detected repository stack id (see internal/detect) to the
+// built-in recipe that serves it, or false when no recipe matches.
+func ForStack(stack string) (string, bool) {
+	id, ok := recipeByStack[stack]
+	return id, ok
+}
+
+// Stacks reports the detected-stack ids one recipe claims to serve. Recipes
+// with no stack claim (files) return nil, which the init guard treats as
+// compatible with every repository.
+func Stacks(recipeID string) []string {
+	return append([]string(nil), stacksByRecipe[recipeID]...)
 }
 
 // didYouMeanRecipe returns a ready-to-append "; did you mean ...?" suffix
@@ -70,17 +95,22 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	}
 	var artifacts []Artifact
 	var err error
-	switch m.Recipe {
-	case "go-agent-tool":
+	switch {
+	case m.Recipe == "go-agent-tool":
 		if version != 3 && version != goAgentToolRecipeVersion {
 			return nil, fmt.Errorf("unsupported go-agent-tool recipe version %d", version)
 		}
 		artifacts, err = renderGoAgentTool(m, version)
-	case "files":
+	case m.Recipe == "files":
 		if version != FilesRecipeVersion {
 			return nil, fmt.Errorf("unsupported files recipe version %d", version)
 		}
 		artifacts, err = renderFiles(m)
+	case manifest.IsStackRecipe(m.Recipe):
+		if version != StackRecipeVersion {
+			return nil, fmt.Errorf("unsupported %s recipe version %d", m.Recipe, version)
+		}
+		artifacts, err = renderStack(m)
 	default:
 		return nil, fmt.Errorf("unsupported recipe %q%s", m.Recipe, didYouMeanRecipe(m.Recipe))
 	}

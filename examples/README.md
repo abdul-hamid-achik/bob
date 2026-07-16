@@ -11,6 +11,9 @@ conflict-free plan.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.
+- [`ts-app-minimal/bob.yaml`](ts-app-minimal/bob.yaml) uses the `ts-app`
+  stack hygiene recipe: every artifact is seeded once when missing and never
+  updated, overwritten, or lock-owned; application source is never touched.
 
 Preview any example in a temporary directory by copying it as `bob.yaml`, then
 running `bob plan`. Review and replace the example module path before using

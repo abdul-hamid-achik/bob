@@ -378,6 +378,13 @@ func (s *Server) handleRecipeDescribe(ctx context.Context, _ *sdkmcp.CallToolReq
 }
 
 func recipeDescription(id string, version int) *RecipeDescription {
+	if info, ok := recipe.StackInfoFor(id); ok {
+		return &RecipeDescription{
+			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+			Description: info.Description + ". Every artifact is a seed: created once when missing, never recorded in bob.lock, and never updated or overwritten afterwards. Stack: " + info.LanguageLabel + ".",
+			Surfaces:    []string{"cli", "json"},
+		}
+	}
 	if id == "files" {
 		return &RecipeDescription{
 			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,

@@ -132,11 +132,13 @@ func ResolveMetadata(m manifest.Manifest) (Metadata, error) {
 		return Metadata{}, fmt.Errorf("resolve metadata: %w", err)
 	}
 	var metadata Metadata
-	switch m.Recipe {
-	case manifest.RecipeGoAgentTool:
+	switch {
+	case m.Recipe == manifest.RecipeGoAgentTool:
 		metadata = resolveGoAgentMetadata(m, artifacts)
-	case manifest.RecipeFiles:
+	case m.Recipe == manifest.RecipeFiles:
 		metadata = resolveFilesMetadata(m, artifacts)
+	case manifest.IsStackRecipe(m.Recipe):
+		metadata = resolveStackMetadata(m, artifacts)
 	default:
 		return Metadata{}, fmt.Errorf("resolve metadata: unsupported recipe %q", m.Recipe)
 	}

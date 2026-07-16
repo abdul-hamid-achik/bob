@@ -116,6 +116,9 @@ func Run(ctx context.Context, m manifest.Manifest, prober Prober) Result {
 }
 
 func selectedTools(m manifest.Manifest) []tool {
+	if manifest.IsStackRecipe(m.Recipe) {
+		return stackTools(m)
+	}
 	tools := []tool{
 		{name: "Go", command: "go", args: []string{"version"}, required: true, note: "builds the generated project", minMajor: 1, minMinor: 26, minPatch: 5},
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
@@ -154,6 +157,42 @@ func selectedTools(m manifest.Manifest) []tool {
 	optional := tools[2:]
 	sort.SliceStable(optional, func(i, j int) bool { return optional[i].name < optional[j].name })
 	return tools
+}
+
+// stackTools probes Git as the only required tool for stack hygiene recipes
+// plus the language toolchain as optional checks. Bob does not build these
+// stacks itself, so a missing toolchain degrades the report without failing
+// readiness.
+func stackTools(m manifest.Manifest) []tool {
+	tools := []tool{
+		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
+	}
+	byLanguage := map[string][]tool{
+		"typescript": {
+			{name: "Bun", command: "bun", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
+			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
+		},
+		"javascript": {
+			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
+		},
+		"python": {
+			{name: "Python", command: "python3", args: []string{"--version"}, note: "runs the Python toolchain"},
+		},
+		"ruby": {
+			{name: "Ruby", command: "ruby", args: []string{"--version"}, note: "runs the Ruby toolchain"},
+			{name: "Bundler", command: "bundle", args: []string{"--version"}, note: "installs Ruby dependencies"},
+		},
+		"lua": {
+			{name: "Lua", command: "lua", args: []string{"-v"}, note: "runs the Lua toolchain"},
+			{name: "LuaRocks", command: "luarocks", args: []string{"--version"}, note: "installs Lua dependencies"},
+		},
+		"rust": {
+			{name: "Cargo", command: "cargo", args: []string{"--version"}, note: "runs the Rust toolchain"},
+		},
+	}
+	optional := append([]tool(nil), byLanguage[m.Runtime.Language]...)
+	sort.SliceStable(optional, func(i, j int) bool { return optional[i].name < optional[j].name })
+	return append(tools, optional...)
 }
 
 func versionAtLeast(output string, wantMajor, wantMinor, wantPatch int) bool {

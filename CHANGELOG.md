@@ -7,6 +7,28 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- Repository stack detection in `bob init`: marker-file detection for Go,
+  TypeScript/Bun, JavaScript, Vue, Python, Ruby, Lua, Rust, and static web
+  sites (with workspace/monorepo, gem, and Neovim-plugin hints plus
+  sass/tailwind/postcss/vite signals). Init auto-selects the recipe matching
+  the detected stack, prints a prominent preview warning on a mismatch, and
+  refuses a mismatched `--write` unless `--force` is passed. New `--recipe`
+  and `--force` flags; `--module` is now required only by `go-agent-tool`.
+- Eight data-driven stack hygiene recipes (`ts-app@1`, `js-app@1`,
+  `vue-app@1`, `python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`,
+  `static-web@1`) that seed `README.md`, `AGENTS.md`, `SECURITY.md`,
+  `.gitignore`, and an optional stack-appropriate CI stub. Every artifact is
+  seed-once: created only when missing, never recorded in `bob.lock`, never
+  updated or overwritten, and application source is never owned.
+- Seed-once artifact semantics in the engine (`seed_exists` action code):
+  existing destinations satisfy a seed regardless of content, human edits stay
+  `check`-clean, and deleted seeds re-create as ordinary drift.
+- `bob recipe list/show`, `bob learn`, `bob doctor`, and the MCP
+  `bob_recipe_describe` tool cover the stack hygiene recipes; doctor probes
+  Git plus the optional language toolchain instead of requiring Go for them.
+
 ## [0.4.0] - 2026-07-15
 
 ### Added

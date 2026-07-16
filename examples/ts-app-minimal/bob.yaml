@@ -1,0 +1,11 @@
+schema_version: 1
+recipe: ts-app
+product:
+  name: acme-web
+  module: github.com/acme/acme-web
+  description: A Bun and Turborepo monorepo with Bob-seeded hygiene files
+runtime:
+  language: typescript
+  kind: monorepo
+distribution:
+  github_actions: true

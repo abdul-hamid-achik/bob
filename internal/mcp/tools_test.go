@@ -267,6 +267,21 @@ func TestRecipeDescribeIsTypedAndClosedWorld(t *testing.T) {
 	}
 
 	result, err = session.CallTool(context.Background(), &sdkmcp.CallToolParams{
+		Name: "bob_recipe_describe", Arguments: map[string]any{"recipe": "ts-app"},
+	})
+	if err != nil || result.IsError {
+		t.Fatalf("describe stack recipe: result=%#v err=%v", result, err)
+	}
+	var stackOutput RecipeDescribeOutput
+	decodeStructured(t, result, &stackOutput)
+	if !stackOutput.OK || stackOutput.Recipe == nil || stackOutput.Recipe.ID != "ts-app" || stackOutput.Recipe.Version != 1 {
+		t.Fatalf("unexpected stack recipe description: %#v", stackOutput)
+	}
+	if !strings.Contains(stackOutput.Recipe.Description, "seed") {
+		t.Fatalf("stack recipe description must state seed-once semantics: %q", stackOutput.Recipe.Description)
+	}
+
+	result, err = session.CallTool(context.Background(), &sdkmcp.CallToolParams{
 		Name: "bob_recipe_describe", Arguments: map[string]any{"recipe": "unknown"},
 	})
 	if err != nil || !result.IsError {

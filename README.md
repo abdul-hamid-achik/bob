@@ -82,10 +82,15 @@ bob check
 ```
 
 To initialize Bob in an empty or existing directory, write only the human-owned
-manifest first:
+manifest first. `bob init` detects the repository's stack (Go, TypeScript/Bun,
+JavaScript, Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults
+to the matching recipe — the seed-once stack hygiene recipes never own
+application source. When a chosen recipe does not match the detected stack,
+the preview warns and `--write` refuses without `--force`:
 
 ```bash
-bob init . --name acme-tool --module github.com/acme/acme-tool --write
+bob init . --name acme-tool --module github.com/acme/acme-tool --write  # Go repo -> go-agent-tool
+bob init . --write            # e.g. a Bun/Turborepo monorepo -> ts-app, no module needed
 bob plan
 bob plan --content  # bounded desired-content previews
 bob apply

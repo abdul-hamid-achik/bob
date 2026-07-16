@@ -51,12 +51,15 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `files` | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Two recipes are embedded: `go-agent-tool@4`, documented below, and `files@1`,
-a plain file-tree recipe documented in its own section further down. `bob
-recipe list` prints both; an unrecognized recipe id fails manifest validation
-and suggests the nearest match rather than guessing.
+Three kinds of recipe are embedded: `go-agent-tool@4`, documented below;
+`files@1`, a plain file-tree recipe documented in its own section further
+down; and the stack hygiene recipes (`ts-app@1`, `js-app@1`, `vue-app@1`,
+`python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`, `static-web@1`),
+documented last. `bob recipe list` prints all of them; an unrecognized recipe
+id fails manifest validation and suggests the nearest match rather than
+guessing.
 
 ## Product
 
@@ -193,10 +196,46 @@ Bob does **not** own is what the content means, and it does not evolve that
 content for you over time. Unlike `go-agent-tool`, there is no upstream
 template carrying this recipe's output forward across versions — there is
 nothing to upgrade toward. You wrote the content; you own its future edits.
-`bob new` and `bob init` still scaffold `go-agent-tool` only. A `files`
-manifest is hand-authored or agent-authored from scratch, which is exactly
-what `bob recipe show files` is for.
+`bob new` still scaffolds `go-agent-tool` only; `bob init` selects the
+recipe matching the detected repository stack. A `files` manifest is
+hand-authored or agent-authored from scratch, which is exactly what
+`bob recipe show files` is for.
 
 See [Build any repository](../guides/any-repository.md) for the complete
 worked example: writing the manifest, planning, applying, editing content, and
 watching Bob report `content_update` on the next plan.
+
+## The stack hygiene recipes
+
+`ts-app@1`, `js-app@1`, `vue-app@1`, `python-app@1`, `ruby-app@1`,
+`lua-lib@1`, `rust-cli@1`, and `static-web@1` share one deliberately small
+contract for repositories whose application source Bob must never own. Each
+renders exactly five **seed-once** artifacts: `README.md`, `AGENTS.md`,
+`SECURITY.md`, `.gitignore`, and — while `distribution.github_actions: true`
+— a stack-appropriate `.github/workflows/ci.yml` stub.
+
+A seed-once artifact is created only when its destination is missing. Any
+existing destination satisfies it, whatever its content, and it is never
+recorded in `bob.lock`, never updated, and never overwritten. The human owns
+every seeded file from the moment it exists; later edits keep `bob check`
+clean, and deleting one is ordinary drift that `bob apply` re-seeds.
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity (same shape rules as a
+  Go module path when present).
+- `product.visibility` and `product.license` are optional.
+- `runtime.language` and `runtime.kind` must match the recipe's contract
+  (for example `ts-app` requires `language: typescript` and `kind: app` or
+  `kind: monorepo`; `rust-cli` requires `language: rust`, `kind: cli`).
+  `bob recipe show <id>` prints each recipe's stack.
+- `surfaces` and `integrations` are unused and must stay zero-valued.
+- `distribution.github_actions` is the only supported distribution toggle;
+  `goreleaser`, `homebrew`, and `docs` are not supported.
+
+`bob init` detects the repository stack from marker files (`go.mod`,
+`package.json`/`tsconfig.json`/lockfiles, a `vue` dependency or `.vue` files,
+`pyproject.toml`, `Gemfile`/`*.gemspec`, `*.rockspec`/`init.lua`/`lua/`,
+`Cargo.toml`, or a bare `index.html`) and defaults to the matching recipe.
+When the chosen recipe's stack does not match the detected one, the preview
+warns and `--write` refuses without `--force`.
