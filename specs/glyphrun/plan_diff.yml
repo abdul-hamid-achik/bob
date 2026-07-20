@@ -1,0 +1,54 @@
+version: 1
+name: bob_plan_diff
+intent: |
+    bob plan --diff renders unified content diffs for every create and update
+    action in the plan. The human-readable output contains standard unified
+    diff headers (--- a/, +++ b/) and @@ hunk markers, and plan always exits
+    with code 0 regardless of workspace state.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-diff.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          output="$(./bin/bob plan "$root" --diff)"
+          printf 'exit_code=0\n'
+          if printf '%s' "$output" | grep -q -- '--- a/'; then printf 'has_old_header=true\n'; fi
+          if printf '%s' "$output" | grep -q -- '+++ b/'; then printf 'has_new_header=true\n'; fi
+          if printf '%s' "$output" | grep -q '@@'; then printf 'has_hunk_marker=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: plan_diff
+outcomes:
+    - id: plan_exits_zero
+      description: plan always exits with code 0 regardless of workspace state
+      verify:
+        screen:
+            contains: exit_code=0
+    - id: has_old_file_header
+      description: unified diff output contains the --- a/ old-file header
+      verify:
+        screen:
+            contains: has_old_header=true
+    - id: has_new_file_header
+      description: unified diff output contains the +++ b/ new-file header
+      verify:
+        screen:
+            contains: has_new_header=true
+    - id: has_hunk_markers
+      description: unified diff output contains @@ hunk markers
+      verify:
+        screen:
+            contains: has_hunk_marker=true
+contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000

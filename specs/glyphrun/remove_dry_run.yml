@@ -1,0 +1,60 @@
+version: 1
+name: bob_remove_dry_run
+intent: |
+    bob remove --dry-run previews the removal without mutating the workspace.
+    The JSON receipt reports what a real run would do (lock_removed=true) but
+    bob.lock, bob.yaml, and every managed file remain on disk.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-dryrun.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          result="$(./bin/bob remove "$root" --dry-run --json)"
+          printf 'exit_code=0\n'
+          printf 'lock_removed=%s\n' "$(printf '%s' "$result" | jq -r '.data.lock_removed')"
+          if [ -e "$root/bob.lock" ]; then printf 'lock_survives=true\n'; fi
+          if [ -e "$root/bob.yaml" ]; then printf 'manifest_survives=true\n'; fi
+          if [ -e "$root/README.md" ]; then printf 'files_survive=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: remove_dry_run
+outcomes:
+    - id: dry_run_exits_zero
+      description: dry-run completes successfully without errors
+      verify:
+        screen:
+            contains: exit_code=0
+    - id: reports_would_remove_lock
+      description: the receipt previews that a real run would remove the lock
+      verify:
+        screen:
+            contains: lock_removed=true
+    - id: lock_still_on_disk
+      description: bob.lock is physically present after dry-run
+      verify:
+        screen:
+            contains: lock_survives=true
+    - id: manifest_still_on_disk
+      description: bob.yaml is physically present after dry-run
+      verify:
+        screen:
+            contains: manifest_survives=true
+    - id: managed_files_still_on_disk
+      description: managed files are physically present after dry-run
+      verify:
+        screen:
+            contains: files_survive=true
+contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000

@@ -1,0 +1,57 @@
+version: 1
+name: bob_remove_lifecycle
+intent: |
+    bob remove deletes every Bob-managed file recorded in bob.lock whose
+    content still proves ownership, removes the lock, and leaves bob.yaml
+    untouched. A second remove on the same workspace exits with code 4
+    (invalid input) because the lock is already gone.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-remove.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          result="$(./bin/bob remove "$root" --json)"
+          printf 'lock_removed=%s\n' "$(printf '%s' "$result" | jq -r '.data.lock_removed')"
+          if [ ! -e "$root/bob.lock" ]; then printf 'lock_absent=true\n'; fi
+          if [ -e "$root/bob.yaml" ]; then printf 'manifest_survives=true\n'; fi
+          set +e
+          ./bin/bob remove "$root" --json >/dev/null 2>&1
+          printf 'exit_code=%s\n' "$?"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: remove_lifecycle
+outcomes:
+    - id: removes_lock
+      description: the remove receipt confirms the ownership lock was deleted
+      verify:
+        screen:
+            contains: lock_removed=true
+    - id: lock_gone_from_disk
+      description: bob.lock is physically absent after remove
+      verify:
+        screen:
+            contains: lock_absent=true
+    - id: manifest_survives
+      description: bob.yaml is never touched by remove
+      verify:
+        screen:
+            contains: manifest_survives=true
+    - id: second_remove_exits_invalid_input
+      description: removing a workspace with no lock exits with code 4
+      verify:
+        screen:
+            contains: exit_code=4
+contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000

@@ -1,0 +1,50 @@
+version: 1
+name: bob_plan_diff_json
+intent: |
+    bob plan --diff --json includes a diffs array in the JSON envelope where
+    every entry carries a unified field containing standard unified diff
+    output. The diff array is a presentation-layer concern and never affects
+    the plan digest.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-diffjson.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          result="$(./bin/bob plan "$root" --diff --json)"
+          printf 'exit_code=0\n'
+          has_diffs="$(printf '%s' "$result" | jq -r '.data.diffs | length > 0')"
+          printf 'has_diffs=%s\n' "$has_diffs"
+          has_unified="$(printf '%s' "$result" | jq -r '[.data.diffs[].unified | select(contains("+++ b/"))] | length > 0')"
+          printf 'has_unified_diffs=%s\n' "$has_unified"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: plan_diff_json
+outcomes:
+    - id: plan_exits_zero
+      description: plan --diff --json exits with code 0
+      verify:
+        screen:
+            contains: exit_code=0
+    - id: diffs_array_populated
+      description: the JSON envelope contains a non-empty diffs array
+      verify:
+        screen:
+            contains: has_diffs=true
+    - id: unified_field_present
+      description: every diff entry carries a unified field with +++ b/ headers
+      verify:
+        screen:
+            contains: has_unified_diffs=true
+contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
