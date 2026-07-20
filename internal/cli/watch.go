@@ -38,7 +38,7 @@ func runWatchLoop(ctx context.Context, cmd *cobra.Command, root string, showCont
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(out, "\nbob watch: stopped after %d plan(s)\n", iterations+1)
+			_, _ = fmt.Fprintf(out, "\nbob watch: stopped after %d plan(s)\n", iterations+1)
 			return nil
 		case <-ticker.C:
 			modTime, size, nowExists := statManifest(manifestPath)

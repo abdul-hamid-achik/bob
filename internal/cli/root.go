@@ -617,9 +617,9 @@ func newRemoveCommand(opts *options) *cobra.Command {
 			}
 			if incomplete {
 				failure := newExitError(ExitConflicts, errors.New("remove: some managed files were not removed"))
-				fmt.Fprintln(cmd.ErrOrStderr(), "bob:", failure)
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "bob:", failure)
 				for _, step := range removeNextActions(result, root) {
-					fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", step)
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", step)
 				}
 				return reportedError{err: failure}
 			}
