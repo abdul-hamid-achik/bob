@@ -11,8 +11,9 @@ import (
 
 type planJSON struct {
 	engine.PlanResult
-	PlanDigestVersion int    `json:"plan_digest_version"`
-	PlanDigest        string `json:"plan_digest"`
+	PlanDigestVersion int               `json:"plan_digest_version"`
+	PlanDigest        string            `json:"plan_digest"`
+	Diffs             []engine.FileDiff `json:"diffs,omitempty"`
 }
 
 func planJSONProjection(displayed, complete engine.PlanResult) planJSON {

@@ -104,6 +104,8 @@ func recordedOperation(args []string) (telemetry.Operation, bool) {
 		return telemetry.OperationPlan, true
 	case "apply":
 		return telemetry.OperationApply, true
+	case "remove":
+		return telemetry.OperationRemove, true
 	case "check":
 		return telemetry.OperationCheck, true
 	case "doctor":

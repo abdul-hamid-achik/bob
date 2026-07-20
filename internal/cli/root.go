@@ -133,6 +133,7 @@ func New(deps Dependencies) *cobra.Command {
 		newPlaybookCommand(opts),
 		newPlanCommand(opts),
 		newApplyCommand(opts),
+		newRemoveCommand(opts),
 		newCheckCommand(opts),
 		newDoctorCommand(opts, deps.Prober),
 		newInspectCommand(opts, deps.IntegrationRunner),
@@ -451,7 +452,7 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 }
 
 func newPlanCommand(opts *options) *cobra.Command {
-	var showContent, conflictsOnly bool
+	var showContent, conflictsOnly, showDiff bool
 	cmd := &cobra.Command{
 		Use:   "plan [path]",
 		Short: "Compare the recipe with the repository without writing",
@@ -464,19 +465,31 @@ func newPlanCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("plan: %w", err)
 			}
 			capturePlanMetrics(opts, root, plan)
+			var diffs []engine.FileDiff
+			if showDiff {
+				diffs, err = loadPlanDiff(root, &plan)
+				if err != nil {
+					return fmt.Errorf("plan: %w", err)
+				}
+			}
 			if opts.json {
 				displayed := plan
 				if conflictsOnly {
 					displayed = filterConflictsOnly(plan, showContent)
 				}
 				data := planJSONProjection(displayed, plan)
+				data.Diffs = diffs
 				return emitJSON(cmd.OutOrStdout(), "plan", data, conflictWarnings(plan), planNextActions(plan, root))
 			}
-			return printPlan(cmd.OutOrStdout(), plan, showContent, conflictsOnly)
+			if err := printPlan(cmd.OutOrStdout(), plan, showContent, conflictsOnly); err != nil {
+				return err
+			}
+			return printDiffs(cmd.OutOrStdout(), diffs)
 		},
 	}
 	cmd.Flags().BoolVar(&showContent, "content", false, "show bounded desired-content previews for create/update/conflict actions, plus current-content previews for conflicts")
 	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
+	cmd.Flags().BoolVar(&showDiff, "diff", false, "show unified content diffs for create and update actions")
 	return cmd
 }
 
@@ -550,6 +563,111 @@ func newApplyCommand(opts *options) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
 	return cmd
+}
+
+func newRemoveCommand(opts *options) *cobra.Command {
+	var force, dryRun bool
+	cmd := &cobra.Command{
+		Use:   "remove [path]",
+		Short: "Remove Bob-managed files and bob.lock from a workspace",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := argumentPath(args)
+			opts.trackWorkspace(root)
+			result, err := engine.Remove(root, engine.RemoveOptions{Force: force, DryRun: dryRun})
+			if err != nil {
+				if errors.Is(err, engine.ErrNoLock) {
+					return classifyInvalidInput(err)
+				}
+				if errors.Is(err, engine.ErrWorkspaceContract) {
+					return classifyInvalidInput(err)
+				}
+				return fmt.Errorf("remove: %w", err)
+			}
+			captureWorkspaceMetrics(opts, root, false)
+			incomplete := len(result.Skipped) > 0 || len(result.Conflicts) > 0
+			warnings := removeWarnings(result)
+			if opts.json {
+				if incomplete {
+					failure := newExitError(ExitConflicts, errors.New("remove: some managed files were not removed"))
+					data := map[string]any{
+						"result": result,
+						"error":  map[string]string{"code": "conflicts", "message": failure.Error()},
+					}
+					if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "remove", data, warnings, removeNextActions(result, root)); emitErr != nil {
+						return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+					}
+					return reportedError{err: failure}
+				}
+				return emitJSON(cmd.OutOrStdout(), "remove", result, warnings, []string{"review the remaining repository files"})
+			}
+			if err := printRemove(cmd.OutOrStdout(), result, dryRun); err != nil {
+				return err
+			}
+			if incomplete {
+				failure := newExitError(ExitConflicts, errors.New("remove: some managed files were not removed"))
+				fmt.Fprintln(cmd.ErrOrStderr(), "bob:", failure)
+				for _, step := range removeNextActions(result, root) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", step)
+				}
+				return reportedError{err: failure}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "remove managed files even when their content drifted from bob.lock")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed without removing anything")
+	return cmd
+}
+
+func printRemove(w io.Writer, result *engine.RemoveResult, dryRun bool) error {
+	verb := "removed"
+	if dryRun {
+		verb = "would remove"
+	}
+	for _, path := range result.Removed {
+		if _, err := fmt.Fprintf(w, "%-12s %s\n", verb, path); err != nil {
+			return err
+		}
+	}
+	for _, path := range result.Skipped {
+		if _, err := fmt.Fprintf(w, "%-12s %s  [managed_hash_mismatch] content drifted; rerun with --force to remove anyway\n", "skipped", path); err != nil {
+			return err
+		}
+	}
+	for _, path := range result.Conflicts {
+		if _, err := fmt.Fprintf(w, "%-12s %s  [conflict] symlink or special file; remove it manually\n", "conflict", path); err != nil {
+			return err
+		}
+	}
+	prefix := ""
+	if dryRun {
+		prefix = "dry-run: "
+	}
+	_, err := fmt.Fprintf(w, "%sremoved %d, skipped %d, conflicts %d; lock removed: %t\n", prefix, len(result.Removed), len(result.Skipped), len(result.Conflicts), result.LockRemoved)
+	return err
+}
+
+func removeWarnings(result *engine.RemoveResult) []string {
+	var warnings []string
+	if len(result.Skipped) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d managed file(s) skipped: content drifted from bob.lock", len(result.Skipped)))
+	}
+	if len(result.Conflicts) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d managed path(s) are symlinks or special files and were not removed", len(result.Conflicts)))
+	}
+	return warnings
+}
+
+func removeNextActions(result *engine.RemoveResult, workspace string) []string {
+	next := make([]string, 0, 2)
+	if len(result.Skipped) > 0 {
+		next = append(next, withWorkspaceArg("rerun bob remove", workspace)+" --force to remove drifted managed files")
+	}
+	if len(result.Conflicts) > 0 {
+		next = append(next, "remove the listed symlinks or special files manually, then rerun "+withWorkspaceArg("bob remove", workspace))
+	}
+	return next
 }
 
 func newCheckCommand(opts *options) *cobra.Command {
@@ -701,6 +819,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "playbook", "purpose": "list, show, or resolve a closed recipe procedure without executing its steps", "mutates": false, "json": true},
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
+		{"name": "remove", "purpose": "remove Bob-managed files and bob.lock from a workspace; the inverse of apply; --force removes drifted files, --dry-run previews", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
 		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
 		{"name": "inspect", "purpose": "summarize Bob state; --probe-integrations explicitly authorizes bounded specialist probes", "mutates": false, "json": true},
@@ -745,6 +864,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		"invariants": []string{
 			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
 			"apply preflights the complete plan and writes nothing when any conflict exists",
+			"remove deletes only files tracked in bob.lock whose content hash still matches; it never touches unmanaged files or bob.yaml",
 			"Bob never overwrites an unmanaged differing file",
 			"a managed file updates only when its current hash matches the prior lock",
 			"repeated apply converges to a no-op",
@@ -989,6 +1109,41 @@ func loadPlan(root string) (engine.PlanResult, error) {
 		return engine.PlanResult{}, classifyInvalidInput(err)
 	}
 	return engine.Plan(root, m, artifacts)
+}
+
+// loadPlanDiff re-renders the recipe artifacts and computes presentation-layer
+// content diffs for every create and update action in the plan. It is called
+// only when --diff is set and never affects the plan digest.
+func loadPlanDiff(root string, plan *engine.PlanResult) ([]engine.FileDiff, error) {
+	m, err := manifest.Load(root)
+	if err != nil {
+		return nil, classifyInvalidInput(err)
+	}
+	artifacts, err := recipe.Render(m)
+	if err != nil {
+		return nil, classifyInvalidInput(err)
+	}
+	return engine.PlanDiff(root, plan, artifacts)
+}
+
+// printDiffs writes each unified diff to w, separated by a blank line. Skipped
+// files print a note instead of a diff body.
+func printDiffs(w io.Writer, diffs []engine.FileDiff) error {
+	for _, d := range diffs {
+		if d.Note != "" {
+			if _, err := fmt.Fprintf(w, "\n--- %s (diff skipped: %s)\n", d.Path, d.Note); err != nil {
+				return err
+			}
+			continue
+		}
+		if d.Unified == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "\n%s", d.Unified); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func printPlan(w io.Writer, plan engine.PlanResult, showContent, conflictsOnly bool) error {

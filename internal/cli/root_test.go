@@ -638,6 +638,140 @@ func TestMCPServeHelpDocumentsStdioRegistration(t *testing.T) {
 	}
 }
 
+func TestPlanDiffFlagHumanAndJSON(t *testing.T) {
+	t.Parallel()
+	target := t.TempDir()
+	// Write a files-recipe manifest so plan produces create actions.
+	manifestContent := `schema_version: 1
+recipe: files
+product:
+  name: diff-test
+  description: test
+files:
+  - path: hello.txt
+    content: |
+      line one
+      line two
+  - path: sub/world.txt
+    content: |
+      greeting
+`
+	if err := os.WriteFile(filepath.Join(target, "bob.yaml"), []byte(manifestContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Human output with --diff.
+	stdout, _, err := executeForTest("plan", target, "--diff")
+	if err != nil {
+		t.Fatalf("plan --diff: %v\n%s", err, stdout)
+	}
+	if !strings.Contains(stdout, "--- a/hello.txt") || !strings.Contains(stdout, "+++ b/hello.txt") {
+		t.Fatalf("human --diff output missing unified diff headers:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "+line one") {
+		t.Fatalf("human --diff output missing addition lines:\n%s", stdout)
+	}
+	// JSON output with --diff.
+	stdout, _, err = executeForTest("--json", "plan", target, "--diff")
+	if err != nil {
+		t.Fatalf("plan --json --diff: %v\n%s", err, stdout)
+	}
+	var got struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Diffs []struct {
+				Path    string `json:"path"`
+				Kind    string `json:"kind"`
+				Unified string `json:"unified"`
+			} `json:"diffs"`
+			PlanDigest string `json:"plan_digest"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, stdout)
+	}
+	if !got.OK {
+		t.Fatalf("plan --json --diff reported ok=false: %s", stdout)
+	}
+	if len(got.Data.Diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d:\n%s", len(got.Data.Diffs), stdout)
+	}
+	foundHello := false
+	for _, d := range got.Data.Diffs {
+		if d.Path == "hello.txt" && d.Kind == "create" {
+			foundHello = true
+			if !strings.Contains(d.Unified, "+line one") || !strings.Contains(d.Unified, "+line two") {
+				t.Fatalf("JSON diff missing additions:\n%s", d.Unified)
+			}
+		}
+	}
+	if !foundHello {
+		t.Fatalf("expected a create diff for hello.txt:\n%s", stdout)
+	}
+	// Verify the digest is present and unchanged by --diff.
+	if !strings.HasPrefix(got.Data.PlanDigest, "sha256:") {
+		t.Fatalf("plan digest missing or malformed: %q", got.Data.PlanDigest)
+	}
+	// Verify --diff does not change the digest.
+	plainStdout, _, err := executeForTest("--json", "plan", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain struct {
+		Data struct {
+			PlanDigest string `json:"plan_digest"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(plainStdout), &plain); err != nil {
+		t.Fatal(err)
+	}
+	if got.Data.PlanDigest != plain.Data.PlanDigest {
+		t.Fatalf("--diff changed the plan digest: with=%s without=%s", got.Data.PlanDigest, plain.Data.PlanDigest)
+	}
+}
+
+func TestPlanDiffFlagUpdateAction(t *testing.T) {
+	t.Parallel()
+	target := t.TempDir()
+	manifestContent := `schema_version: 1
+recipe: files
+product:
+  name: diff-test
+  description: test
+files:
+  - path: config.txt
+    content: |
+      version 1
+`
+	if err := os.WriteFile(filepath.Join(target, "bob.yaml"), []byte(manifestContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Apply to create the initial state.
+	if _, _, err := executeForTest("apply", target); err != nil {
+		t.Fatal(err)
+	}
+	// Update the manifest to change the file content.
+	updatedManifest := `schema_version: 1
+recipe: files
+product:
+  name: diff-test
+  description: test
+files:
+  - path: config.txt
+    content: |
+      version 2
+`
+	if err := os.WriteFile(filepath.Join(target, "bob.yaml"), []byte(updatedManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := executeForTest("plan", target, "--diff")
+	if err != nil {
+		t.Fatalf("plan --diff: %v\n%s", err, stdout)
+	}
+	if !strings.Contains(stdout, "-version 1") || !strings.Contains(stdout, "+version 2") {
+		t.Fatalf("expected update diff with version change:\n%s", stdout)
+	}
+}
+
 func executeForTest(args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := New(Dependencies{Out: &stdout, ErrOut: &stderr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
