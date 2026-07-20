@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"github.com/abdul-hamid-achik/bob/internal/strsim"
 )
 
@@ -571,16 +572,8 @@ func LoadFileWithSource(path string) (Manifest, []byte, error) {
 	if len(source) > maxBytes {
 		return m, nil, fmt.Errorf("read manifest: file exceeds %d bytes", maxBytes)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(source))
-	dec.KnownFields(true)
-	if err := dec.Decode(&m); err != nil {
-		return m, nil, fmt.Errorf("decode manifest: %w", err)
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return m, nil, errors.New("decode manifest: multiple YAML documents are not supported")
-		}
+	m, err = fsutil.DecodeStrictYAML[Manifest](source)
+	if err != nil {
 		return m, nil, fmt.Errorf("decode manifest: %w", err)
 	}
 	if err := m.Validate(); err != nil {

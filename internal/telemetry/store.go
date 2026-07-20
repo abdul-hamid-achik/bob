@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 )
 
 const (
@@ -277,7 +279,7 @@ func secureMkdirAll(path string) error {
 	if err != nil {
 		return err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return errors.New("telemetry directory must be a directory, not a symlink")
 	}
 	return os.Chmod(path, 0o700)
@@ -291,7 +293,7 @@ func secureSubdirectory(parent, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if parentInfo.Mode()&fs.ModeSymlink != 0 || !parentInfo.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(parentInfo) {
 		return "", errors.New("telemetry parent must be a directory, not a symlink")
 	}
 	path := filepath.Join(parent, name)
@@ -302,7 +304,7 @@ func secureSubdirectory(parent, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return "", errors.New("telemetry child must be a directory, not a symlink")
 	}
 	if err := os.Chmod(path, 0o700); err != nil {
@@ -343,7 +345,7 @@ func readPrivateRegularFile(path string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.Mode().IsRegular() {
+	if fsutil.IsSymlinkOrNotRegular(info) {
 		return nil, errors.New("telemetry file must be a regular file, not a symlink")
 	}
 	if info.Size() > limit {

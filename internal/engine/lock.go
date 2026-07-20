@@ -11,6 +11,8 @@ import (
 	"sort"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 )
 
 const (
@@ -89,17 +91,8 @@ func loadLock(root string) (LockFile, bool, []byte, error) {
 	if err != nil || !exists {
 		return LockFile{}, exists, data, err
 	}
-	var lock LockFile
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&lock); err != nil {
-		return LockFile{}, true, data, fmt.Errorf("decode %s: %w", LockFilename, err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return LockFile{}, true, data, fmt.Errorf("decode %s: multiple YAML documents are not supported", LockFilename)
-		}
+	lock, err := fsutil.DecodeStrictYAML[LockFile](data)
+	if err != nil {
 		return LockFile{}, true, data, fmt.Errorf("decode %s: %w", LockFilename, err)
 	}
 	if err := validateLock(lock); err != nil {

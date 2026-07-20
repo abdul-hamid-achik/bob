@@ -5,10 +5,11 @@ package workspace
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 )
 
 // Resolve rejects a symlink at the selected workspace boundary and resolves
@@ -25,7 +26,7 @@ func Resolve(path string, mustExist bool) (string, error) {
 	abs = filepath.Clean(abs)
 	info, err := os.Lstat(abs)
 	if err == nil {
-		if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+		if fsutil.IsSymlinkOrNotDir(info) {
 			return "", fmt.Errorf("workspace %s is not a regular directory", abs)
 		}
 		return filepath.EvalSymlinks(abs)
@@ -52,7 +53,7 @@ func Resolve(path string, mustExist bool) (string, error) {
 			return "", err
 		}
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return "", fmt.Errorf("workspace ancestor %s is not a regular directory", ancestor)
 	}
 	resolved, err := filepath.EvalSymlinks(ancestor)

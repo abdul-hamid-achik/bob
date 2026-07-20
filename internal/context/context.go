@@ -449,6 +449,9 @@ func omit(result *Result, field string, count int) {
 	result.Truncation.Omitted[field] += count
 }
 
+// clone deep-copies a Result via JSON round-trip. This cannot fail because
+// Result contains only JSON-safe types (structs, slices, maps, strings, ints,
+// bools) with no channels, funcs, or cyclic references.
 func clone(value Result) Result {
 	data, _ := json.Marshal(value)
 	var cloned Result

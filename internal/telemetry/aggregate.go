@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"time"
+
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 )
 
 var eventFilenamePattern = regexp.MustCompile(`^[0-9]{6}\.json$`)
@@ -95,7 +96,7 @@ func (store *Store) Aggregate(ctx context.Context, query Query) (Stats, error) {
 		if !valid {
 			continue
 		}
-		if day.Type()&fs.ModeSymlink != 0 || !day.IsDir() {
+		if fsutil.DirEntryIsSymlinkOrNotDir(day) {
 			stats.Skipped++
 			continue
 		}
@@ -169,7 +170,7 @@ func (store *Store) Prune(ctx context.Context) (PruneReport, error) {
 		if !valid {
 			continue
 		}
-		if entry.Type()&fs.ModeSymlink != 0 || !entry.IsDir() {
+		if fsutil.DirEntryIsSymlinkOrNotDir(entry) {
 			return report, fmt.Errorf("telemetry day %s must be a directory, not a symlink", entry.Name())
 		}
 		if !date.Before(cutoff) {
@@ -256,7 +257,7 @@ func readSafeDirectory(path string) ([]os.DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return nil, errors.New("telemetry directory must be a directory, not a symlink")
 	}
 	return os.ReadDir(path)

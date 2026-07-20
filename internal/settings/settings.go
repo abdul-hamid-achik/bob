@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"strconv"
 
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"github.com/abdul-hamid-achik/bob/internal/paths"
 	"go.yaml.in/yaml/v3"
 )
@@ -85,7 +85,7 @@ func loadFile(path string, getenv func(string) string) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("inspect settings: %w", err)
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.Mode().IsRegular() {
+	if fsutil.IsSymlinkOrNotRegular(info) {
 		return Settings{}, errors.New("settings file must be a regular file, not a symlink")
 	}
 	if info.Size() > maxConfigBytes {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -45,7 +46,7 @@ func WriteFile(path string, value Settings) error {
 	if err != nil {
 		return fmt.Errorf("inspect settings directory: %w", err)
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return errors.New("settings directory must be a directory, not a symlink")
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {

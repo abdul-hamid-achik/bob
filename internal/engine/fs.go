@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
 
@@ -53,7 +54,7 @@ func validateRoot(root string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("inspect workspace root: %w", err)
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+	if fsutil.IsSymlinkOrNotDir(info) {
 		return "", fmt.Errorf("workspace root %s is not a regular directory", abs)
 	}
 	resolved, err := filepath.EvalSymlinks(abs)
@@ -125,7 +126,7 @@ func inspectDestination(root, relative string) (observation, error) {
 		return observation{}, nil
 	}
 	if err != nil {
-		return observation{}, err
+		return observation{}, fmt.Errorf("inspect destination: lstat %q: %w", destination, err)
 	}
 	if info.Mode()&fs.ModeSymlink != 0 {
 		return observation{exists: true, mode: info.Mode(), conflictCode: CodeSymlink, conflictReason: "destination is a symlink"}, nil
@@ -135,19 +136,19 @@ func inspectDestination(root, relative string) (observation, error) {
 	}
 	file, err := os.Open(destination)
 	if err != nil {
-		return observation{}, err
+		return observation{}, fmt.Errorf("inspect destination: open %q: %w", destination, err)
 	}
 	defer func() { _ = file.Close() }()
 	openedInfo, err := file.Stat()
 	if err != nil {
-		return observation{}, err
+		return observation{}, fmt.Errorf("inspect destination: stat %q: %w", destination, err)
 	}
 	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
 		return observation{}, errors.New("destination changed while it was being opened")
 	}
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return observation{}, err
+		return observation{}, fmt.Errorf("inspect destination: hash %q: %w", destination, err)
 	}
 	return observation{
 		exists: true,
@@ -162,7 +163,7 @@ func inspectDestination(root, relative string) (observation, error) {
 func inspectPathComponents(root, destination string) (*pathConflict, error) {
 	relative, err := filepath.Rel(root, destination)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inspect path components: resolve relative path: %w", err)
 	}
 	components := strings.Split(relative, string(os.PathSeparator))
 	current := root
@@ -173,7 +174,7 @@ func inspectPathComponents(root, destination string) (*pathConflict, error) {
 			return nil, nil
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("inspect path components: lstat %q: %w", current, err)
 		}
 		if info.Mode()&fs.ModeSymlink != 0 {
 			return &pathConflict{code: CodeSymlink, reason: fmt.Sprintf("path component %s is a symlink", current)}, nil
@@ -223,7 +224,7 @@ func ensureParentDirectories(root, relative string) error {
 	parent := filepath.Dir(filepath.Join(root, filepath.FromSlash(relative)))
 	relativeParent, err := filepath.Rel(root, parent)
 	if err != nil {
-		return err
+		return fmt.Errorf("ensure parent directories: resolve relative path: %w", err)
 	}
 	if relativeParent == "." {
 		return nil
@@ -234,14 +235,14 @@ func ensureParentDirectories(root, relative string) error {
 		info, err := os.Lstat(current)
 		if errors.Is(err, os.ErrNotExist) {
 			if err := os.Mkdir(current, 0o755); err != nil {
-				return err
+				return fmt.Errorf("ensure parent directories: mkdir %q: %w", current, err)
 			}
 			info, err = os.Lstat(current)
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("ensure parent directories: lstat %q: %w", current, err)
 		}
-		if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+		if fsutil.IsSymlinkOrNotDir(info) {
 			return fmt.Errorf("path component %s is not a regular directory", current)
 		}
 	}
@@ -252,7 +253,7 @@ func stageFile(root string, artifact desiredArtifact) (string, error) {
 	destination := filepath.Join(root, filepath.FromSlash(artifact.path))
 	tmp, err := os.CreateTemp(filepath.Dir(destination), ".bob-stage-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("stage file: create temporary: %w", err)
 	}
 	name := tmp.Name()
 	cleanup := func(cause error) (string, error) {
@@ -261,17 +262,17 @@ func stageFile(root string, artifact desiredArtifact) (string, error) {
 		return "", cause
 	}
 	if err := tmp.Chmod(artifact.mode); err != nil {
-		return cleanup(err)
+		return cleanup(fmt.Errorf("stage file: chmod: %w", err))
 	}
 	if _, err := tmp.Write(artifact.Content); err != nil {
-		return cleanup(err)
+		return cleanup(fmt.Errorf("stage file: write: %w", err))
 	}
 	if err := tmp.Sync(); err != nil {
-		return cleanup(err)
+		return cleanup(fmt.Errorf("stage file: sync: %w", err))
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(name)
-		return "", err
+		return "", fmt.Errorf("stage file: close: %w", err)
 	}
 	return name, nil
 }
@@ -282,10 +283,10 @@ func publishStaged(root string, action Action, staged string) error {
 		// Link is an atomic no-replace publication: a destination that appears
 		// after the final precondition check cannot be overwritten.
 		if err := os.Link(staged, destination); err != nil {
-			return err
+			return fmt.Errorf("publish staged: link %q: %w", destination, err)
 		}
 		if err := os.Remove(staged); err != nil {
-			return err
+			return fmt.Errorf("publish staged: remove staged %q: %w", staged, err)
 		}
 		return nil
 	}
@@ -302,39 +303,11 @@ func publishStaged(root string, action Action, staged string) error {
 		return errors.New("destination changed immediately before replacement")
 	}
 	if err := os.Rename(staged, destination); err != nil {
-		return err
+		return fmt.Errorf("publish staged: rename %q: %w", destination, err)
 	}
 	return nil
 }
 
 func writeAtomic(path string, data []byte, mode fs.FileMode, noReplace bool) error {
-	parent := filepath.Dir(path)
-	tmp, err := os.CreateTemp(parent, ".bob-atomic-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if err := tmp.Chmod(mode.Perm()); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if noReplace {
-		if err := os.Link(name, path); err != nil {
-			return err
-		}
-		return os.Remove(name)
-	}
-	return os.Rename(name, path)
+	return fsutil.WriteAtomic(path, data, mode, noReplace)
 }
