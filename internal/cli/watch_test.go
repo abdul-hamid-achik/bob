@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const testWatchInterval = 20 * time.Millisecond
+
 func TestWatchJSONMutuallyExclusive(t *testing.T) {
 	t.Parallel()
 	_, _, err := executeForTest("plan", "--watch", "--json")
@@ -34,14 +36,13 @@ func TestWatchLoopExitsOnContextCancel(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(&out)
 
-	// Cancel after the initial plan renders.
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
 
-	if err := runWatchLoop(ctx, cmd, root, false, false, false); err != nil {
-		t.Fatalf("runWatchLoop: %v", err)
+	if err := runWatchLoopWithInterval(ctx, cmd, root, false, false, false, testWatchInterval); err != nil {
+		t.Fatalf("runWatchLoopWithInterval: %v", err)
 	}
 	output := out.String()
 	if !strings.Contains(output, "bob watch:") {
@@ -57,26 +58,20 @@ func TestWatchReplansOnChange(t *testing.T) {
 	root := t.TempDir()
 	writeTestManifest(t, root)
 
-	origInterval := watchPollInterval
-	watchPollInterval = 20 * time.Millisecond
-	defer func() { watchPollInterval = origInterval }()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	var out bytes.Buffer
 	cmd := &cobra.Command{}
 	cmd.SetOut(&out)
 
 	go func() {
-		// Wait for the initial plan, then modify bob.yaml.
 		time.Sleep(50 * time.Millisecond)
 		writeTestManifestWithDescription(t, root, "changed description")
-		// Wait for the re-plan to be picked up, then cancel.
 		time.Sleep(100 * time.Millisecond)
 		cancel()
 	}()
 
-	if err := runWatchLoop(ctx, cmd, root, false, false, false); err != nil {
-		t.Fatalf("runWatchLoop: %v", err)
+	if err := runWatchLoopWithInterval(ctx, cmd, root, false, false, false, testWatchInterval); err != nil {
+		t.Fatalf("runWatchLoopWithInterval: %v", err)
 	}
 	output := out.String()
 	if !strings.Contains(output, "bob.yaml changed, replanning...") {
@@ -88,10 +83,6 @@ func TestWatchHandlesDeletedManifest(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	writeTestManifest(t, root)
-
-	origInterval := watchPollInterval
-	watchPollInterval = 20 * time.Millisecond
-	defer func() { watchPollInterval = origInterval }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var out bytes.Buffer
@@ -105,8 +96,8 @@ func TestWatchHandlesDeletedManifest(t *testing.T) {
 		cancel()
 	}()
 
-	if err := runWatchLoop(ctx, cmd, root, false, false, false); err != nil {
-		t.Fatalf("runWatchLoop: %v", err)
+	if err := runWatchLoopWithInterval(ctx, cmd, root, false, false, false, testWatchInterval); err != nil {
+		t.Fatalf("runWatchLoopWithInterval: %v", err)
 	}
 	output := out.String()
 	if !strings.Contains(output, "bob.yaml not found, waiting...") {
@@ -119,10 +110,6 @@ func TestWatchHandlesInvalidManifest(t *testing.T) {
 	root := t.TempDir()
 	writeTestManifest(t, root)
 
-	origInterval := watchPollInterval
-	watchPollInterval = 20 * time.Millisecond
-	defer func() { watchPollInterval = origInterval }()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	var out bytes.Buffer
 	cmd := &cobra.Command{}
@@ -130,7 +117,6 @@ func TestWatchHandlesInvalidManifest(t *testing.T) {
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		// Write invalid YAML.
 		if err := os.WriteFile(filepath.Join(root, manifest.Filename), []byte("{{invalid yaml"), 0o644); err != nil {
 			t.Error(err)
 		}
@@ -138,8 +124,8 @@ func TestWatchHandlesInvalidManifest(t *testing.T) {
 		cancel()
 	}()
 
-	if err := runWatchLoop(ctx, cmd, root, false, false, false); err != nil {
-		t.Fatalf("runWatchLoop: %v", err)
+	if err := runWatchLoopWithInterval(ctx, cmd, root, false, false, false, testWatchInterval); err != nil {
+		t.Fatalf("runWatchLoopWithInterval: %v", err)
 	}
 	output := out.String()
 	if !strings.Contains(output, "bob.yaml changed, replanning...") {

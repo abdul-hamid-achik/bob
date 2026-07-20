@@ -22,6 +22,10 @@ var watchPollInterval = time.Second
 // re-runs the plan on each change. It clears the screen before every
 // iteration and exits cleanly when ctx is cancelled.
 func runWatchLoop(ctx context.Context, cmd *cobra.Command, root string, showContent, conflictsOnly, showDiff bool) error {
+	return runWatchLoopWithInterval(ctx, cmd, root, showContent, conflictsOnly, showDiff, watchPollInterval)
+}
+
+func runWatchLoopWithInterval(ctx context.Context, cmd *cobra.Command, root string, showContent, conflictsOnly, showDiff bool, interval time.Duration) error {
 	manifestPath := filepath.Join(root, manifest.Filename)
 	out := cmd.OutOrStdout()
 
@@ -31,7 +35,7 @@ func runWatchLoop(ctx context.Context, cmd *cobra.Command, root string, showCont
 	printWatchHeader(out, "watching bob.yaml (Ctrl+C to stop)")
 	printWatchPlan(out, root, showContent, conflictsOnly, showDiff)
 
-	ticker := time.NewTicker(watchPollInterval)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	iterations := 0
