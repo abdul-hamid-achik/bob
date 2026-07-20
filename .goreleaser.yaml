@@ -39,7 +39,7 @@ homebrew_casks:
     homepage: https://github.com/abdul-hamid-achik/bob
     description: Deterministic repository factory for agent-native developer tools
     license: MIT
-    caveats: "Run `bob doctor` to inspect required and optional tools. Use `bob plan` before the explicit `bob apply`; launch `bob studio` for a read-only terminal view, or `bob mcp serve` for six typed repository tools. macOS may require explicit approval for an unsigned build."
+    caveats: "Run `bob doctor` to inspect required and optional tools. Use `bob plan` before the explicit `bob apply`; launch `bob studio` for a read-only terminal view, or `bob mcp serve` for nine typed repository tools. macOS may require explicit approval for an unsigned build."
     hooks:
       post:
         install: |
