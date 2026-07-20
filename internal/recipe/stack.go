@@ -12,6 +12,13 @@ import (
 // renderer; adding a stack adds a definition, not a version.
 const StackRecipeVersion = 1
 
+// stackSeed is one seed-once file: a workspace-relative path and the Go
+// template source rendered into its initial content.
+type stackSeed struct {
+	Path   string
+	Source string
+}
+
 // stackDefinition is one data-driven stack hygiene recipe. Adding support for
 // a new language stack means adding one entry here plus its runtime contract
 // in manifest.stackRecipeRuntimes; the renderer, engine seed semantics,
@@ -28,6 +35,11 @@ type stackDefinition struct {
 	// rendered only when distribution.github_actions is selected.
 	Gitignore  string
 	CIWorkflow string
+	// ExtraSeeds are additional stack-specific seed-once files rendered
+	// alongside the universal hygiene set (README.md, AGENTS.md, SECURITY.md,
+	// .gitignore, .editorconfig). Like every stack artifact, each is created
+	// only when missing and never lock-owned, updated, or overwritten.
+	ExtraSeeds []stackSeed
 }
 
 var stackDefinitions = map[string]stackDefinition{
@@ -39,6 +51,10 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"bun install", "bun run lint", "bun run test", "bun run build"},
 		Gitignore:     stackGitignoreNode,
 		CIWorkflow:    stackCITypeScript,
+		ExtraSeeds: []stackSeed{
+			{Path: "tsconfig.json", Source: stackTSConfig},
+			{Path: ".prettierrc", Source: stackPrettierRC},
+		},
 	},
 	manifest.RecipeJSApp: {
 		ID:            manifest.RecipeJSApp,
@@ -48,6 +64,9 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"npm install", "npm run lint --if-present", "npm test", "npm run build --if-present"},
 		Gitignore:     stackGitignoreNode,
 		CIWorkflow:    stackCIJavaScript,
+		ExtraSeeds: []stackSeed{
+			{Path: ".prettierrc", Source: stackPrettierRC},
+		},
 	},
 	manifest.RecipeVueApp: {
 		ID:            manifest.RecipeVueApp,
@@ -57,6 +76,9 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"bun install", "bun run dev", "bun run test", "bun run build"},
 		Gitignore:     stackGitignoreVue,
 		CIWorkflow:    stackCIVue,
+		ExtraSeeds: []stackSeed{
+			{Path: ".prettierrc", Source: stackPrettierVueRC},
+		},
 	},
 	manifest.RecipePythonApp: {
 		ID:            manifest.RecipePythonApp,
@@ -66,6 +88,10 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"python -m venv .venv && source .venv/bin/activate", `pip install -e ".[dev]"`, "pytest"},
 		Gitignore:     stackGitignorePython,
 		CIWorkflow:    stackCIPython,
+		ExtraSeeds: []stackSeed{
+			{Path: "pyproject.toml", Source: stackPyproject},
+			{Path: ".python-version", Source: stackPythonVersion},
+		},
 	},
 	manifest.RecipeRubyApp: {
 		ID:            manifest.RecipeRubyApp,
@@ -75,6 +101,11 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"bundle install", "bundle exec rake"},
 		Gitignore:     stackGitignoreRuby,
 		CIWorkflow:    stackCIRuby,
+		ExtraSeeds: []stackSeed{
+			{Path: ".rubocop.yml", Source: stackRubocop},
+			{Path: ".ruby-version", Source: stackRubyVersion},
+			{Path: "Gemfile", Source: stackGemfile},
+		},
 	},
 	manifest.RecipeLuaLib: {
 		ID:            manifest.RecipeLuaLib,
@@ -84,6 +115,10 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"luarocks install busted", "busted --verbose"},
 		Gitignore:     stackGitignoreLua,
 		CIWorkflow:    stackCILua,
+		ExtraSeeds: []stackSeed{
+			{Path: ".luacheckrc", Source: stackLuacheckRC},
+			{Path: ".lua-version", Source: stackLuaVersion},
+		},
 	},
 	manifest.RecipeRustCLI: {
 		ID:            manifest.RecipeRustCLI,
@@ -93,6 +128,10 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"cargo fmt --all --check", "cargo clippy --all-targets", "cargo test", "cargo build"},
 		Gitignore:     stackGitignoreRust,
 		CIWorkflow:    stackCIRust,
+		ExtraSeeds: []stackSeed{
+			{Path: "clippy.toml", Source: stackClippyConfig},
+			{Path: "rust-toolchain.toml", Source: stackRustToolchain},
+		},
 	},
 	manifest.RecipeStaticWeb: {
 		ID:            manifest.RecipeStaticWeb,
@@ -102,6 +141,9 @@ var stackDefinitions = map[string]stackDefinition{
 		Commands:      []string{"open index.html"},
 		Gitignore:     stackGitignoreStaticWeb,
 		CIWorkflow:    stackCIStaticWeb,
+		ExtraSeeds: []stackSeed{
+			{Path: ".htmlhintrc", Source: stackHTMLHintRC},
+		},
 	},
 }
 
@@ -142,8 +184,27 @@ func StackInfoFor(id string) (StackInfo, bool) {
 		Description:   definition.Description,
 		LanguageLabel: definition.LanguageLabel,
 		Stacks:        append([]string(nil), definition.Stacks...),
-		SeededPaths:   []string{".github/workflows/ci.yml", ".gitignore", "AGENTS.md", "README.md", "SECURITY.md"},
+		SeededPaths:   stackSeededPaths(definition),
 	}, true
+}
+
+// stackSeededPaths returns the sorted set of paths a stack hygiene recipe can
+// seed: the universal hygiene set plus the stack-specific ExtraSeeds and the
+// CI workflow (seeded only when distribution.github_actions is selected).
+func stackSeededPaths(definition stackDefinition) []string {
+	paths := []string{
+		".editorconfig",
+		".github/workflows/ci.yml",
+		".gitignore",
+		"AGENTS.md",
+		"README.md",
+		"SECURITY.md",
+	}
+	for _, seed := range definition.ExtraSeeds {
+		paths = append(paths, seed.Path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 type stackTemplateData struct {
@@ -183,17 +244,19 @@ func renderStack(m manifest.Manifest) ([]Artifact, error) {
 		artifacts = append(artifacts, Artifact{Path: path, Mode: 0o644, Seed: true, Content: content})
 		return nil
 	}
-	seeds := []struct{ path, source string }{
-		{"README.md", stackReadmeTemplate},
-		{"AGENTS.md", stackAgentsTemplate},
-		{"SECURITY.md", stackSecurityTemplate},
-		{".gitignore", definition.Gitignore},
+	seeds := []stackSeed{
+		{Path: "README.md", Source: stackReadmeTemplate},
+		{Path: "AGENTS.md", Source: stackAgentsTemplate},
+		{Path: "SECURITY.md", Source: stackSecurityTemplate},
+		{Path: ".gitignore", Source: definition.Gitignore},
+		{Path: ".editorconfig", Source: stackEditorConfig},
 	}
+	seeds = append(seeds, definition.ExtraSeeds...)
 	if m.Distribution.GitHubActions {
-		seeds = append(seeds, struct{ path, source string }{".github/workflows/ci.yml", definition.CIWorkflow})
+		seeds = append(seeds, stackSeed{Path: ".github/workflows/ci.yml", Source: definition.CIWorkflow})
 	}
 	for _, seed := range seeds {
-		if err := add(seed.path, seed.source); err != nil {
+		if err := add(seed.Path, seed.Source); err != nil {
 			return nil, err
 		}
 	}
@@ -481,4 +544,134 @@ const stackCIRust = stackCIHeader + `      # The hosted Ubuntu runner ships a st
 const stackCIStaticWeb = stackCIHeader + `      # TODO: replace with your real validation or build (vite build,
       # html-validate, linkinator, sass --no-source-map...).
       - run: test -f index.html
+`
+
+// stackEditorConfig is seeded for every stack. The indent width follows the
+// language convention: four spaces for Python and Rust, two for the rest.
+const stackEditorConfig = `# Seeded once by Bob ([[.RecipeID]]@[[.RecipeVersion]]). Yours to own and extend;
+# Bob never updates or overwrites it.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+[[if or (eq .RecipeID "python-app") (eq .RecipeID "rust-cli")]]indent_size = 4
+[[else]]indent_size = 2
+[[end]]
+[*.md]
+trim_trailing_whitespace = false
+`
+
+const stackTSConfig = `{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+`
+
+const stackPrettierRC = `{
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2
+}
+`
+
+const stackPrettierVueRC = `{
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "vueIndentScriptAndStyle": true
+}
+`
+
+const stackPyproject = `[project]
+name = [[quote .Product.Name]]
+version = "0.1.0"
+description = [[quote .Product.Description]]
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+`
+
+const stackPythonVersion = `3.12
+`
+
+const stackRubocop = `AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  SuggestExtensions: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Metrics/MethodLength:
+  Max: 20
+`
+
+const stackRubyVersion = `3.3.0
+`
+
+const stackGemfile = `source "https://rubygems.org"
+
+# For a gem, declare dependencies in the gemspec. For an app, add gems below.
+gemspec
+`
+
+const stackLuacheckRC = `std = "lua51"
+globals = { "vim" }
+max_line_length = 120
+`
+
+const stackLuaVersion = `5.1
+`
+
+const stackClippyConfig = `msrv = "1.74"
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+`
+
+const stackRustToolchain = `[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
+`
+
+const stackHTMLHintRC = `{
+  "tagname-lowercase": true,
+  "attr-lowercase": true,
+  "attr-value-double-quotes": true,
+  "doctype-first": true,
+  "tag-pair": true,
+  "id-unique": true,
+  "src-not-empty": true,
+  "attr-no-duplication": true,
+  "title-require": true
+}
 `

@@ -3,6 +3,7 @@ package recipe
 import (
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -126,7 +127,7 @@ func TestRenderStackProducesDeterministicSeedOnlyArtifacts(t *testing.T) {
 		if !reflect.DeepEqual(first, second) {
 			t.Fatalf("%s: render is not deterministic", id)
 		}
-		wantPaths := []string{".github/workflows/ci.yml", ".gitignore", "AGENTS.md", "README.md", "SECURITY.md"}
+		wantPaths := expectedStackPaths(id)
 		if got := artifactPathsOf(first); !reflect.DeepEqual(got, wantPaths) {
 			t.Fatalf("%s: paths = %v, want %v", id, got, wantPaths)
 		}
@@ -155,7 +156,7 @@ func TestRenderStackHonorsGitHubActionsToggle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{".gitignore", "AGENTS.md", "README.md", "SECURITY.md"}
+	want := []string{".editorconfig", ".gitignore", ".prettierrc", "AGENTS.md", "README.md", "SECURITY.md", "tsconfig.json"}
 	if got := artifactPathsOf(artifacts); !reflect.DeepEqual(got, want) {
 		t.Fatalf("paths = %v, want %v", got, want)
 	}
@@ -231,11 +232,97 @@ func TestStackInfoForReportsCatalogMetadata(t *testing.T) {
 	if !reflect.DeepEqual(info.Stacks, []string{"typescript"}) {
 		t.Fatalf("stacks = %v", info.Stacks)
 	}
-	if len(info.SeededPaths) != 5 {
-		t.Fatalf("seeded paths = %v", info.SeededPaths)
+	if want := expectedStackPaths(manifest.RecipeTSApp); !reflect.DeepEqual(info.SeededPaths, want) {
+		t.Fatalf("seeded paths = %v, want %v", info.SeededPaths, want)
 	}
 	if _, ok := StackInfoFor("go-agent-tool"); ok {
 		t.Fatal("go-agent-tool is not a stack hygiene recipe")
+	}
+}
+
+func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
+	t.Parallel()
+	// markers each stack's extra seed files must contain after rendering.
+	markers := map[string]map[string][]string{
+		manifest.RecipeTSApp: {
+			"tsconfig.json": {`"moduleResolution": "bundler"`, `"strict": true`, `"target": "ESNext"`},
+			".prettierrc":   {`"tabWidth": 2`, `"trailingComma": "all"`},
+		},
+		manifest.RecipeJSApp: {
+			".prettierrc": {`"tabWidth": 2`, `"semi": true`},
+		},
+		manifest.RecipeVueApp: {
+			".prettierrc": {`"vueIndentScriptAndStyle": true`},
+		},
+		manifest.RecipePythonApp: {
+			"pyproject.toml":  {`name = "demo"`, `requires-python = ">=3.11"`, "[tool.ruff]", "line-length = 88", "[tool.pytest.ini_options]"},
+			".python-version": {"3.12"},
+		},
+		manifest.RecipeRubyApp: {
+			".rubocop.yml":  {"AllCops:", "TargetRubyVersion: 3.3"},
+			".ruby-version": {"3.3.0"},
+			"Gemfile":       {`source "https://rubygems.org"`, "gemspec"},
+		},
+		manifest.RecipeLuaLib: {
+			".luacheckrc":  {`std = "lua51"`, `"vim"`},
+			".lua-version": {"5.1"},
+		},
+		manifest.RecipeRustCLI: {
+			"clippy.toml":         {"msrv", "cognitive-complexity-threshold"},
+			"rust-toolchain.toml": {`channel = "stable"`, `"clippy"`, `"rustfmt"`},
+		},
+		manifest.RecipeStaticWeb: {
+			".htmlhintrc": {`"doctype-first": true`, `"tag-pair": true`},
+		},
+	}
+	// .editorconfig indent width follows the language convention: four spaces
+	// for Python and Rust, two for every other stack.
+	fourSpace := map[string]bool{manifest.RecipePythonApp: true, manifest.RecipeRustCLI: true}
+	for _, id := range manifest.StackRecipeIDs() {
+		m, err := manifest.DefaultStack(id, "demo", "", "A demo repository.", "")
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		artifacts, err := Render(m)
+		if err != nil {
+			t.Fatalf("%s: render: %v", id, err)
+		}
+		byPath := map[string]string{}
+		for _, artifact := range artifacts {
+			if !artifact.Seed {
+				t.Fatalf("%s: artifact %q must be seed-once", id, artifact.Path)
+			}
+			content := string(artifact.Content)
+			if strings.Contains(content, "[[") {
+				t.Fatalf("%s: artifact %q has unexpanded template markers:\n%s", id, artifact.Path, content)
+			}
+			byPath[artifact.Path] = content
+		}
+		editorconfig, ok := byPath[".editorconfig"]
+		if !ok {
+			t.Fatalf("%s: missing .editorconfig", id)
+		}
+		if !strings.Contains(editorconfig, "root = true") || !strings.Contains(editorconfig, "charset = utf-8") {
+			t.Fatalf("%s: .editorconfig missing defaults:\n%s", id, editorconfig)
+		}
+		wantIndent := "indent_size = 2"
+		if fourSpace[id] {
+			wantIndent = "indent_size = 4"
+		}
+		if !strings.Contains(editorconfig, wantIndent) {
+			t.Fatalf("%s: .editorconfig missing %q:\n%s", id, wantIndent, editorconfig)
+		}
+		for path, wants := range markers[id] {
+			content, ok := byPath[path]
+			if !ok {
+				t.Fatalf("%s: missing expected seed %q", id, path)
+			}
+			for _, want := range wants {
+				if !strings.Contains(content, want) {
+					t.Fatalf("%s: %s missing %q:\n%s", id, path, want, content)
+				}
+			}
+		}
 	}
 }
 
@@ -244,6 +331,36 @@ func artifactPathsOf(artifacts []Artifact) []string {
 	for _, artifact := range artifacts {
 		paths = append(paths, artifact.Path)
 	}
+	return paths
+}
+
+// stackExtraSeeds mirrors the per-stack ExtraSeeds declared in stack.go so the
+// renderer tests assert against an independent expectation rather than the
+// table under test.
+var stackExtraSeeds = map[string][]string{
+	manifest.RecipeTSApp:     {".prettierrc", "tsconfig.json"},
+	manifest.RecipeJSApp:     {".prettierrc"},
+	manifest.RecipeVueApp:    {".prettierrc"},
+	manifest.RecipePythonApp: {".python-version", "pyproject.toml"},
+	manifest.RecipeRubyApp:   {".rubocop.yml", ".ruby-version", "Gemfile"},
+	manifest.RecipeLuaLib:    {".lua-version", ".luacheckrc"},
+	manifest.RecipeRustCLI:   {"clippy.toml", "rust-toolchain.toml"},
+	manifest.RecipeStaticWeb: {".htmlhintrc"},
+}
+
+// expectedStackPaths returns the sorted paths a stack hygiene recipe renders
+// when distribution.github_actions is selected (the DefaultStack default).
+func expectedStackPaths(id string) []string {
+	paths := []string{
+		".editorconfig",
+		".github/workflows/ci.yml",
+		".gitignore",
+		"AGENTS.md",
+		"README.md",
+		"SECURITY.md",
+	}
+	paths = append(paths, stackExtraSeeds[id]...)
+	sort.Strings(paths)
 	return paths
 }
 
