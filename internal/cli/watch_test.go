@@ -100,7 +100,7 @@ func TestWatchHandlesDeletedManifest(t *testing.T) {
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		os.Remove(filepath.Join(root, manifest.Filename))
+		_ = os.Remove(filepath.Join(root, manifest.Filename))
 		time.Sleep(100 * time.Millisecond)
 		cancel()
 	}()

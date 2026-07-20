@@ -74,14 +74,14 @@ func statManifest(path string) (time.Time, int64, bool) {
 // clearScreen writes the ANSI escape sequence that clears the terminal and
 // moves the cursor to the home position.
 func clearScreen(w io.Writer) {
-	fmt.Fprint(w, "\033[2J\033[H")
+	_, _ = fmt.Fprint(w, "\033[2J\033[H")
 }
 
 // printWatchHeader writes the timestamped watch-mode header line and a
 // separator rule.
 func printWatchHeader(w io.Writer, message string) {
-	fmt.Fprintf(w, "bob watch: %s — %s\n", time.Now().Format("2006-01-02 15:04:05"), message)
-	fmt.Fprintln(w, "─────────────────────────────────────────")
+	_, _ = fmt.Fprintf(w, "bob watch: %s — %s\n", time.Now().Format("2006-01-02 15:04:05"), message)
+	_, _ = fmt.Fprintln(w, "─────────────────────────────────────────")
 }
 
 // printWatchPlan runs a single plan iteration and writes the human-readable
@@ -90,24 +90,24 @@ func printWatchHeader(w io.Writer, message string) {
 func printWatchPlan(w io.Writer, root string, showContent, conflictsOnly, showDiff bool) {
 	plan, err := loadPlan(root)
 	if err != nil {
-		fmt.Fprintf(w, "bob: %v\n", err)
-		fmt.Fprintln(w, "next: fix bob.yaml and save to trigger a re-plan")
+		_, _ = fmt.Fprintf(w, "bob: %v\n", err)
+		_, _ = fmt.Fprintln(w, "next: fix bob.yaml and save to trigger a re-plan")
 		return
 	}
 	var diffs []engine.FileDiff
 	if showDiff {
 		diffs, err = loadPlanDiff(root, &plan)
 		if err != nil {
-			fmt.Fprintf(w, "bob: plan: %v\n", err)
-			fmt.Fprintln(w, "next: fix bob.yaml and save to trigger a re-plan")
+			_, _ = fmt.Fprintf(w, "bob: plan: %v\n", err)
+			_, _ = fmt.Fprintln(w, "next: fix bob.yaml and save to trigger a re-plan")
 			return
 		}
 	}
 	if err := printPlan(w, plan, showContent, conflictsOnly); err != nil {
-		fmt.Fprintf(w, "bob: %v\n", err)
+		_, _ = fmt.Fprintf(w, "bob: %v\n", err)
 		return
 	}
 	if err := printDiffs(w, diffs); err != nil {
-		fmt.Fprintf(w, "bob: %v\n", err)
+		_, _ = fmt.Fprintf(w, "bob: %v\n", err)
 	}
 }

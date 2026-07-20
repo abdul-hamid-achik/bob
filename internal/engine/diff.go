@@ -267,22 +267,21 @@ func formatUnifiedDiff(path, oldContent, newContent string) string {
 			fmt.Fprintf(&b, "%c%s\n", line.prefix, line.text)
 			lastOld := line.isOld && oldPos == len(oldLines)
 			lastNew := line.isNew && newPos == len(newLines)
-			if line.prefix == ' ' {
+			switch line.prefix {
+			case ' ':
 				if lastOld && oldNoNL && lastNew && newNoNL {
 					b.WriteString("\\ No newline at end of file\n")
 				} else if lastOld && oldNoNL && !newNoNL {
-					// Old has no newline but new does: the context line
-					// represents old's last line without newline.
 					b.WriteString("\\ No newline at end of file\n")
 				}
 				oldPos++
 				newPos++
-			} else if line.prefix == '-' {
+			case '-':
 				if lastOld && oldNoNL {
 					b.WriteString("\\ No newline at end of file\n")
 				}
 				oldPos++
-			} else {
+			default:
 				if lastNew && newNoNL {
 					b.WriteString("\\ No newline at end of file\n")
 				}
