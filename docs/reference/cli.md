@@ -16,8 +16,9 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
-| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts. |
+| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs for create/update actions. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
+| `bob remove [path]` | Writes | Remove Bob-managed files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |
@@ -335,15 +336,52 @@ reviewed `plan --json` result identified by `applied_plan_digest`. The receipt
 is returned once and is not persisted. It proves which Bob reconciliation ran,
 not that generated application behavior passed.
 
+## Plan diff preview
+
+`bob plan [workspace] --diff` appends unified content diffs for every create
+and update action after the normal plan summary. The diff is computed by a
+bounded LCS algorithm (standard library only, no external dependencies) and
+produces standard unified diff output with `--- a/`, `+++ b/`, and `@@` hunk
+headers with three lines of context.
+
+Files whose content exceeds 1 MiB or 8192 lines are skipped with a note;
+binary (non-UTF-8) content is likewise skipped. The `--diff` flag is
+presentation-only: it never affects the plan digest, the action list, or any
+engine behavior. JSON output adds a `diffs` array (omitted when `--diff` is
+not set).
+
+## Safe remove
+
+`bob remove [workspace]` is the inverse of `bob apply`. It removes only files
+currently tracked in `bob.lock` whose content hash still matches the lock
+entry — the same ownership proof apply uses. Unmanaged files, `bob.yaml`, and
+directories containing unmanaged files are never touched.
+
+- `--force` removes managed files even when their content has drifted from
+  the lock (hash mismatch). Without `--force`, drifted files are skipped and
+  reported.
+- `--dry-run` previews what a real run would remove without writing anything.
+- Symlinks and special files at managed paths are reported as conflicts and
+  never removed, even with `--force`.
+- Empty directories left behind by removed files are cleaned up bottom-up;
+  the workspace root itself is never removed.
+- `bob.lock` is removed last, and only when nothing was skipped or
+  conflicted. A partial remove retains the lock so a later `--force` run can
+  still prove and delete the remaining files.
+
+Remove acquires the same `.bob.apply.lock` used by apply to prevent
+concurrent mutations. Exit codes: `0` clean success, `2` when files were
+skipped or conflicted, `4` when no lock exists or the manifest is invalid.
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
 | `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
-| `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
+| `2` | `apply` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
-| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, or `bob init --write` refusing a recipe that does not match the detected stack without `--force`. |
+| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a recipe that does not match the detected stack without `--force`, or `bob remove` when no lock file exists. |
 | `5` | `apply --expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read

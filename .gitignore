@@ -1,5 +1,6 @@
 /bin/
 /dist/
+/.qwen/
 /coverage.out
 /coverage.html
 /docs/node_modules/

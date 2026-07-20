@@ -7,6 +7,39 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- **`bob remove [path]`** — the inverse of `bob apply`: removes only
+  `bob.lock`-tracked files whose content hash still matches, never touches
+  unmanaged files or `bob.yaml`, cleans up empty directories, and deletes the
+  lock last. `--force` removes drifted files; `--dry-run` previews without
+  writing. Exit `2` on skipped/conflicted files, `4` when no lock exists.
+- **`bob plan --diff`** — unified content diffs for create and update actions
+  using a bounded stdlib-only LCS algorithm (1 MiB / 8192-line cap).
+  Presentation-only: never affects the plan digest. JSON output adds a
+  `diffs` array (omitted without the flag).
+- **Fuzz tests** for `NormalizeRepositoryPath`, `validateRelativePath`, and
+  `safePath` — property-based verification of the path-safety invariants with
+  ~120 seed inputs across the three functions.
+- **`internal/version` test** locking the `dev`/`none`/`unknown` ldflags
+  sentinel defaults.
+
+### Changed
+
+- **`internal/fsutil`** — new shared package extracting `IsSymlinkOrNotDir`,
+  `IsSymlinkOrNotRegular`, `WriteAtomic`, and `DecodeStrictYAML[T]` from
+  ~12 duplicated call sites across engine, manifest, settings, telemetry,
+  and workspace.
+- **`internal/engine/fs.go`** — 17 bare `return err` sites now wrapped with
+  operation and path context for debuggable apply failures.
+
+### Fixed
+
+- Homebrew cask caveats said "six typed repository tools"; the MCP server
+  registers nine.
+- `AGENTS.md` architecture block omitted `internal/detect`, `internal/guidance`,
+  and `internal/strsim`.
+
 ## [0.6.1] - 2026-07-16
 
 ### Fixed
