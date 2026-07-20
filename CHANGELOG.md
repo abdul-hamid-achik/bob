@@ -7,6 +7,8 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-20
+
 ### Added
 
 - **`bob remove [path]`** — the inverse of `bob apply`: removes only
