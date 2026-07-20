@@ -19,6 +19,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs for create/update actions. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
 | `bob remove [path]` | Writes | Remove Bob-managed files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing. |
+| `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews, `--expect-plan-digest` gates authority. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |

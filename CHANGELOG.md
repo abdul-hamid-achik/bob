@@ -18,6 +18,22 @@ and the project uses semantic versioning after the first tagged release.
   using a bounded stdlib-only LCS algorithm (1 MiB / 8192-line cap).
   Presentation-only: never affects the plan digest. JSON output adds a
   `diffs` array (omitted without the flag).
+- **`bob plan --watch`** — polls `bob.yaml` every second and re-runs the plan
+  on change. Stdlib-only (no fsnotify); graceful SIGINT; tolerates invalid or
+  missing manifests without crashing. Incompatible with `--json`.
+- **`bob upgrade [path]`** — detects when `bob.lock` was written by an older
+  recipe version and re-applies with the current contract. `--dry-run`
+  previews; `--expect-plan-digest` gates authority. Exit `4` when no lock
+  exists or the lock is newer than supported.
+- **Enriched stack recipes** — all eight stack hygiene recipes now seed
+  language-specific tooling configs: `.editorconfig` (universal),
+  `tsconfig.json` + `.prettierrc` (ts-app), `.prettierrc` (js-app, vue-app),
+  `pyproject.toml` + `.python-version` (python-app), `.rubocop.yml` +
+  `.ruby-version` + `Gemfile` (ruby-app), `.luacheckrc` + `.lua-version`
+  (lua-lib), `clippy.toml` + `rust-toolchain.toml` (rust-cli), `.htmlhintrc`
+  (static-web). All seed-once, never lock-owned.
+- **Glyphrun behavior specs** for `bob remove` (lifecycle + dry-run) and
+  `bob plan --diff` (human + JSON output).
 - **Fuzz tests** for `NormalizeRepositoryPath`, `validateRelativePath`, and
   `safePath` — property-based verification of the path-safety invariants with
   ~120 seed inputs across the three functions.

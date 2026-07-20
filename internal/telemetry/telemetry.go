@@ -42,6 +42,7 @@ const (
 	OperationPlan             Operation = "plan"
 	OperationApply            Operation = "apply"
 	OperationRemove           Operation = "remove"
+	OperationUpgrade          Operation = "upgrade"
 	OperationCheck            Operation = "check"
 	OperationDoctor           Operation = "doctor"
 	OperationInspect          Operation = "inspect"
@@ -202,7 +203,7 @@ func validSurface(value Surface) bool {
 
 func validOperation(value Operation) bool {
 	switch value {
-	case OperationNew, OperationInit, OperationPlan, OperationApply, OperationRemove, OperationCheck,
+	case OperationNew, OperationInit, OperationPlan, OperationApply, OperationRemove, OperationUpgrade, OperationCheck,
 		OperationDoctor, OperationInspect, OperationValidateManifest, OperationRecipeDescribe:
 		return true
 	default:

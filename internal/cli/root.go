@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -134,6 +135,7 @@ func New(deps Dependencies) *cobra.Command {
 		newPlanCommand(opts),
 		newApplyCommand(opts),
 		newRemoveCommand(opts),
+		newUpgradeCommand(opts),
 		newCheckCommand(opts),
 		newDoctorCommand(opts, deps.Prober),
 		newInspectCommand(opts, deps.IntegrationRunner),
@@ -452,7 +454,7 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 }
 
 func newPlanCommand(opts *options) *cobra.Command {
-	var showContent, conflictsOnly, showDiff bool
+	var showContent, conflictsOnly, showDiff, watch bool
 	cmd := &cobra.Command{
 		Use:   "plan [path]",
 		Short: "Compare the recipe with the repository without writing",
@@ -460,6 +462,14 @@ func newPlanCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
+			if watch {
+				if opts.json {
+					return classifyInvalidInput(errors.New("plan: --watch and --json are mutually exclusive"))
+				}
+				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+				defer stop()
+				return runWatchLoop(ctx, cmd, root, showContent, conflictsOnly, showDiff)
+			}
 			plan, err := loadPlan(root)
 			if err != nil {
 				return fmt.Errorf("plan: %w", err)
@@ -490,6 +500,7 @@ func newPlanCommand(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&showContent, "content", false, "show bounded desired-content previews for create/update/conflict actions, plus current-content previews for conflicts")
 	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "show unified content diffs for create and update actions")
+	cmd.Flags().BoolVar(&watch, "watch", false, "watch bob.yaml and re-plan on change")
 	return cmd
 }
 
@@ -670,6 +681,102 @@ func removeNextActions(result *engine.RemoveResult, workspace string) []string {
 	return next
 }
 
+func newUpgradeCommand(opts *options) *cobra.Command {
+	var expectedPlanDigest string
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:   "upgrade [path]",
+		Short: "Upgrade bob.lock to the current recipe version",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := argumentPath(args)
+			opts.trackWorkspace(root)
+			m, err := manifest.Load(root)
+			if err != nil {
+				return classifyInvalidInput(err)
+			}
+			from, to, needsUpgrade, err := engine.UpgradeStatus(root, m)
+			if err != nil {
+				return classifyInvalidInput(err)
+			}
+			captureWorkspaceMetrics(opts, root, m.Recipe == manifest.RecipeGoAgentTool)
+			if !needsUpgrade {
+				if opts.json {
+					return emitJSON(cmd.OutOrStdout(), "upgrade", engine.UpgradeResult{FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{}}, nil, []string{"repository is already at the current recipe version"})
+				}
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "already at recipe version %d; nothing to upgrade\n", to)
+				return err
+			}
+			result, err := engine.Upgrade(root, engine.UpgradeOptions{
+				ApplyOptions: engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest},
+				DryRun:       dryRun,
+			})
+			if err != nil {
+				var mismatch *engine.PlanDigestMismatchError
+				if errors.As(err, &mismatch) {
+					failure := newExitError(ExitPlanMismatch, fmt.Errorf("upgrade: %w", mismatch))
+					if opts.json {
+						data := map[string]any{
+							"expected_plan_digest": mismatch.ExpectedPlanDigest,
+							"actual_plan_digest":   mismatch.ActualPlanDigest,
+							"error": map[string]string{
+								"code":    "plan_digest_mismatch",
+								"message": mismatch.Error(),
+							},
+						}
+						next := nextActionsForFailure(failure, root)
+						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, nil, next); emitErr != nil {
+							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+						}
+						return reportedError{err: failure}
+					}
+					return failure
+				}
+				if errors.Is(err, engine.ErrInvalidPlanDigest) {
+					return classifyInvalidInput(err)
+				}
+				if errors.Is(err, engine.ErrWorkspaceContract) {
+					return classifyInvalidInput(err)
+				}
+				if errors.Is(err, engine.ErrPlanConflicts) {
+					failure := newExitError(ExitConflicts, errors.New("upgrade: plan contains conflicts; run bob plan for details"))
+					conflicts := conflictSummaries(result.Plan.Actions)
+					if opts.json {
+						data := map[string]any{
+							"error":     map[string]string{"code": "conflicts", "message": failure.Error()},
+							"conflicts": conflicts,
+						}
+						next := nextActionsForFailure(failure, root)
+						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, conflictWarnings(result.Plan), next); emitErr != nil {
+							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+						}
+						return reportedError{err: failure}
+					}
+					if printErr := printConflicts(cmd.OutOrStdout(), conflicts); printErr != nil {
+						return printErr
+					}
+					return failure
+				}
+				return fmt.Errorf("upgrade: %w", err)
+			}
+			if opts.json {
+				return emitJSON(cmd.OutOrStdout(), "upgrade", result, nil, []string{"review the repository diff", withWorkspaceArg("run bob check", root)})
+			}
+			verb := "upgraded"
+			prefix := ""
+			if dryRun {
+				verb = "would upgrade"
+				prefix = "dry-run: "
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s%s recipe %s from v%d to v%d: %d files written\n", prefix, verb, result.Recipe, result.FromVersion, result.ToVersion, result.Actions)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would change without applying")
+	return cmd
+}
+
 func newCheckCommand(opts *options) *cobra.Command {
 	var conflictsOnly bool
 	cmd := &cobra.Command{
@@ -820,6 +927,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
 		{"name": "remove", "purpose": "remove Bob-managed files and bob.lock from a workspace; the inverse of apply; --force removes drifted files, --dry-run previews", "mutates": true, "json": true},
+		{"name": "upgrade", "purpose": "upgrade bob.lock to the current recipe version; --dry-run previews, --expect-plan-digest gates authority", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
 		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
 		{"name": "inspect", "purpose": "summarize Bob state; --probe-integrations explicitly authorizes bounded specialist probes", "mutates": false, "json": true},
@@ -865,6 +973,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
 			"apply preflights the complete plan and writes nothing when any conflict exists",
 			"remove deletes only files tracked in bob.lock whose content hash still matches; it never touches unmanaged files or bob.yaml",
+			"upgrade re-applies with the current recipe version only when the lock is older; it never downgrades and refuses a newer lock",
 			"Bob never overwrites an unmanaged differing file",
 			"a managed file updates only when its current hash matches the prior lock",
 			"repeated apply converges to a no-op",
