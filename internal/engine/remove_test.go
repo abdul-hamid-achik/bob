@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
@@ -99,6 +100,57 @@ func TestRemoveSkipsHumanModifiedFileWithoutForce(t *testing.T) {
 	}
 	if !exists(t, filepath.Join(root, LockFilename)) {
 		t.Fatal("lock must still exist after a partial remove")
+	}
+}
+
+func TestRemovePreservesFileChangedImmediatelyBeforeDelete(t *testing.T) {
+	t.Parallel()
+	root := setupManagedWorkspace(t, []recipe.Artifact{artifact("README.md", "managed\n")})
+	readme := filepath.Join(root, "README.md")
+	result, err := Remove(root, RemoveOptions{beforeDelete: func(path string) {
+		if path != "README.md" {
+			t.Fatalf("beforeDelete path = %q", path)
+		}
+		if err := os.WriteFile(readme, []byte("concurrent human edit\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result.Skipped, []string{"README.md"}) || len(result.Removed) != 0 || result.LockRemoved {
+		t.Fatalf("result = %#v", result)
+	}
+	data, err := os.ReadFile(readme)
+	if err != nil || string(data) != "concurrent human edit\n" {
+		t.Fatalf("concurrent edit = %q, %v; want preserved", data, err)
+	}
+	if !exists(t, filepath.Join(root, LockFilename)) {
+		t.Fatal("lock must remain after the final ownership check refuses deletion")
+	}
+}
+
+func TestRemoveRetainsLockChangedDuringRemoval(t *testing.T) {
+	t.Parallel()
+	root := setupManagedWorkspace(t, []recipe.Artifact{artifact("README.md", "managed\n")})
+	lockPath := filepath.Join(root, LockFilename)
+	result, err := Remove(root, RemoveOptions{beforeDelete: func(string) {
+		data, readErr := os.ReadFile(lockPath)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if writeErr := os.WriteFile(lockPath, append(data, []byte("# concurrent edit\n")...), 0o644); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}})
+	if err == nil || !strings.Contains(err.Error(), "bob.lock changed during removal") {
+		t.Fatalf("remove error = %v, want concurrent lock change", err)
+	}
+	if result == nil || !reflect.DeepEqual(result.Removed, []string{"README.md"}) || result.LockRemoved {
+		t.Fatalf("result = %#v", result)
+	}
+	if !exists(t, lockPath) {
+		t.Fatal("concurrently changed lock must be retained")
 	}
 }
 

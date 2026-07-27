@@ -36,7 +36,7 @@ meaning from declared paths or content.
 `available` means its deterministic preconditions are currently met.
 `blocked_by` is a list of stable reason codes.
 
-`add-cli-command` belongs to `go-agent-tool@4` and becomes available only after
+`add-cli-command` belongs to `go-agent-tool@5` and becomes available only after
 the Bob-owned version-4 root and registry contract is materialized and
 converged. An older lock or pending composition-file reconciliation reports the
 stable `extension_contract_not_materialized` blocker. Once available, the

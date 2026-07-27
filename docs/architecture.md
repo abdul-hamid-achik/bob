@@ -50,7 +50,8 @@ Studio must be disabled.
 
 Every recipe renders its complete desired artifact set in memory,
 deterministically and under a version. Three kinds are embedded: the current
-`go-agent-tool@4` recipe has a static human-owned command extension contract;
+`go-agent-tool@5` has a static human-owned command extension contract and a
+generated regression test that keeps a blank scaffold lint-clean;
 `files@1` materializes an arbitrary manifest-declared file tree; and the eight
 stack hygiene recipes (`ts-app@1` through `static-web@1`) render only
 seed-once hygiene artifacts and never own application source. There is no
@@ -143,7 +144,26 @@ Multi-file apply is not globally transactional. A process crash can leave some
 files published before the lock is written. A later plan observes the exact
 state and may classify already-published matching files as `adopt`.
 
-Bob does not delete files.
+### Recipe upgrader
+
+`upgrade` accepts an older positive lock version for the same recipe, renders
+the current version, and delegates conflict detection and safe publication to
+the apply engine. Dry-run exposes the migration plan without writing, and an
+optional expected plan digest binds mutation to a reviewed repository state.
+Future and cross-recipe locks are rejected.
+
+### Remover
+
+`remove` deletes only regular files recorded in `bob.lock`; unmanaged and
+seed-once files plus `bob.yaml` remain human-owned. It rechecks type and hash
+immediately before each unlink, removes empty managed directories bottom-up,
+and verifies the exact loaded lock bytes before deleting `bob.lock` last.
+Drift is preserved unless explicit `--force` authority was supplied, and
+symlinks or special files are always conflicts.
+
+Like apply, remove is serialized by the workspace apply lock but is not a
+globally transactional multi-file operation. An interrupted or partial remove
+keeps `bob.lock`, allowing the next plan or remove to describe the exact state.
 
 ### Drift check
 

@@ -66,15 +66,26 @@ reports the actual state and may classify those exact files as safe `adopt`
 actions. Review that plan before continuing. Bob doesn't panic about a crash
 mid-apply; it just tells you exactly where the truck stopped.
 
+Removal uses the same ownership evidence in the other direction, but it is not
+an inverse of apply: only lock-owned files are candidates. Seed-once artifacts,
+unmanaged files, and `bob.yaml` remain. Bob rechecks each candidate immediately
+before unlinking it and rechecks the exact loaded lock before removing
+`bob.lock` last. A concurrent human edit is therefore preserved unless the
+caller explicitly supplied `--force`; symlinks and special files are never
+removed.
+
 ## Commands and authority
 
 - `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, and Studio do not mutate the
   repository.
 - `inspect --probe-integrations` explicitly launches selected status commands;
   current Codemap may open tool-owned state and Vecgrep may contact its provider.
-- `apply` is the explicit repository mutation command. Optional
-  `--expect-plan-digest` binds it to a freshly recomputed reviewed plan before
-  staging or writing.
+- `apply` writes one conflict-free fresh plan. Optional `--expect-plan-digest`
+  binds it to a freshly recomputed reviewed plan before staging or writing.
+- `upgrade` migrates an older same-recipe lock through the same planning and
+  apply safety rules; dry-run is read-only and digest gating is available.
+- `remove` deletes only lock-owned files whose ownership is still proven,
+  keeps the manifest and seed-once artifacts, and removes the lock last.
 - All nine MCP tools have read-only repository effects. Manifest validation may
   also operate on bounded inline YAML; recipe description needs no workspace.
 - MCP starts with an exact workspace allowlist. `--allow-workspace` adds exact

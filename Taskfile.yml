@@ -102,6 +102,11 @@ tasks:
       - mkdir -p {{.BUILD_DIR}}
       - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.MAIN}}
 
+  agent-bootstrap:
+    desc: Run the coding-agent onboarding contract from the current source tree
+    cmds:
+      - go run {{.MAIN}} learn --json
+
   install:
     desc: Install bob to GOPATH/bin
     cmds:

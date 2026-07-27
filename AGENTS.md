@@ -80,6 +80,7 @@ task verify       # canonical non-mutating code/security/build gate
 task specs        # Glyphrun behavior specs (local)
 task docs-build   # VitePress production build and link validation
 task ship         # verify + specs + docs + release snapshot
+task agent-bootstrap # run bob learn from the current source tree
 ```
 
 Run `gofmt -s` on Go changes. Return lowercase wrapped errors from library code;
@@ -100,8 +101,10 @@ Normative product behavior belongs in the reference pages under
 `docs/reference/`; private design notes stay outside the repository. `README.md`
 stays an orientation page rather than a second complete manual. Do not commit
 VitePress build output or dependencies.
-Coding agents should run `bob learn --json` (or read
-<https://bobcli.dev/agents>) before driving Bob.
+Coding agents should run `task agent-bootstrap` from a source checkout, or
+`bob learn --json` from an installed release (or read
+<https://bobcli.dev/agents>), before driving Bob. Do not trust an ignored
+`./bin/bob` without rebuilding it first.
 
 When a public contract changes, update the relevant README/docs page, the
 reference pages when normative behavior changes, the changelog, and any

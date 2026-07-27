@@ -127,12 +127,32 @@ func nextActionsForFailure(err error, workspace string) []string {
 	return nextActionsForCode(classifyErrorCode(err), workspace)
 }
 
-// printHumanFailure writes the same "bob: <error>" line cmd/bob has always
-// printed, followed by "next: ..." corrective steps so a weak model that
-// only reads stderr text (no --json) can still self-recover.
-func printHumanFailure(w io.Writer, err error, workspace string) {
+// nextActionsForCommandFailure refines shared recovery guidance when the same
+// error code can come from more than one mutation command.
+func nextActionsForCommandFailure(err error, workspace, command string) []string {
+	code := classifyErrorCode(err)
+	if command == "upgrade" {
+		switch code {
+		case "conflicts":
+			return []string{
+				"run: " + withWorkspaceArg("bob plan", workspace) + " --json and inspect actions with kind=conflict",
+				"resolve each conflict, then rerun " + withWorkspaceArg("bob upgrade", workspace),
+			}
+		case "plan_digest_mismatch":
+			return []string{
+				"run: " + withWorkspaceArg("bob plan", workspace) + " --json",
+				"review the new plan before rerunning the guarded upgrade",
+			}
+		}
+	}
+	return nextActionsForFailure(err, workspace)
+}
+
+// printHumanCommandFailure writes the same "bob: <error>" line cmd/bob has
+// always printed, followed by command-aware "next: ..." corrective steps.
+func printHumanCommandFailure(w io.Writer, err error, workspace, command string) {
 	_, _ = fmt.Fprintln(w, "bob:", err)
-	for _, step := range nextActionsForFailure(err, workspace) {
+	for _, step := range nextActionsForCommandFailure(err, workspace, command) {
 		_, _ = fmt.Fprintf(w, "next: %s\n", step)
 	}
 }

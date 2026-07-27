@@ -1,0 +1,57 @@
+version: 1
+name: bob_upgrade_lifecycle
+intent: |
+    bob upgrade previews an older same-recipe lock without mutation, then
+    migrates it to the current recipe version through the guarded apply path.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-upgrade.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
+          ./bin/bob apply "$root" >/dev/null
+          sed 's/^    version: 5$/    version: 4/' "$root/bob.lock" >"$root/bob.lock.previous"
+          mv "$root/bob.lock.previous" "$root/bob.lock"
+          preview="$(./bin/bob upgrade "$root" --dry-run --json)"
+          printf 'preview_from=%s\n' "$(printf '%s' "$preview" | jq -r '.data.from_version')"
+          printf 'preview_to=%s\n' "$(printf '%s' "$preview" | jq -r '.data.to_version')"
+          printf 'version_after_preview=%s\n' "$(sed -n 's/^    version: //p' "$root/bob.lock")"
+          result="$(./bin/bob upgrade "$root" --json)"
+          printf 'applied=%s\n' "$(printf '%s' "$result" | jq -r '.data.applied')"
+          printf 'version_after_upgrade=%s\n' "$(sed -n 's/^    version: //p' "$root/bob.lock")"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: upgrade_lifecycle
+outcomes:
+    - id: previews_published_upgrade
+      description: dry-run identifies the old and current recipe versions
+      verify:
+        screen:
+            contains: preview_from=4
+    - id: preview_is_read_only
+      description: dry-run leaves the older ownership lock intact
+      verify:
+        screen:
+            contains: version_after_preview=4
+    - id: applies_upgrade
+      description: real upgrade reports that the migration ran
+      verify:
+        screen:
+            contains: applied=true
+    - id: writes_current_lock
+      description: the ownership lock advances to recipe version 5
+      verify:
+        screen:
+            contains: version_after_upgrade=5
+contractHash: sha256:2f13ea4324695038fc2de97938a8e27e6d68b8002dbdccbd0f00fd05ea051096

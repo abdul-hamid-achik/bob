@@ -1,6 +1,6 @@
 // Package engine plans and applies deterministic, ownership-aware repository
-// changes. It never runs commands; its only mutation surface is the artifact
-// files declared by a recipe and the bob.lock ownership registry.
+// changes. It never runs commands; its mutation surface is limited to recipe
+// artifacts and the bob.lock ownership registry, including proven removal.
 package engine
 
 import (
@@ -28,7 +28,7 @@ const (
 	// managed whole file.
 	//
 	// Deprecated: use recipe.Version("go-agent-tool") instead.
-	RecipeVersion = 4
+	RecipeVersion = 5
 )
 
 // ActionKind is the planner's decision for one desired artifact.

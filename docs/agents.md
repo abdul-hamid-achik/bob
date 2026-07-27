@@ -40,14 +40,14 @@ bob learn --json
 |---|---|
 | `product` | What Bob is: a deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler. |
 | `summary` | A short prose description of the product contract. |
-| `lifecycle` | The ordered workflow: `init`/`new` preview → `plan` → `apply` → `check`. |
+| `lifecycle` | The ordered workflow: `init`/`new` preview → `plan` → `apply` → `check`, plus the explicit `upgrade` and `remove` lifecycle paths. |
 | `commands` | One entry per command: name, purpose, whether it mutates, whether it supports `--json`. |
 | `recommended_agent_bootstrap` | Ordered `learn`, `context`, `plan`, and `check` argv guidance. |
 | `json_envelope` | A field guide to the envelope itself — what `ok`, `data`, `warnings`, and `next_actions` mean. |
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
 | `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@4`, and the eight stack hygiene recipes `ts-app@1`, `js-app@1`, `vue-app@1`, `python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`, `static-web@1`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@5`, and the eight stack hygiene recipes `ts-app@1`, `js-app@1`, `vue-app@1`, `python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`, `static-web@1`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |
@@ -72,7 +72,7 @@ bob check --json          # to confirm convergence, exits non-zero on drift
 
 Context is bounded, read-only, and offline. Branch on its stable capability
 facets and action codes; never treat `verification: not_assessed` as success.
-For a converged `go-agent-tool@4` workspace, add commands through the advertised
+For a converged `go-agent-tool@5` workspace, add commands through the advertised
 `cli.command_files` extension point. If `add-cli-command` reports
 `extension_contract_not_materialized`, reconcile the version-4 root and
 registry contract before creating an extension. Those composition files remain
@@ -108,6 +108,10 @@ bob apply . --expect-plan-digest sha256:<64-lowercase-hex> --json
 Bob fresh-plans while holding its apply lock. A stale digest exits `5` with
 `plan_digest_mismatch` and writes nothing. A successful apply receipt proves
 which reconciliation Bob performed; it does not verify generated behavior.
+Preview recipe migration with `bob upgrade --dry-run --json` and bind a real
+upgrade to the reviewed plan digest when policy requires it. Preview teardown
+with `bob remove --dry-run --json`; remove affects only proven lock-owned files,
+not seed-once or unmanaged files, and preserves `bob.yaml`.
 
 ## The `--json` envelope contract
 
@@ -144,10 +148,10 @@ envelope above.
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
 | `1` | Unclassified command failure (`command_failed`), or an unresolvable workspace path (`workspace_invalid`). |
-| `2` | `apply` refused a conflicted plan, or `check` found an ownership conflict. |
+| `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
-| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), or a bad flag or argument. |
-| `5` | Guarded apply refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
+| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |
+| `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
 
 `bob check` is the deliberate special case: it exits non-zero when the
 repository or lock *would* change, even though its JSON body is a normal,
@@ -166,10 +170,10 @@ Every failure envelope carries `data.error.code`, one of:
 |---|---|
 | `missing_manifest` | No `bob.yaml` was found at the resolved workspace path. |
 | `manifest_invalid` | `bob.yaml` failed to parse or failed `Validate`; the message lists every problem. |
-| `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
+| `conflicts` | The plan contains one or more ownership conflicts; apply or upgrade refused every write. Remove also uses this code when a managed file is skipped or a managed path is unsafe. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely. |
-| `plan_digest_mismatch` | The fresh apply plan differs from the explicitly reviewed plan digest; review a new plan before applying. |
+| `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest; review a new plan before authorizing mutation. |
 | `command_failed` | An unclassified failure; read the message for detail. |
 
 Validation errors echo the offending value and, when one exists, the nearest
@@ -254,10 +258,10 @@ Map the error code straight to a corrective command — this is exactly what
 |---|---|
 | `missing_manifest` | `bob init --module <module> --write` |
 | `manifest_invalid` | Fix every problem the message lists, then rerun `bob plan --json`. `bob recipe show <recipe-id>` describes the recipe, and the [Manifest Reference](./reference/manifest.md) documents the schema you're validating against. |
-| `conflicts` | Inspect `data.conflicts` (apply) or actions with `kind: conflict` (plan/check), resolve each path deliberately, then rerun `bob apply`. |
+| `conflicts` | Inspect `data.conflicts` or actions with `kind: conflict`, resolve each path deliberately, then rerun the originating `bob apply` or `bob upgrade`; for remove, follow its listed `--force` or manual-path guidance. |
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |
-| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply. |
+| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. |
 | `command_failed` | Read the message; it is the whole diagnosis. If it looks like a bug, `bob learn --json` won't help further — that's a report, not a retry loop. |
 
 Every failure envelope's `next_actions` array already contains this same

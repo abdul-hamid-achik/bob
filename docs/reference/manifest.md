@@ -53,7 +53,7 @@ distribution:
 | `schema_version` | `1` | Selects the strict manifest schema. |
 | `recipe` | `go-agent-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Three kinds of recipe are embedded: `go-agent-tool@4`, documented below;
+Three kinds of recipe are embedded: `go-agent-tool@5`, documented below;
 `files@1`, a plain file-tree recipe documented in its own section further
 down; and the stack hygiene recipes (`ts-app@1`, `js-app@1`, `vue-app@1`,
 `python-app@1`, `ruby-app@1`, `lua-lib@1`, `rust-cli@1`, `static-web@1`),
@@ -196,10 +196,11 @@ Bob does **not** own is what the content means, and it does not evolve that
 content for you over time. Unlike `go-agent-tool`, there is no upstream
 template carrying this recipe's output forward across versions — there is
 nothing to upgrade toward. You wrote the content; you own its future edits.
-`bob new` still scaffolds `go-agent-tool` only; `bob init` selects the
-recipe matching the detected repository stack. A `files` manifest is
-hand-authored or agent-authored from scratch, which is exactly what
-`bob recipe show files` is for.
+`bob new --recipe files` can scaffold the minimal files manifest, while an
+omitted `--recipe` keeps `go-agent-tool` as the greenfield default and selects
+the detected stack recipe for a target that already has content. A `files`
+manifest may also be authored directly; `bob recipe show files` prints its
+schema and a copyable example.
 
 See [Build any repository](../guides/any-repository.md) for the complete
 worked example: writing the manifest, planning, applying, editing content, and

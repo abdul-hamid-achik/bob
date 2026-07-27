@@ -405,7 +405,7 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 	if got.SchemaVersion != 1 || !got.OK || got.Command != "learn" {
 		t.Fatalf("unexpected envelope: %#v", got)
 	}
-	if len(got.Data.Lifecycle) != 4 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 9 {
+	if len(got.Data.Lifecycle) != 5 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 9 {
 		t.Fatalf("unexpected learn data: %#v", got.Data)
 	}
 	for _, tool := range []string{"bob_context", "bob_path", "bob_playbook"} {

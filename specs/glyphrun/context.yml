@@ -26,7 +26,7 @@ outcomes:
       description: context reports the exact built-in recipe contract
       verify:
         screen:
-            contains: go-agent-tool@4
+            contains: go-agent-tool@5
     - id: reports_drift
       description: the unapplied example is reported as drifted
       verify:
@@ -38,8 +38,8 @@ outcomes:
         screen:
             contains: verification=not_assessed
     - id: advertises_command_extension
-      description: recipe v4 advertises the human-owned command extension contract
+      description: the current recipe advertises the human-owned command extension contract
       verify:
         screen:
             contains: cli.command_files
-contractHash: sha256:75d4a8990d68fc4adf5740dcb39bcfd8e8334d446c84906d1ff04a2dcac4ef20
+contractHash: sha256:101d48122587a158d83204fb4439d44ea057516c429a1db492322cc9a1a59dc6

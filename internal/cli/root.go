@@ -84,13 +84,13 @@ func execute(args []string, deps Dependencies) error {
 		return err
 	}
 	workspace := deps.metrics.workspace
+	command := commandFromArgs(args)
 	if !jsonRequested(args) || mcpRequested(args) {
-		printHumanFailure(deps.ErrOut, err, workspace)
+		printHumanCommandFailure(deps.ErrOut, err, workspace, command)
 		return err
 	}
-	command := commandFromArgs(args)
 	code := classifyErrorCode(err)
-	next := nextActionsForFailure(err, workspace)
+	next := nextActionsForCommandFailure(err, workspace, command)
 	if emitErr := emitJSONStatus(deps.Out, false, command, map[string]any{
 		"error": map[string]string{"code": code, "message": err.Error()},
 	}, nil, next); emitErr != nil {
@@ -724,7 +724,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 								"message": mismatch.Error(),
 							},
 						}
-						next := nextActionsForFailure(failure, root)
+						next := nextActionsForCommandFailure(failure, root, "upgrade")
 						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, nil, next); emitErr != nil {
 							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
 						}
@@ -746,7 +746,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 							"error":     map[string]string{"code": "conflicts", "message": failure.Error()},
 							"conflicts": conflicts,
 						}
-						next := nextActionsForFailure(failure, root)
+						next := nextActionsForCommandFailure(failure, root, "upgrade")
 						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, conflictWarnings(result.Plan), next); emitErr != nil {
 							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
 						}
@@ -899,7 +899,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 	data := map[string]any{
 		"schema_version": 1,
 		"product":        "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
-		"owns":           []string{"manifest validation", "recipe rendering", "workspace context", "path classification", "bounded playbooks", "repository plan", "generated-file ownership", "safe apply", "drift detection"},
+		"owns":           []string{"manifest validation", "recipe rendering", "workspace context", "path classification", "bounded playbooks", "repository plan", "generated-file ownership", "safe apply", "recipe upgrade", "proven removal", "drift detection"},
 		"does_not_own":   []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
 		"recipe":         recipe.IDs(),
 	}
@@ -926,7 +926,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "playbook", "purpose": "list, show, or resolve a closed recipe procedure without executing its steps", "mutates": false, "json": true},
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
-		{"name": "remove", "purpose": "remove Bob-managed files and bob.lock from a workspace; the inverse of apply; --force removes drifted files, --dry-run previews", "mutates": true, "json": true},
+		{"name": "remove", "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews", "mutates": true, "json": true},
 		{"name": "upgrade", "purpose": "upgrade bob.lock to the current recipe version; --dry-run previews, --expect-plan-digest gates authority", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
 		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
@@ -955,6 +955,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"bob plan compares desired state with the repository and lock without writing",
 			"bob apply writes only absent, identical, or previously managed files and refuses when any conflict exists",
 			"bob check exits non-zero in CI when generated infrastructure drifts",
+			"bob upgrade migrates an older same-recipe lock; bob remove releases only proven lock-owned files",
 		},
 		"commands": commands,
 		"recipes":  recipes,
@@ -972,7 +973,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		"invariants": []string{
 			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
 			"apply preflights the complete plan and writes nothing when any conflict exists",
-			"remove deletes only files tracked in bob.lock whose content hash still matches; it never touches unmanaged files or bob.yaml",
+			"remove deletes only regular files tracked in bob.lock whose ownership is still proven; it never touches unmanaged or seed-once files, symlinks, special files, or bob.yaml",
 			"upgrade re-applies with the current recipe version only when the lock is older; it never downgrades and refuses a newer lock",
 			"Bob never overwrites an unmanaged differing file",
 			"a managed file updates only when its current hash matches the prior lock",
@@ -981,18 +982,18 @@ func newLearnCommand(opts *options) *cobra.Command {
 		"exit_codes": map[string]string{
 			"0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
 			"1": "unclassified command failure, or doctor reporting required tools missing",
-			"2": "apply refused a conflicted plan, or check found an ownership conflict",
+			"2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
 			"3": "check found drift with no ownership conflict",
-			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, or an unrecognized recipe id",
-			"5": "apply refused because the fresh plan differs from the reviewed plan digest",
+			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, or missing/incompatible ownership state for remove or upgrade",
+			"5": "guarded apply or upgrade refused because the fresh plan differs from the reviewed plan digest",
 		},
 		"error_codes": map[string]string{
 			"missing_manifest":     "no bob.yaml was found at the resolved workspace path",
 			"manifest_invalid":     "bob.yaml failed to parse or failed Validate; the message lists every problem",
 			"input_invalid":        "a flag, argument, or recipe id was invalid",
-			"conflicts":            "the plan contains one or more ownership conflicts; apply refused every write",
+			"conflicts":            "the plan contains ownership conflicts, or remove skipped or rejected managed paths; the requested mutation did not complete",
 			"workspace_invalid":    "the workspace path could not be resolved safely",
-			"plan_digest_mismatch": "the fresh apply plan differs from the explicitly reviewed plan digest; no repository writes occurred",
+			"plan_digest_mismatch": "the fresh apply or upgrade plan differs from the explicitly reviewed plan digest; no repository writes occurred",
 			"command_failed":       "an unclassified failure; read the message for detail",
 		},
 		"mcp": map[string]any{
@@ -1020,7 +1021,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			}
 			var b strings.Builder
 			b.WriteString("Bob: deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler.\n")
-			b.WriteString("Lifecycle: new|init (preview; --write creates) -> plan (read-only) -> apply (explicit, conflict-free only) -> check (CI drift gate).\n")
+			b.WriteString("Lifecycle: new|init (preview; --write creates) -> plan (read-only) -> apply (explicit, conflict-free only) -> check (CI drift gate); upgrade and remove are explicit guarded lifecycle paths.\n")
 			b.WriteString("Guarantees: context/path/playbook/plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
 			b.WriteString("Guidance: context describes the workspace contract; path classifies one exact repository path; playbook resolves a closed typed procedure but never executes it.\n")
 			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")

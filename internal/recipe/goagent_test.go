@@ -98,30 +98,40 @@ func TestRenderGoAgentToolIsDeterministicAndSafe(t *testing.T) {
 	}
 }
 
-func TestPublishedGoAgentToolV3RemainsByteIdentical(t *testing.T) {
+func TestPublishedGoAgentToolVersionsRemainByteIdentical(t *testing.T) {
 	t.Parallel()
-	artifacts, err := RenderVersion(fullGoAgentManifest(), 3)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		version int
+		digest  string
+		files   int
+	}{
+		{version: 3, digest: "9509914e038b6975bd4c22f51772238a0c9163b472e7e09eb835cd1dca88af2a", files: 28},
+		{version: 4, digest: "77cd4634da2315ba63c7c8ea0474e448b72495f87b89f5115162954147ed1f4e", files: 30},
 	}
-	digest := sha256.New()
-	for _, artifact := range artifacts {
-		_, _ = fmt.Fprintf(digest, "%s\x00%o\x00", artifact.Path, artifact.Mode)
-		_, _ = digest.Write(artifact.Content)
-		_, _ = digest.Write([]byte{0})
-	}
-	if got, want := fmt.Sprintf("%x", digest.Sum(nil)), "9509914e038b6975bd4c22f51772238a0c9163b472e7e09eb835cd1dca88af2a"; got != want {
-		t.Fatalf("go-agent-tool@3 digest = %s, want immutable %s", got, want)
-	}
-	if len(artifacts) != 28 {
-		t.Fatalf("go-agent-tool@3 artifacts = %d, want 28", len(artifacts))
+	for _, test := range tests {
+		artifacts, err := RenderVersion(fullGoAgentManifest(), test.version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.New()
+		for _, artifact := range artifacts {
+			_, _ = fmt.Fprintf(digest, "%s\x00%o\x00", artifact.Path, artifact.Mode)
+			_, _ = digest.Write(artifact.Content)
+			_, _ = digest.Write([]byte{0})
+		}
+		if got := fmt.Sprintf("%x", digest.Sum(nil)); got != test.digest {
+			t.Errorf("go-agent-tool@%d digest = %s, want immutable %s", test.version, got, test.digest)
+		}
+		if len(artifacts) != test.files {
+			t.Errorf("go-agent-tool@%d artifacts = %d, want %d", test.version, len(artifacts), test.files)
+		}
 	}
 }
 
 func TestRenderVersionRejectsUnsupportedContracts(t *testing.T) {
 	t.Parallel()
 	m := fullGoAgentManifest()
-	for _, version := range []int{0, 2, 5} {
+	for _, version := range []int{0, 2, 6} {
 		if _, err := RenderVersion(m, version); err == nil || !strings.Contains(err.Error(), "unsupported go-agent-tool recipe version") {
 			t.Fatalf("version %d error = %v", version, err)
 		}
@@ -298,6 +308,19 @@ func TestRenderedGoAgentToolBuildsWithLockedModules(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, output)
+		}
+	}
+	if linter, err := exec.LookPath("golangci-lint"); err == nil {
+		cmd := exec.Command(linter, "run", "./...")
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(),
+			"GOWORK=off",
+			"GOFLAGS=-mod=readonly",
+			"GOCACHE="+cache,
+			"GOLANGCI_LINT_CACHE="+t.TempDir(),
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("golangci-lint generated project: %v\n%s", err, output)
 		}
 	}
 }

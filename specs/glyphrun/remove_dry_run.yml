@@ -57,4 +57,4 @@ outcomes:
       verify:
         screen:
             contains: files_survive=true
-contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+contractHash: sha256:877d39bd0783e8a3118667b68d45f3be4128a22e3f06a3b59c3b272eabedd18e

@@ -7,11 +7,45 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-27
+
+### Added
+
+- Immutable `go-agent-tool@5`, with a generated registry regression test that
+  proves the human-owned command factory seam and keeps a blank scaffold clean
+  under its own configured linter.
+- End-to-end CLI tests for recipe upgrade success, dry-run, current-version
+  no-op, conflict recovery guidance, digest mismatch, and missing-lock errors.
+- `task agent-bootstrap`, which runs the coding-agent onboarding contract from
+  the current source tree without relying on an ignored local binary.
+
+### Changed
+
+- Rendered-project smoke coverage now runs `golangci-lint` when it is available,
+  with isolated caches, in addition to `go test` and `go mod tidy`.
+- `bob remove` rechecks each file immediately before unlink and rechecks the
+  exact loaded lock before deleting `bob.lock`, preserving concurrent edits and
+  ownership evidence.
+- Upgrade failures now return command-specific corrective actions instead of
+  directing callers to apply.
+- Public reference pages now describe plan watch, recipe upgrade, safe remove,
+  exit codes, and the current recipe catalog consistently.
+
+### Fixed
+
+- Fresh `go-agent-tool@4` repositories exposed an intentionally available
+  `registerCommand` extension seam that their configured linter classified as
+  unused. Version 5 proves the seam from generated test code without changing
+  the published version-4 bytes.
+- Plan-diff and remove Glyphrun specs introduced in 0.7.0 now carry validated
+  contract hashes instead of placeholder zero values.
+- Release comparison links now include every published version since 0.5.0.
+
 ## [0.7.0] - 2026-07-20
 
 ### Added
 
-- **`bob remove [path]`** — the inverse of `bob apply`: removes only
+- **`bob remove [path]`** — removes only
   `bob.lock`-tracked files whose content hash still matches, never touches
   unmanaged files or `bob.yaml`, cleans up empty directories, and deletes the
   lock last. `--force` removes drifted files; `--dry-run` previews without
@@ -239,7 +273,12 @@ and the project uses semantic versioning after the first tagged release.
   upgrades from older same-recipe locks.
 - Completed the Homebrew cask metadata and install guidance.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/abdul-hamid-achik/bob/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/abdul-hamid-achik/bob/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/abdul-hamid-achik/bob/releases/tag/v0.3.0

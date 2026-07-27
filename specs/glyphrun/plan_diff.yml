@@ -51,4 +51,4 @@ outcomes:
       verify:
         screen:
             contains: has_hunk_marker=true
-contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+contractHash: sha256:21fb4e8557c7db74b6335e3c5790e83ed78a8e2df5c3ee094f175af6f8fd6b35

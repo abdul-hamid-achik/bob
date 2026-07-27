@@ -23,7 +23,7 @@ func TestResolveMetadataSortedAndCrossReferenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertSortedMetadataIDs(t, metadata)
-	if metadata.Recipe.ID != manifest.RecipeGoAgentTool || metadata.Recipe.Version != 4 {
+	if metadata.Recipe.ID != manifest.RecipeGoAgentTool || metadata.Recipe.Version != 5 {
 		t.Fatalf("recipe = %#v", metadata.Recipe)
 	}
 	foundCommandExtension := false

@@ -187,7 +187,7 @@ func resolveGoAgentMetadata(m manifest.Manifest, artifacts []Artifact) Metadata 
 	metadata.Capabilities = definitions
 	metadata.Invariants = []InvariantDefinition{
 		{ID: "cli.stdout.machine_clean", Statement: "Machine-readable stdout remains valid JSON; diagnostics belong on stderr."},
-		{ID: "cli.command_extensions_v4", Statement: "go-agent-tool@4 commands register from human-owned package files without editing Bob-owned root or registry files."},
+		{ID: "cli.command_extensions_v4", Statement: "go-agent-tool@4+ commands register from human-owned package files without editing Bob-owned root or registry files."},
 		{ID: "repository.no_unmanaged_overwrite", Statement: "Bob never overwrites an unmanaged differing file."},
 		{ID: "repository.whole_file_updates", Statement: "A managed file updates only while its current hash matches bob.lock."},
 		{ID: "verification.not_implied", Statement: "Selection, materialization, and binary availability do not prove application behavior."},

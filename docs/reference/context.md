@@ -82,7 +82,7 @@ by versioned recipe metadata. Availability is an offline executable lookup; Bob
 does not run the executable. A selected or materialized integration is never
 reported as verified.
 
-The `go-agent-tool@4` catalog exposes these stable capability IDs:
+The `go-agent-tool@5` catalog exposes these stable capability IDs:
 
 ```text
 surface.cli
@@ -105,7 +105,7 @@ repository.whole_file_ownership
 `repository.whole_file_ownership`; it does not borrow application-specific
 capabilities from `go-agent-tool`.
 
-`go-agent-tool@4` advertises `cli.command_files` as a human-owned extension
+`go-agent-tool@5` advertises `cli.command_files` as a human-owned extension
 point. New command implementation and test files match its declared patterns;
 `internal/cli/root.go`, `internal/cli/root_test.go`, `internal/cli/registry.go`,
 and `internal/cli/registry_test.go` remain Bob-owned forbidden paths. The

@@ -95,11 +95,18 @@ bob init . --name acme-tool --module github.com/acme/acme-tool --write  # Go rep
 bob init . --write            # e.g. a Bun/Turborepo monorepo -> ts-app, no module needed
 bob plan
 bob plan --content  # bounded desired-content previews
+bob plan --diff     # bounded unified diffs
 bob apply
+bob upgrade --dry-run  # preview a published recipe migration
 ```
 
 `plan` and `check` never write. `apply` refuses the entire operation if even one
 target conflicts.
+
+Use `bob plan --watch` while editing `bob.yaml`. To stop Bob managing a
+workspace, preview `bob remove --dry-run`; a real `bob remove` deletes only
+lock-owned files whose ownership still holds, leaves seed-once and unmanaged
+files intact, preserves `bob.yaml`, and removes `bob.lock` last.
 
 Bob also has local operator surfaces that do not change repository files:
 
@@ -262,6 +269,7 @@ task verify       # non-mutating code, security, and build checks
 task specs        # terminal behavior; requires glyph
 task docs-build   # VitePress production build
 task ship         # complete pre-release gate
+task agent-bootstrap # current-source agent onboarding
 ```
 
 Without Task:

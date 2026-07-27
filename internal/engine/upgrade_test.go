@@ -4,41 +4,42 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
 )
 
-// setupV3Workspace writes bob.yaml and applies the go-agent-tool v3 artifact
-// set, then rewinds bob.lock to recipe version 3 so the workspace looks like
-// one last touched by a v3 binary.
-func setupV3Workspace(t *testing.T) string {
+// setupVersionWorkspace writes bob.yaml and applies one published artifact set,
+// then rewinds bob.lock so the workspace looks like one last touched by that
+// recipe version.
+func setupVersionWorkspace(t *testing.T, version int) string {
 	t.Helper()
 	root := t.TempDir()
 	m := testManifest()
 	writeManifest(t, root, m)
-	v3Artifacts, err := recipe.RenderVersion(m, 3)
+	artifacts, err := recipe.RenderVersion(m, version)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(root, m, v3Artifacts); err != nil {
+	if _, err := Apply(root, m, artifacts); err != nil {
 		t.Fatal(err)
 	}
-	setLockRecipeVersion(t, root, 3)
+	setLockRecipeVersion(t, root, version)
 	return root
 }
 
-func TestUpgradeV3ToV4(t *testing.T) {
+func TestUpgradeV4ToV5(t *testing.T) {
 	t.Parallel()
-	root := setupV3Workspace(t)
+	root := setupVersionWorkspace(t, 4)
 	m := testManifest()
 
 	from, to, needsUpgrade, err := UpgradeStatus(root, m)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if from != 3 || to != 4 || !needsUpgrade {
-		t.Fatalf("status = (%d, %d, %t), want (3, 4, true)", from, to, needsUpgrade)
+	if from != 4 || to != 5 || !needsUpgrade {
+		t.Fatalf("status = (%d, %d, %t), want (4, 5, true)", from, to, needsUpgrade)
 	}
 
 	result, err := Upgrade(root, UpgradeOptions{})
@@ -48,7 +49,7 @@ func TestUpgradeV3ToV4(t *testing.T) {
 	if !result.Applied {
 		t.Fatal("expected upgrade to apply")
 	}
-	if result.FromVersion != 3 || result.ToVersion != 4 || result.Recipe != "go-agent-tool" {
+	if result.FromVersion != 4 || result.ToVersion != 5 || result.Recipe != "go-agent-tool" {
 		t.Fatalf("result = %#v", result)
 	}
 
@@ -56,12 +57,12 @@ func TestUpgradeV3ToV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 4 {
-		t.Fatalf("lock recipe version = %d, want 4", lock.Recipe.Version)
+	if lock.Recipe.Version != 5 {
+		t.Fatalf("lock recipe version = %d, want 5", lock.Recipe.Version)
 	}
-	// v4 adds the registry artifacts that v3 did not declare.
-	if !exists(t, filepath.Join(root, "internal/cli/registry.go")) {
-		t.Fatal("upgrade to v4 must create internal/cli/registry.go")
+	registryTest, err := os.ReadFile(filepath.Join(root, "internal/cli/registry_test.go"))
+	if err != nil || !strings.Contains(string(registryTest), "TestRegisterCommandCollectsHumanOwnedFactory") {
+		t.Fatalf("upgrade to v5 did not install the registry lint regression test: %v", err)
 	}
 }
 
@@ -82,8 +83,8 @@ func TestUpgradeAlreadyCurrentIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if from != 4 || to != 4 || needsUpgrade {
-		t.Fatalf("status = (%d, %d, %t), want (4, 4, false)", from, to, needsUpgrade)
+	if from != 5 || to != 5 || needsUpgrade {
+		t.Fatalf("status = (%d, %d, %t), want (5, 5, false)", from, to, needsUpgrade)
 	}
 
 	result, err := Upgrade(root, UpgradeOptions{})
@@ -110,7 +111,7 @@ func TestUpgradeNoLockErrors(t *testing.T) {
 
 func TestUpgradeDryRunMutatesNothing(t *testing.T) {
 	t.Parallel()
-	root := setupV3Workspace(t)
+	root := setupVersionWorkspace(t, 4)
 
 	result, err := Upgrade(root, UpgradeOptions{DryRun: true})
 	if err != nil {
@@ -127,17 +128,18 @@ func TestUpgradeDryRunMutatesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 3 {
-		t.Fatalf("dry-run lock recipe version = %d, want 3 (unchanged)", lock.Recipe.Version)
+	if lock.Recipe.Version != 4 {
+		t.Fatalf("dry-run lock recipe version = %d, want 4 (unchanged)", lock.Recipe.Version)
 	}
-	if exists(t, filepath.Join(root, "internal/cli/registry.go")) {
-		t.Fatal("dry-run must not create internal/cli/registry.go")
+	registryTest, err := os.ReadFile(filepath.Join(root, "internal/cli/registry_test.go"))
+	if err != nil || strings.Contains(string(registryTest), "TestRegisterCommandCollectsHumanOwnedFactory") {
+		t.Fatalf("dry-run changed the v4 registry test: %v", err)
 	}
 }
 
 func TestUpgradeRefusesConflictedWorkspace(t *testing.T) {
 	t.Parallel()
-	root := setupV3Workspace(t)
+	root := setupVersionWorkspace(t, 4)
 	// Drift a managed file so the migration plan conflicts.
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("human edit\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -155,7 +157,7 @@ func TestUpgradeRefusesConflictedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 3 {
-		t.Fatalf("conflicted upgrade lock recipe version = %d, want 3 (unchanged)", lock.Recipe.Version)
+	if lock.Recipe.Version != 4 {
+		t.Fatalf("conflicted upgrade lock recipe version = %d, want 4 (unchanged)", lock.Recipe.Version)
 	}
 }

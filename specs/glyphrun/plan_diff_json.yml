@@ -47,4 +47,4 @@ outcomes:
       verify:
         screen:
             contains: has_unified_diffs=true
-contractHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+contractHash: sha256:c00e809d8d2886e74e03cec0523a469d5c4c1a40f6944c9e2284609521f74260

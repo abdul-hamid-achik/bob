@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -24,7 +25,20 @@ type RemoveOptions struct {
 	Force bool
 	// DryRun performs every ownership and hash check but removes nothing.
 	DryRun bool
+	// beforeDelete is a test seam for proving the final precondition check. It
+	// is deliberately unexported so callers cannot insert behavior into the
+	// destructive path.
+	beforeDelete func(string)
 }
+
+type removeDecision uint8
+
+const (
+	removeMissing removeDecision = iota
+	removeEligible
+	removeSkipped
+	removeConflict
+)
 
 // RemoveResult reports exactly what Remove changed. Under DryRun, Removed,
 // Skipped, Conflicts, and LockRemoved describe what a real run would do;
@@ -38,14 +52,14 @@ type RemoveResult struct {
 }
 
 // Remove deletes every Bob-managed file recorded in bob.lock whose current
-// content still proves ownership, then removes bob.lock itself. It is the
-// inverse of Apply. It never touches unmanaged files, bob.yaml, symlinks, or
-// special files; a managed file whose content drifted is skipped without Force
-// and reported in Skipped. bob.lock is removed only when nothing was skipped
-// or conflicted, so a partial remove keeps its ownership record for a later
-// --force retry. Empty directories left behind by removed files are cleaned up
-// bottom-up, never removing the workspace root or a directory that still holds
-// other files.
+// content still proves ownership, then removes bob.lock itself. Seed-once files
+// are not lock-owned and therefore remain. Remove never touches unmanaged files,
+// bob.yaml, symlinks, or special files; a managed file whose content drifted is
+// skipped without Force and reported in Skipped. bob.lock is removed only when
+// nothing was skipped or conflicted, so a partial remove keeps its ownership
+// record for a later --force retry. Empty directories left behind by removed
+// files are cleaned up bottom-up, never removing the workspace root or a
+// directory that still holds other files.
 func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 	canonicalRoot, err := validateRoot(root)
 	if err != nil {
@@ -57,7 +71,7 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 	}
 	defer release()
 
-	lock, lockExists, _, err := loadLock(canonicalRoot)
+	lock, lockExists, lockBytes, err := loadLock(canonicalRoot)
 	if err != nil {
 		return nil, fmt.Errorf("remove: %w", err)
 	}
@@ -97,21 +111,25 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("remove: inspect %q: %w", path, err)
 		}
-		if !observation.exists {
-			// Already gone; there is nothing to remove or prove.
-			continue
-		}
-		if observation.conflictCode != "" {
-			// A symlink or special file at a managed path is never removed.
-			result.Conflicts = append(result.Conflicts, path)
-			continue
-		}
-		if observation.hash != entry.SHA256 && !opts.Force {
-			// Ownership cannot be proven for a drifted file without --force.
-			result.Skipped = append(result.Skipped, path)
+		decision := decideRemoval(observation, entry.SHA256, opts.Force)
+		if recordNonRemoval(result, path, decision) {
 			continue
 		}
 		if !opts.DryRun {
+			if opts.beforeDelete != nil {
+				opts.beforeDelete(path)
+			}
+			// Editors commonly save by replacing a file after the initial hash
+			// check. Re-observe immediately before unlink so a newly written human
+			// version is preserved unless --force explicitly authorized its removal.
+			observation, err = inspectDestination(canonicalRoot, path)
+			if err != nil {
+				return result, fmt.Errorf("remove: recheck %q: %w", path, err)
+			}
+			decision = decideRemoval(observation, entry.SHA256, opts.Force)
+			if recordNonRemoval(result, path, decision) {
+				continue
+			}
 			destination := filepath.Join(canonicalRoot, filepath.FromSlash(path))
 			if err := os.Remove(destination); err != nil {
 				return nil, fmt.Errorf("remove: delete %q: %w", path, err)
@@ -123,17 +141,56 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 	// The lock is removed only when every managed path was fully cleared. A
 	// skipped or conflicted file keeps its ownership record so a later
 	// `remove --force` can still prove and delete it.
-	result.LockRemoved = len(result.Skipped) == 0 && len(result.Conflicts) == 0
+	canRemoveLock := len(result.Skipped) == 0 && len(result.Conflicts) == 0
 	if opts.DryRun {
+		result.LockRemoved = canRemoveLock
 		return result, nil
 	}
 	removeEmptyDirectories(canonicalRoot, result.Removed)
-	if result.LockRemoved {
-		if err := os.Remove(filepath.Join(canonicalRoot, LockFilename)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("remove: delete %s: %w", LockFilename, err)
+	if canRemoveLock {
+		currentLock, exists, err := readLockBytes(canonicalRoot)
+		if err != nil {
+			return result, fmt.Errorf("remove: recheck %s: %w", LockFilename, err)
 		}
+		if !exists || !bytes.Equal(currentLock, lockBytes) {
+			return result, fmt.Errorf("remove: %s changed during removal; retained ownership state", LockFilename)
+		}
+		if err := os.Remove(filepath.Join(canonicalRoot, LockFilename)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return result, fmt.Errorf("remove: delete %s: %w", LockFilename, err)
+		}
+		result.LockRemoved = true
 	}
 	return result, nil
+}
+
+func decideRemoval(observation observation, lockedSHA256 string, force bool) removeDecision {
+	if !observation.exists {
+		return removeMissing
+	}
+	if observation.conflictCode != "" {
+		return removeConflict
+	}
+	if observation.hash != lockedSHA256 && !force {
+		return removeSkipped
+	}
+	return removeEligible
+}
+
+// recordNonRemoval records a terminal non-delete decision and reports whether
+// the caller should continue to the next managed path.
+func recordNonRemoval(result *RemoveResult, path string, decision removeDecision) bool {
+	switch decision {
+	case removeMissing:
+		return true
+	case removeSkipped:
+		result.Skipped = append(result.Skipped, path)
+		return true
+	case removeConflict:
+		result.Conflicts = append(result.Conflicts, path)
+		return true
+	default:
+		return false
+	}
 }
 
 // removeEmptyDirectories removes directories left empty after file removal,

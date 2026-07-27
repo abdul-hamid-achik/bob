@@ -107,6 +107,8 @@ bob mcp serve           expose nine typed repository-read-only MCP tools
 bob context [path]      compile a bounded, read-only workspace contract
 bob path <path>         classify one exact repository path through Bob ownership
 bob playbook ...        resolve a closed typed procedure without executing it
+bob remove [path]       remove only lock-owned files, preserving human state
+bob upgrade [path]      migrate an older same-recipe ownership lock safely
 ```
 
 `new` and `init` preview by default and require `--write` to create files.
@@ -137,11 +139,13 @@ action for an unmanaged regular file whose content already matches exactly; it
 is not a standalone `bob adopt` command or a claim that an existing application
 was behaviorally imported.
 
-The current recipe version 4 keeps that ownership model and adds a deterministic
-human-owned command-registration seam. New Cobra commands live in extension
-files; the generated root and registry remain complete Bob-owned artifacts.
-Version 4 also retains the public repository structure established in version
-3: community templates, a Code of Conduct, Dependabot, non-mutating
+Recipe version 4 introduced a deterministic human-owned command-registration
+seam. New Cobra commands live in extension files; the generated root and
+registry remain complete Bob-owned artifacts. Current version 5 preserves that
+contract and adds a generated registry regression test, so a newly rendered
+repository passes its own configured linter while proving the extension seam
+is reachable. It retains the public repository structure established in
+version 3: community templates, a Code of Conduct, Dependabot, non-mutating
 verification, vulnerability scanning, pinned CI actions, release configuration,
 and a security-patched Go baseline.
 
@@ -153,7 +157,7 @@ Bob currently does not:
 - infer or rewrite application business logic;
 - overwrite an unmanaged differing file or a managed file changed by a person;
 - own managed blocks inside otherwise user-owned files;
-- delete generated files;
+- delete unmanaged, seed-once, drifted-without-force, symlink, or special files;
 - expose Studio mutation or MCP mutation surfaces;
 - provide standalone `adopt` or `verify` commands;
 - persist plans, detailed execution histories, or verification receipts;

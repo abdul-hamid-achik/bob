@@ -28,7 +28,7 @@ type Artifact struct {
 // goAgentToolRecipeVersion is the current go-agent-tool recipe contract
 // version. engine.RecipeVersion mirrors this value as a deprecated
 // compatibility alias; recipe.Version is the source of truth.
-const goAgentToolRecipeVersion = 4
+const goAgentToolRecipeVersion = 5
 
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
@@ -97,7 +97,7 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	var err error
 	switch {
 	case m.Recipe == "go-agent-tool":
-		if version != 3 && version != goAgentToolRecipeVersion {
+		if version != 3 && version != 4 && version != goAgentToolRecipeVersion {
 			return nil, fmt.Errorf("unsupported go-agent-tool recipe version %d", version)
 		}
 		artifacts, err = renderGoAgentTool(m, version)

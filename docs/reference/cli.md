@@ -16,9 +16,9 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
-| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs for create/update actions. |
+| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, and `--watch` refreshes human output when `bob.yaml` changes. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
-| `bob remove [path]` | Writes | Remove Bob-managed files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing. |
+| `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing. |
 | `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews, `--expect-plan-digest` gates authority. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
@@ -29,7 +29,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob studio [path]` | Repository-read-only interactive UI | Monitor Overview, Plan, and aggregate Stats. |
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
-| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@4`, and the stack hygiene recipes). |
+| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@5`, and the stack hygiene recipes). |
 | `bob recipe show <id>` | Read-only | Describe one recipe; `files` includes its schema and a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
 | `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
@@ -43,7 +43,7 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 ```text
 $ bob recipe list
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
-go-agent-tool@4  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
+go-agent-tool@5  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
 js-app@1  Seed-once hygiene for a plain JavaScript Node app or workspace: docs presence, .gitignore, and a CI stub; never owns application source
 lua-lib@1  Seed-once hygiene for a Lua library or Neovim plugin: docs presence, .gitignore, and a busted CI stub; never owns application source
 python-app@1  Seed-once hygiene for a Python project: docs presence, .gitignore, and a pytest CI stub; never owns application source
@@ -237,7 +237,7 @@ recovery path a script would parse.
 | `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely (for example, a symlink at the workspace boundary). |
-| `plan_digest_mismatch` | A guarded apply fresh-planned a different repository state than the caller reviewed. |
+| `plan_digest_mismatch` | A guarded apply or upgrade fresh-planned a different repository state than the caller reviewed. |
 | `command_failed` | An unclassified failure — read the message for detail. |
 
 An `apply` refused by conflicts skips the round-trip back through `plan`: its
@@ -337,6 +337,25 @@ reviewed `plan --json` result identified by `applied_plan_digest`. The receipt
 is returned once and is not persisted. It proves which Bob reconciliation ran,
 not that generated application behavior passed.
 
+## Recipe upgrade
+
+`bob upgrade [workspace]` migrates a lock written by an older version of the
+same recipe to the current embedded recipe. It uses the prior lock hashes as
+the ownership proof, renders the current desired artifacts, and applies the
+same whole-plan conflict and publication rules as `bob apply`. A lock from a
+future version or a different recipe is refused.
+
+`--dry-run` returns the observed and target versions, the complete plan, and
+whether migration is required without writing. A current lock is a successful
+no-op. `--expect-plan-digest` accepts the same qualified digest as apply and
+refuses stale authority with `plan_digest_mismatch` and zero writes. Successful
+JSON output reports `from_version`, `to_version`, `applied`, and the bounded
+apply receipt when a migration ran.
+
+Upgrade holds the workspace apply lock for the full fresh-plan and mutation
+sequence. Conflicts exit `2`; a missing, invalid, cross-recipe, or future lock
+exits `4`; a digest mismatch exits `5`.
+
 ## Plan diff preview
 
 `bob plan [workspace] --diff` appends unified content diffs for every create
@@ -351,12 +370,21 @@ presentation-only: it never affects the plan digest, the action list, or any
 engine behavior. JSON output adds a `diffs` array (omitted when `--diff` is
 not set).
 
+## Plan watch
+
+`bob plan [workspace] --watch` renders the normal human plan immediately and
+refreshes it whenever `bob.yaml` changes. It is a read-only convenience for a
+person editing the manifest: invalid or temporarily missing manifests are
+shown inline and watching continues until interrupted. Because it is a live
+terminal view, `--watch` cannot be combined with `--json`.
+
 ## Safe remove
 
-`bob remove [workspace]` is the inverse of `bob apply`. It removes only files
-currently tracked in `bob.lock` whose content hash still matches the lock
-entry — the same ownership proof apply uses. Unmanaged files, `bob.yaml`, and
-directories containing unmanaged files are never touched.
+`bob remove [workspace]` releases the files whose ownership is recorded in
+`bob.lock`. It removes only tracked files whose content hash still matches the
+lock entry — the same ownership proof apply uses. Unmanaged files, seed-once
+artifacts, `bob.yaml`, and directories containing unmanaged files are never
+touched.
 
 - `--force` removes managed files even when their content has drifted from
   the lock (hash mismatch). Without `--force`, drifted files are skipped and
@@ -370,6 +398,12 @@ directories containing unmanaged files are never touched.
   conflicted. A partial remove retains the lock so a later `--force` run can
   still prove and delete the remaining files.
 
+Immediately before each unlink, Bob rechecks the file type and content hash so
+an edit made after the initial inspection is preserved. Immediately before
+removing `bob.lock`, Bob also requires its bytes to match the lock it loaded.
+These checks close the normal editor-save race; like apply, remove is not a
+globally transactional multi-file operation.
+
 Remove acquires the same `.bob.apply.lock` used by apply to prevent
 concurrent mutations. Exit codes: `0` clean success, `2` when files were
 skipped or conflicted, `4` when no lock exists or the manifest is invalid.
@@ -380,10 +414,10 @@ skipped or conflicted, `4` when no lock exists or the manifest is invalid.
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
 | `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
-| `2` | `apply` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
+| `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
-| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a recipe that does not match the detected stack without `--force`, or `bob remove` when no lock file exists. |
-| `5` | `apply --expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
+| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |
+| `5` | `apply` or `upgrade` with `--expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read
 `data.error.code` for detail — do not infer success from the mere presence of

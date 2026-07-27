@@ -118,7 +118,7 @@ func TestRecipeV3UpgradeRetainsV2PathsAndRaisesGoSecurityPatch(t *testing.T) {
 
 }
 
-func TestGoAgentToolV3LockUpgradesSafelyToV4(t *testing.T) {
+func TestGoAgentToolV3LockUpgradesSafelyToV5(t *testing.T) {
 	t.Parallel()
 	m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
 	root, _, v4 := installGoAgentV3Workspace(t, m)
@@ -132,7 +132,7 @@ func TestGoAgentToolV3LockUpgradesSafelyToV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.HasConflicts() || !plan.LockChanged || plan.Recipe.Version != 4 {
+	if plan.HasConflicts() || !plan.LockChanged || plan.Recipe.Version != 5 {
 		t.Fatalf("v3 to v4 plan = %#v", plan)
 	}
 	actions := make(map[string]engine.Action, len(plan.Actions))
@@ -149,8 +149,8 @@ func TestGoAgentToolV3LockUpgradesSafelyToV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 4 {
-		t.Fatalf("upgraded lock version = %d, want 4", lock.Recipe.Version)
+	if lock.Recipe.Version != 5 {
+		t.Fatalf("upgraded lock version = %d, want 5", lock.Recipe.Version)
 	}
 	preserved, err := os.ReadFile(humanPath)
 	if err != nil || !reflect.DeepEqual(preserved, humanContent) {
@@ -241,7 +241,7 @@ func installGoAgentV3Workspace(t *testing.T, m manifest.Manifest) (string, []rec
 	if err != nil {
 		t.Fatal(err)
 	}
-	v4, err := recipe.Render(m)
+	v5, err := recipe.Render(m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,14 +253,14 @@ func installGoAgentV3Workspace(t *testing.T, m manifest.Manifest) (string, []rec
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.Replace(string(lock), "  version: 4\n", "  version: 3\n", 1)
+	updated := strings.Replace(string(lock), "  version: 5\n", "  version: 3\n", 1)
 	if updated == string(lock) {
 		t.Fatal("temporary v3 workspace lock did not contain current recipe version")
 	}
 	if err := os.WriteFile(lockPath, []byte(updated), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return root, v3, v4
+	return root, v3, v5
 }
 
 func loadPublishedLock(t *testing.T, version int) (publishedLock, []byte) {

@@ -89,9 +89,13 @@ func renderGoAgentTool(m manifest.Manifest, version int) ([]Artifact, error) {
 		{"internal/version/version.go", goAgentVersionTemplate},
 	}
 	if version >= 4 {
+		registryTestTemplate := goAgentRegistryV4TestTemplate
+		if version >= 5 {
+			registryTestTemplate += goAgentRegistryV5TestAddition
+		}
 		base = append(base,
 			templateArtifact{"internal/cli/registry.go", goAgentRegistryTemplate},
-			templateArtifact{"internal/cli/registry_test.go", goAgentRegistryTestTemplate},
+			templateArtifact{"internal/cli/registry_test.go", registryTestTemplate},
 		)
 	}
 	for _, item := range base {
@@ -697,7 +701,7 @@ func validCommandID(id string) bool {
 }
 `
 
-const goAgentRegistryTestTemplate = `package cli
+const goAgentRegistryV4TestTemplate = `package cli
 
 import (
 	"reflect"
@@ -765,6 +769,26 @@ func TestExtensionFactoryCannotShadowBuiltInCommand(t *testing.T) {
 	}})
 	if err == nil || !strings.Contains(err.Error(), "built-in command") {
 		t.Fatalf("error = %v, want built-in command collision", err)
+	}
+}
+`
+
+const goAgentRegistryV5TestAddition = `
+func TestRegisterCommandCollectsHumanOwnedFactory(t *testing.T) {
+	previous := extensionFactories
+	extensionFactories = nil
+	t.Cleanup(func() { extensionFactories = previous })
+
+	build := func(*options, Dependencies) *cobra.Command {
+		return &cobra.Command{Use: "hello"}
+	}
+	registerCommand("hello", build)
+
+	if len(extensionFactories) != 1 || extensionFactories[0].id != "hello" {
+		t.Fatalf("registered factories = %#v", extensionFactories)
+	}
+	if reflect.ValueOf(extensionFactories[0].build).Pointer() != reflect.ValueOf(build).Pointer() {
+		t.Fatal("registered factory did not retain its builder")
 	}
 }
 `
