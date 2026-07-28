@@ -8,9 +8,10 @@ import (
 )
 
 // StackRecipeVersion is the current contract version shared by every stack
-// hygiene recipe. All stack recipes version together because they share one
-// renderer; adding a stack adds a definition, not a version.
-const StackRecipeVersion = 1
+// hygiene recipe. Version 2 adds Swift and Elixir, preserves detected
+// JavaScript package managers, and aligns the seeded runtime commands. The
+// published version-1 definitions remain renderable below.
+const StackRecipeVersion = 2
 
 // stackSeed is one seed-once file: a workspace-relative path and the Go
 // template source rendered into its initial content.
@@ -42,7 +43,7 @@ type stackDefinition struct {
 	ExtraSeeds []stackSeed
 }
 
-var stackDefinitions = map[string]stackDefinition{
+var stackDefinitionsV1 = map[string]stackDefinition{
 	manifest.RecipeTSApp: {
 		ID:            manifest.RecipeTSApp,
 		Description:   "Seed-once hygiene for a TypeScript app or Bun/Turborepo monorepo: docs presence, .gitignore, and a CI stub; never owns application source",
@@ -147,6 +148,132 @@ var stackDefinitions = map[string]stackDefinition{
 	},
 }
 
+var stackDefinitions = map[string]stackDefinition{
+	manifest.RecipeTSApp: {
+		ID:            manifest.RecipeTSApp,
+		Description:   "Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source",
+		LanguageLabel: "TypeScript (Bun or Node; app or workspace monorepo)",
+		Stacks:        []string{"typescript"},
+		Commands:      []string{"bun install", "bun run lint", "bun run test", "bun run build"},
+		Gitignore:     stackGitignoreNode,
+		CIWorkflow:    stackCITypeScript,
+		ExtraSeeds: []stackSeed{
+			{Path: "tsconfig.json", Source: stackTSConfig},
+			{Path: ".prettierrc", Source: stackPrettierRC},
+		},
+	},
+	manifest.RecipeJSApp: {
+		ID:            manifest.RecipeJSApp,
+		Description:   "Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source",
+		LanguageLabel: "JavaScript (Node)",
+		Stacks:        []string{"javascript"},
+		Commands:      []string{"npm install", "npm run lint --if-present", "npm test", "npm run build --if-present"},
+		Gitignore:     stackGitignoreNode,
+		CIWorkflow:    stackCIJavaScript,
+		ExtraSeeds: []stackSeed{
+			{Path: ".prettierrc", Source: stackPrettierRC},
+		},
+	},
+	manifest.RecipeVueApp: {
+		ID:            manifest.RecipeVueApp,
+		Description:   "Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source",
+		LanguageLabel: "Vue (Vite)",
+		Stacks:        []string{"vue"},
+		Commands:      []string{"bun install", "bun run dev", "bun run test", "bun run build"},
+		Gitignore:     stackGitignoreVue,
+		CIWorkflow:    stackCIVue,
+		ExtraSeeds: []stackSeed{
+			{Path: ".prettierrc", Source: stackPrettierVueRC},
+		},
+	},
+	manifest.RecipePythonApp: {
+		ID:            manifest.RecipePythonApp,
+		Description:   "Seed-once hygiene for a Python project: docs, aligned Python tooling, and pytest CI; never owns application source",
+		LanguageLabel: "Python 3.13",
+		Stacks:        []string{"python"},
+		Commands:      []string{"python3 -m venv .venv && source .venv/bin/activate", `python -m pip install -e ".[dev]"`, "python -m pytest"},
+		Gitignore:     stackGitignorePython,
+		CIWorkflow:    stackCIPythonV2,
+		ExtraSeeds: []stackSeed{
+			{Path: "pyproject.toml", Source: stackPyprojectV2},
+			{Path: ".python-version", Source: stackPythonVersionV2},
+		},
+	},
+	manifest.RecipeRubyApp: {
+		ID:            manifest.RecipeRubyApp,
+		Description:   "Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source",
+		LanguageLabel: "Ruby (application or gem)",
+		Stacks:        []string{"ruby"},
+		Commands:      []string{"bundle install", "bundle exec rake"},
+		Gitignore:     stackGitignoreRuby,
+		CIWorkflow:    stackCIRuby,
+		ExtraSeeds: []stackSeed{
+			{Path: ".rubocop.yml", Source: stackRubocop},
+			{Path: ".ruby-version", Source: stackRubyVersion},
+			{Path: "Gemfile", Source: stackGemfileV2},
+		},
+	},
+	manifest.RecipeLuaLib: {
+		ID:            manifest.RecipeLuaLib,
+		Description:   "Seed-once hygiene for a Lua library or Neovim plugin with kind-aligned runtime configuration; never owns application source",
+		LanguageLabel: "Lua (library or Neovim plugin)",
+		Stacks:        []string{"lua"},
+		Commands:      []string{"luarocks install busted", "busted --verbose"},
+		Gitignore:     stackGitignoreLua,
+		CIWorkflow:    stackCILuaV2,
+		ExtraSeeds: []stackSeed{
+			{Path: ".luacheckrc", Source: stackLuacheckRCV2},
+			{Path: ".lua-version", Source: stackLuaVersionV2},
+		},
+	},
+	manifest.RecipeRustCLI: {
+		ID:            manifest.RecipeRustCLI,
+		Description:   "Seed-once hygiene for a Rust CLI, library, or workspace: Cargo checks and CI; never owns application source",
+		LanguageLabel: "Rust (CLI, library, or workspace)",
+		Stacks:        []string{"rust"},
+		Commands:      []string{"cargo fmt --all --check", "cargo clippy --all-targets -- -D warnings", "cargo test", "cargo build"},
+		Gitignore:     stackGitignoreRust,
+		CIWorkflow:    stackCIRustV2,
+		ExtraSeeds: []stackSeed{
+			{Path: "clippy.toml", Source: stackClippyConfig},
+			{Path: "rust-toolchain.toml", Source: stackRustToolchain},
+		},
+	},
+	manifest.RecipeSwiftPkg: {
+		ID:            manifest.RecipeSwiftPkg,
+		Description:   "Seed-once hygiene for a Swift package: SwiftPM commands, ignores, and CI; never owns package source",
+		LanguageLabel: "Swift Package Manager",
+		Stacks:        []string{"swift"},
+		Commands:      []string{"swift build", "swift test"},
+		Gitignore:     stackGitignoreSwift,
+		CIWorkflow:    stackCISwift,
+	},
+	manifest.RecipeElixirApp: {
+		ID:            manifest.RecipeElixirApp,
+		Description:   "Seed-once hygiene for an Elixir application or umbrella: Mix formatting, tests, ignores, and CI; never owns application source",
+		LanguageLabel: "Elixir (Mix application or umbrella)",
+		Stacks:        []string{"elixir"},
+		Commands:      []string{"mix deps.get", "mix format --check-formatted", "mix test"},
+		Gitignore:     stackGitignoreElixir,
+		CIWorkflow:    stackCIElixir,
+		ExtraSeeds: []stackSeed{
+			{Path: ".formatter.exs", Source: stackElixirFormatter},
+		},
+	},
+	manifest.RecipeStaticWeb: {
+		ID:            manifest.RecipeStaticWeb,
+		Description:   "Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content",
+		LanguageLabel: "Static web site (HTML/CSS)",
+		Stacks:        []string{"static-web"},
+		Commands:      []string{"open index.html"},
+		Gitignore:     stackGitignoreStaticWeb,
+		CIWorkflow:    stackCIStaticWeb,
+		ExtraSeeds: []stackSeed{
+			{Path: ".htmlhintrc", Source: stackHTMLHintRC},
+		},
+	},
+}
+
 // recipeByStack maps a detected stack id to the recipe that serves it, and
 // stacksByRecipe the reverse claim used by the init mismatch guard.
 // go-agent-tool participates even though it is not a stack hygiene recipe.
@@ -219,13 +346,20 @@ type stackTemplateData struct {
 // renderStack materializes the seed-once hygiene artifact set for one stack
 // hygiene recipe. Every artifact carries Seed: the engine creates it only
 // when missing, never lock-owns it, and never updates or overwrites it.
-func renderStack(m manifest.Manifest) ([]Artifact, error) {
+func renderStackVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	if err := m.Validate(); err != nil {
 		return nil, fmt.Errorf("render %s: %w", m.Recipe, err)
 	}
-	definition, ok := stackDefinitions[m.Recipe]
+	definitions := stackDefinitions
+	if version == 1 {
+		definitions = stackDefinitionsV1
+	}
+	definition, ok := definitions[m.Recipe]
 	if !ok {
-		return nil, fmt.Errorf("render stack recipe: no definition for %q", m.Recipe)
+		return nil, fmt.Errorf("render stack recipe: %s@%d is not available", m.Recipe, version)
+	}
+	if version == StackRecipeVersion {
+		definition = stackDefinitionForManifest(definition, m)
 	}
 	data := stackTemplateData{
 		Product:       m.Product,
@@ -233,7 +367,7 @@ func renderStack(m manifest.Manifest) ([]Artifact, error) {
 		Language:      definition.LanguageLabel,
 		Commands:      definition.Commands,
 		RecipeID:      definition.ID,
-		RecipeVersion: StackRecipeVersion,
+		RecipeVersion: version,
 	}
 	var artifacts []Artifact
 	add := func(path, source string) error {
@@ -262,6 +396,23 @@ func renderStack(m manifest.Manifest) ([]Artifact, error) {
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
 	return artifacts, nil
+}
+
+func stackDefinitionForManifest(definition stackDefinition, m manifest.Manifest) stackDefinition {
+	if m.Recipe != manifest.RecipeTSApp && m.Recipe != manifest.RecipeJSApp && m.Recipe != manifest.RecipeVueApp {
+		return definition
+	}
+	manager := m.Runtime.PackageManager
+	if manager == "" {
+		if m.Recipe == manifest.RecipeJSApp {
+			manager = "npm"
+		} else {
+			manager = "bun"
+		}
+	}
+	definition.Commands = nodeCommands(manager, m.Recipe)
+	definition.CIWorkflow = nodeCIWorkflow(manager, m.Recipe)
+	return definition
 }
 
 func resolveStackMetadata(m manifest.Manifest, artifacts []Artifact) Metadata {
@@ -445,6 +596,27 @@ const stackGitignoreRust = `/target/
 !.env.example
 `
 
+const stackGitignoreSwift = `/.build/
+/.swiftpm/xcode/package.xcworkspace/
+DerivedData/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreElixir = `/_build/
+/deps/
+/cover/
+/doc/
+/.elixir_ls/
+erl_crash.dump
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackGitignoreStaticWeb = `dist/
 node_modules/
 .DS_Store
@@ -508,6 +680,62 @@ const stackCIVue = stackCIHeader + `      - uses: oven-sh/setup-bun@0c5077e51419
       - run: bun run build
 `
 
+func nodeCommands(manager, recipeID string) []string {
+	install := manager + " install"
+	run := manager + " run"
+	if manager == "yarn" {
+		run = "yarn"
+	}
+	switch recipeID {
+	case manifest.RecipeVueApp:
+		return []string{install, run + " dev", run + " test", run + " build"}
+	case manifest.RecipeJSApp:
+		return []string{install, run + " test"}
+	default:
+		return []string{install, run + " lint", run + " test", run + " build"}
+	}
+}
+
+func nodeCIWorkflow(manager, recipeID string) string {
+	setup := `      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+`
+	install := "npm ci"
+	run := "npm run"
+	switch manager {
+	case "bun":
+		setup = `      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+`
+		install = "bun install --frozen-lockfile"
+		run = "bun run"
+	case "pnpm":
+		setup += "      - run: corepack enable\n"
+		install = "pnpm install --frozen-lockfile"
+		run = "pnpm run"
+	case "yarn":
+		setup += "      - run: corepack enable\n"
+		install = "yarn install --frozen-lockfile"
+		run = "yarn"
+	}
+	workflow := stackCIHeader + setup + "      - run: " + install + "\n"
+	switch recipeID {
+	case manifest.RecipeVueApp:
+		workflow += "      # TODO: align these with your package.json scripts (vite build, vitest...).\n"
+		workflow += "      - run: " + run + " test\n"
+		workflow += "      - run: " + run + " build\n"
+	case manifest.RecipeJSApp:
+		workflow += "      # TODO: add lint and build commands when those scripts exist.\n"
+		workflow += "      - run: " + run + " test\n"
+	default:
+		workflow += "      # TODO: align these with your package.json scripts.\n"
+		workflow += "      - run: " + run + " lint\n"
+		workflow += "      - run: " + run + " test\n"
+		workflow += "      - run: " + run + " build\n"
+	}
+	return workflow
+}
+
 const stackCIPython = stackCIHeader + `      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
@@ -515,6 +743,15 @@ const stackCIPython = stackCIHeader + `      - uses: actions/setup-python@ece7cb
       # TODO: install with your real tool (pip install -e ".[dev]", uv sync, poetry install).
       - run: pip install -e ".[dev]"
       - run: pytest
+`
+
+const stackCIPythonV2 = stackCIHeader + `      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      # TODO: align installation with the dependency tool already used here.
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest
 `
 
 const stackCIRuby = stackCIHeader + `      - uses: ruby/setup-ruby@8e41b362d2589a22a44c1cfa214b3c83052c195b # v1.318.0
@@ -533,6 +770,15 @@ const stackCILua = stackCIHeader + `      - uses: leafo/gh-actions-lua@8aace3457
       - run: busted --verbose
 `
 
+const stackCILuaV2 = stackCIHeader + `      - uses: leafo/gh-actions-lua@8aace3457a2fcf3f3c4e9007ecc6b869ff6d74d6 # v11.0.0
+        with:
+          luaVersion: "[[if eq .Manifest.Runtime.Kind "plugin"]]5.1[[else]]5.4[[end]]"
+      - uses: leafo/gh-actions-luarocks@4c082a5fad45388feaeb0798dbd82dbd7dc65bca # v5.0.0
+      - run: luarocks install busted
+      # TODO: align with your spec layout (busted spec/, luacheck, stylua...).
+      - run: busted --verbose
+`
+
 const stackCIRust = stackCIHeader + `      # The hosted Ubuntu runner ships a stable Rust toolchain; pin one with
       # dtolnay/rust-toolchain if you need a specific version.
       - run: cargo fmt --all --check
@@ -541,13 +787,37 @@ const stackCIRust = stackCIHeader + `      # The hosted Ubuntu runner ships a st
       - run: cargo build --locked
 `
 
+const stackCIRustV2 = stackCIHeader + `      # rust-toolchain.toml selects the stable toolchain and required components.
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: cargo build
+`
+
+const stackCISwift = stackCIHeader + `      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2
+        with:
+          swift-version: "6.2"
+      - run: swift build
+      - run: swift test
+`
+
+const stackCIElixir = stackCIHeader + `      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.18.4"
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix test
+`
+
 const stackCIStaticWeb = stackCIHeader + `      # TODO: replace with your real validation or build (vite build,
       # html-validate, linkinator, sass --no-source-map...).
       - run: test -f index.html
 `
 
 // stackEditorConfig is seeded for every stack. The indent width follows the
-// language convention: four spaces for Python and Rust, two for the rest.
+// language convention: four spaces for Python, Rust, and Swift; two for the
+// rest.
 const stackEditorConfig = `# Seeded once by Bob ([[.RecipeID]]@[[.RecipeVersion]]). Yours to own and extend;
 # Bob never updates or overwrites it.
 root = true
@@ -558,7 +828,7 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
-[[if or (eq .RecipeID "python-app") (eq .RecipeID "rust-cli")]]indent_size = 4
+[[if or (eq .RecipeID "python-app") (eq .RecipeID "rust-cli") (eq .RecipeID "swift-package")]]indent_size = 4
 [[else]]indent_size = 2
 [[end]]
 [*.md]
@@ -621,6 +891,27 @@ addopts = "-ra"
 const stackPythonVersion = `3.12
 `
 
+const stackPyprojectV2 = `[project]
+name = [[quote .Product.Name]]
+version = "0.1.0"
+description = [[quote .Product.Description]]
+requires-python = ">=3.13"
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+`
+
+const stackPythonVersionV2 = `3.13
+`
+
 const stackRubocop = `AllCops:
   TargetRubyVersion: 3.3
   NewCops: enable
@@ -645,12 +936,28 @@ const stackGemfile = `source "https://rubygems.org"
 gemspec
 `
 
+const stackGemfileV2 = `source "https://rubygems.org"
+
+[[if eq .Manifest.Runtime.Kind "gem"]]# Gem dependencies belong in the gemspec.
+gemspec
+[[else]]# Add application dependencies below.
+gem "rake"
+[[end]]`
+
 const stackLuacheckRC = `std = "lua51"
 globals = { "vim" }
 max_line_length = 120
 `
 
 const stackLuaVersion = `5.1
+`
+
+const stackLuacheckRCV2 = `std = "[[if eq .Manifest.Runtime.Kind "plugin"]]lua51[[else]]lua54[[end]]"
+[[if eq .Manifest.Runtime.Kind "plugin"]]globals = { "vim" }
+[[end]]max_line_length = 120
+`
+
+const stackLuaVersionV2 = `[[if eq .Manifest.Runtime.Kind "plugin"]]5.1[[else]]5.4[[end]]
 `
 
 const stackClippyConfig = `msrv = "1.74"
@@ -674,4 +981,9 @@ const stackHTMLHintRC = `{
   "attr-no-duplication": true,
   "title-require": true
 }
+`
+
+const stackElixirFormatter = `[
+  inputs: ["mix.exs", "{config,lib,test}/**/*.{ex,exs}"]
+]
 `

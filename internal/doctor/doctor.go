@@ -168,13 +168,6 @@ func stackTools(m manifest.Manifest) []tool {
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
 	}
 	byLanguage := map[string][]tool{
-		"typescript": {
-			{name: "Bun", command: "bun", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
-			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
-		},
-		"javascript": {
-			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript-family toolchain"},
-		},
 		"python": {
 			{name: "Python", command: "python3", args: []string{"--version"}, note: "runs the Python toolchain"},
 		},
@@ -189,10 +182,51 @@ func stackTools(m manifest.Manifest) []tool {
 		"rust": {
 			{name: "Cargo", command: "cargo", args: []string{"--version"}, note: "runs the Rust toolchain"},
 		},
+		"swift": {
+			{name: "Swift", command: "swift", args: []string{"--version"}, note: "runs the Swift Package Manager toolchain"},
+		},
+		"elixir": {
+			{name: "Elixir", command: "elixir", args: []string{"--version"}, note: "runs the Elixir toolchain"},
+			{name: "Mix", command: "mix", args: []string{"--version"}, note: "builds and tests the Elixir project"},
+		},
 	}
-	optional := append([]tool(nil), byLanguage[m.Runtime.Language]...)
+	var optional []tool
+	if m.Runtime.Language == "typescript" || m.Runtime.Language == "javascript" {
+		optional = javascriptTools(m)
+	} else {
+		optional = append([]tool(nil), byLanguage[m.Runtime.Language]...)
+	}
 	sort.SliceStable(optional, func(i, j int) bool { return optional[i].name < optional[j].name })
 	return append(tools, optional...)
+}
+
+func javascriptTools(m manifest.Manifest) []tool {
+	manager := m.Runtime.PackageManager
+	if manager == "" {
+		if m.Recipe == manifest.RecipeJSApp {
+			manager = "npm"
+		} else {
+			manager = "bun"
+		}
+	}
+	managerTools := map[string][]tool{
+		"bun": {
+			{name: "Bun", command: "bun", args: []string{"--version"}, note: "installs dependencies and runs JavaScript-family scripts"},
+		},
+		"npm": {
+			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript toolchain"},
+			{name: "npm", command: "npm", args: []string{"--version"}, note: "installs dependencies and runs package scripts"},
+		},
+		"pnpm": {
+			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript toolchain"},
+			{name: "pnpm", command: "pnpm", args: []string{"--version"}, note: "installs dependencies and runs package scripts"},
+		},
+		"yarn": {
+			{name: "Node", command: "node", args: []string{"--version"}, note: "runs the JavaScript toolchain"},
+			{name: "Yarn", command: "yarn", args: []string{"--version"}, note: "installs dependencies and runs package scripts"},
+		},
+	}
+	return append([]tool(nil), managerTools[manager]...)
 }
 
 func versionAtLeast(output string, wantMajor, wantMinor, wantPatch int) bool {

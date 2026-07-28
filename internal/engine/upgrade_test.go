@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
 )
 
@@ -63,6 +64,54 @@ func TestUpgradeV4ToV5(t *testing.T) {
 	registryTest, err := os.ReadFile(filepath.Join(root, "internal/cli/registry_test.go"))
 	if err != nil || !strings.Contains(string(registryTest), "TestRegisterCommandCollectsHumanOwnedFactory") {
 		t.Fatalf("upgrade to v5 did not install the registry lint regression test: %v", err)
+	}
+}
+
+func TestUpgradeStackV1ToV2NeverRewritesSeeds(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	m, err := manifest.DefaultStack(manifest.RecipeTSApp, "demo", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(t, root, m)
+	v1, err := recipe.RenderVersion(m, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(root, m, v1); err != nil {
+		t.Fatal(err)
+	}
+	setLockRecipeVersion(t, root, 1)
+	readmePath := filepath.Join(root, "README.md")
+	before, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(before), "ts-app@1") {
+		t.Fatalf("fixture is not version 1:\n%s", before)
+	}
+
+	result, err := Upgrade(root, UpgradeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Applied || result.FromVersion != 1 || result.ToVersion != 2 {
+		t.Fatalf("unexpected upgrade result: %#v", result)
+	}
+	after, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("stack upgrade rewrote a seed-once README")
+	}
+	lock, err := LoadLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Recipe.Version != 2 || len(lock.Files) != 0 {
+		t.Fatalf("stack lock = %#v, want version 2 with no owned files", lock)
 	}
 }
 

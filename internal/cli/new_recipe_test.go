@@ -40,10 +40,15 @@ func TestNewRecipeSelection(t *testing.T) {
 		wantFiles []string
 	}{
 		{
-			name:         "explicit ts-app scaffolds seed hygiene into a fresh target",
-			args:         []string{"--recipe", "ts-app", "--write"},
-			wantManifest: []string{"recipe: ts-app"},
-			wantFiles:    []string{"bob.yaml", "AGENTS.md", "SECURITY.md", ".gitignore", ".github/workflows/ci.yml"},
+			name:    "explicit stack recipe refuses to fake a fresh application",
+			args:    []string{"--recipe", "ts-app", "--write"},
+			wantErr: "never scaffolds application source",
+		},
+		{
+			name:       "explicit stack recipe preview explains the existing-project contract",
+			args:       []string{"--recipe", "swift-package"},
+			wantStdout: []string{"recipe: swift-package"},
+			wantStderr: []string{"never scaffolds application source", "bob init"},
 		},
 		{
 			name:       "auto-detection previews ts-app for a seeded Bun+tsconfig target",

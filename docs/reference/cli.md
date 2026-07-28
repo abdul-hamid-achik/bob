@@ -11,7 +11,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 
 | Command | Repository effect | Purpose |
 |---|---|---|
-| `bob new <name>` | Preview by default; writes with `--write` | Create a new repository contract and initial files from any catalog recipe (`--recipe <id>`, auto-detected for targets with content). |
+| `bob new <name>` | Preview by default; writes with `--write` | Create a repository contract and initial files; stack hygiene recipes require a target whose application stack already exists. |
 | `bob init [path]` | Preview by default; writes `bob.yaml` with `--write` | Initialize Bob in an existing directory without generating files yet. |
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
@@ -42,32 +42,38 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 
 ```text
 $ bob recipe list
+elixir-app@2  Seed-once hygiene for an Elixir application or umbrella: Mix formatting, tests, ignores, and CI; never owns application source
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
 go-agent-tool@5  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
-js-app@1  Seed-once hygiene for a plain JavaScript Node app or workspace: docs presence, .gitignore, and a CI stub; never owns application source
-lua-lib@1  Seed-once hygiene for a Lua library or Neovim plugin: docs presence, .gitignore, and a busted CI stub; never owns application source
-python-app@1  Seed-once hygiene for a Python project: docs presence, .gitignore, and a pytest CI stub; never owns application source
-ruby-app@1  Seed-once hygiene for a Ruby app or gem: docs presence, .gitignore, and a bundler/rake CI stub; never owns application source
-rust-cli@1  Seed-once hygiene for a Rust CLI: docs presence, .gitignore, and a cargo CI stub; never owns application source
-static-web@1  Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content
-ts-app@1  Seed-once hygiene for a TypeScript app or Bun/Turborepo monorepo: docs presence, .gitignore, and a CI stub; never owns application source
-vue-app@1  Seed-once hygiene for a Vue application: docs presence, .gitignore, and a Vite-oriented CI stub; never owns application source
+js-app@2  Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source
+lua-lib@2  Seed-once hygiene for a Lua library or Neovim plugin with kind-aligned runtime configuration; never owns application source
+python-app@2  Seed-once hygiene for a Python project: docs, aligned Python tooling, and pytest CI; never owns application source
+ruby-app@2  Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source
+rust-cli@2  Seed-once hygiene for a Rust CLI, library, or workspace: Cargo checks and CI; never owns application source
+static-web@2  Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content
+swift-package@2  Seed-once hygiene for a Swift package: SwiftPM commands, ignores, and CI; never owns package source
+ts-app@2  Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source
+vue-app@2  Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source
 ```
 
 `bob recipe show <id>` describes one recipe: `files` prints its manifest
 schema and a copyable example, and each stack hygiene recipe prints its stack
-and the exact seed-once artifact paths. `bob new` scaffolds any catalog
-recipe via `--recipe <id>`. When `--recipe` is omitted, a target directory
+and the exact seed-once artifact paths. `bob new` previews any catalog recipe
+via `--recipe <id>`. When `--recipe` is omitted, a target directory
 whose content matches a detected stack auto-selects that stack's recipe (a
 stack recipe may then scaffold into the non-empty target because it only
 seeds create-once files), and a greenfield (missing or empty) target keeps
-the historical `go-agent-tool` default. An explicit stack `--recipe` that
+the historical `go-agent-tool` default. A stack-recipe `--write` against a
+greenfield target refuses because these recipes never scaffold application
+source; create the Swift package, Mix project, Node app, or other application
+first, then use `bob init --write` and `bob apply`. An explicit stack
+`--recipe` that
 does not match the target's detected stack warns on preview and refuses
 `--write` (run `bob init --recipe <id> --force` to seed it anyway). For
 `bob new`, `--module` is required by `go-agent-tool` and rejected by every
 other recipe, which does not scaffold a Go module.
-`bob init` detects the repository's stack (Go, TypeScript/Bun, JavaScript,
-Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults to the
+`bob init` detects the repository's stack (Go, TypeScript, JavaScript,
+Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. When the chosen
 recipe does not match the detected stack, the preview prints a prominent
 warning and `--write` refuses with exit code `4` (`input_invalid`) unless
@@ -76,7 +82,9 @@ stack hygiene recipes it is optional repository identity. `bob init --json`
 carries the full detection result in `data.detection` — `stacks` (each with
 its proving marker files), `primary`, `monorepo`, `kind_hint`,
 `package_manager`, and `signals` — alongside the previewed or written
-manifest. A `files` manifest
+manifest. For JavaScript-family repositories, `runtime.package_manager`
+preserves a detected Bun, npm, pnpm, or Yarn lockfile; Vue also preserves
+JavaScript when TypeScript markers are absent. A `files` manifest
 is hand- or agent-authored. Stack hygiene recipes render only seed-once
 artifacts: each file is created when missing, never recorded in `bob.lock`,
 and never updated or overwritten afterwards — application source is never

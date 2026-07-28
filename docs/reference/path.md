@@ -29,7 +29,7 @@ The standard CLI envelope has `command: "path"`. Its `data` includes:
   "state": "managed_in_sync",
   "human_edit_effect": "will_conflict",
   "ownership": {
-    "recipe": {"id": "go-agent-tool", "version": 4},
+    "recipe": {"id": "go-agent-tool", "version": 5},
     "locked_sha256": "...",
     "current_sha256": "..."
   },

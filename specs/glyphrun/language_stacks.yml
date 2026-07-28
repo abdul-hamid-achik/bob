@@ -1,0 +1,87 @@
+version: 1
+name: bob_language_stacks
+intent: |
+    Bob detects SwiftPM and Elixir/Mix repositories, preserves JavaScript
+    package-manager intent, and refuses to present hygiene-only output as a
+    complete greenfield language scaffold.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-languages.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+
+          mkdir -p "$root/swift-demo"
+          printf '%s\n' '// swift-tools-version: 6.0' >"$root/swift-demo/Package.swift"
+          swift_init="$(./bin/bob init "$root/swift-demo" --write --json)"
+          ./bin/bob apply "$root/swift-demo" >/dev/null
+          ./bin/bob check "$root/swift-demo" >/dev/null
+          printf 'swift_recipe=%s\n' "$(printf '%s' "$swift_init" | jq -r '.data.manifest.recipe')"
+          printf 'swift_version=%s\n' "$(sed -n 's/^    version: //p' "$root/swift-demo/bob.lock")"
+
+          mkdir -p "$root/elixir-demo"
+          printf '%s\n' 'def project, do: [apps_path: "apps"]' >"$root/elixir-demo/mix.exs"
+          elixir_init="$(./bin/bob init "$root/elixir-demo" --write --json)"
+          ./bin/bob apply "$root/elixir-demo" >/dev/null
+          ./bin/bob check "$root/elixir-demo" >/dev/null
+          printf 'elixir_recipe=%s\n' "$(printf '%s' "$elixir_init" | jq -r '.data.manifest.recipe')"
+          printf 'elixir_kind=%s\n' "$(printf '%s' "$elixir_init" | jq -r '.data.manifest.runtime.kind')"
+
+          mkdir -p "$root/vue-demo"
+          printf '%s\n' '{"dependencies":{"vue":"^3"}}' >"$root/vue-demo/package.json"
+          printf '%s\n' '{}' >"$root/vue-demo/tsconfig.json"
+          printf '%s\n' "lockfileVersion: '9.0'" >"$root/vue-demo/pnpm-lock.yaml"
+          vue_init="$(./bin/bob init "$root/vue-demo" --json)"
+          printf 'vue_language=%s\n' "$(printf '%s' "$vue_init" | jq -r '.data.manifest.runtime.language')"
+          printf 'vue_manager=%s\n' "$(printf '%s' "$vue_init" | jq -r '.data.manifest.runtime.package_manager')"
+
+          set +e
+          ./bin/bob new empty-swift --dir "$root/empty-swift" --recipe swift-package --write >/dev/null 2>&1
+          greenfield_status="$?"
+          set -e
+          printf 'greenfield_exit=%s\n' "$greenfield_status"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: language_stacks
+outcomes:
+    - id: detects_swift_package
+      description: Package.swift selects the version-2 Swift package recipe
+      verify:
+        screen:
+            contains: swift_recipe=swift-package
+    - id: records_stack_version_two
+      description: applied stack hygiene records recipe version 2
+      verify:
+        screen:
+            contains: swift_version=2
+    - id: detects_elixir_umbrella
+      description: Mix apps_path selects the Elixir umbrella kind
+      verify:
+        screen:
+            contains: elixir_kind=umbrella
+    - id: preserves_vue_language
+      description: Vue with tsconfig remains TypeScript
+      verify:
+        screen:
+            contains: vue_language=typescript
+    - id: preserves_package_manager
+      description: pnpm lockfiles select pnpm in the manifest contract
+      verify:
+        screen:
+            contains: vue_manager=pnpm
+    - id: refuses_hygiene_only_greenfield
+      description: stack recipe writes refuse an empty application target
+      verify:
+        screen:
+            contains: greenfield_exit=4
+contractHash: sha256:fde5e0f16f3d90a2e6531a72a336a3082a1ef02d7fba76879b421bba093430f1

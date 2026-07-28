@@ -24,14 +24,14 @@ schema version 1:
   "workspace": "/canonical/workspace",
   "contract_digest": "sha256:...",
   "context_digest": "sha256:...",
-  "recipe": {"id": "go-agent-tool", "version": 4},
+  "recipe": {"id": "go-agent-tool", "version": 5},
   "product": {"name": "acme", "module": "github.com/acme/acme", "runtime": "go", "kind": "cli"},
   "repository": {
     "state": "clean",
     "clean": true,
     "lock_changed": false,
     "conflict_count": 0,
-    "managed_files": 24,
+    "managed_files": 30,
     "plan_digest_version": 1,
     "plan_digest": "sha256:..."
   },

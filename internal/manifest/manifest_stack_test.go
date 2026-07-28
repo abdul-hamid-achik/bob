@@ -119,6 +119,32 @@ func TestValidateStackRecipeRejectsUnsupportedSections(t *testing.T) {
 	}
 }
 
+func TestValidateStackRecipePackageManagerContract(t *testing.T) {
+	t.Parallel()
+	m, err := DefaultStack(RecipeVueApp, "demo", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, manager := range []string{"", "bun", "npm", "pnpm", "yarn"} {
+		m.Runtime.PackageManager = manager
+		if err := m.Validate(); err != nil {
+			t.Fatalf("package manager %q should validate: %v", manager, err)
+		}
+	}
+	m.Runtime.PackageManager = "deno"
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "runtime.package_manager") {
+		t.Fatalf("unexpected invalid-manager error: %v", err)
+	}
+	python, err := DefaultStack(RecipePythonApp, "demo", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	python.Runtime.PackageManager = "npm"
+	if err := python.Validate(); err == nil || !strings.Contains(err.Error(), "only supported by ts-app") {
+		t.Fatalf("unexpected non-JavaScript error: %v", err)
+	}
+}
+
 func TestUnknownRecipeErrorListsStackRecipes(t *testing.T) {
 	t.Parallel()
 	m := Default("demo", "github.com/acme/demo", "")
@@ -127,7 +153,7 @@ func TestUnknownRecipeErrorListsStackRecipes(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
-	for _, id := range []string{RecipeFiles, RecipeGoAgentTool, RecipeTSApp, RecipeStaticWeb} {
+	for _, id := range []string{RecipeFiles, RecipeGoAgentTool, RecipeTSApp, RecipeSwiftPkg, RecipeElixirApp, RecipeStaticWeb} {
 		if !strings.Contains(err.Error(), id) {
 			t.Fatalf("error %q does not list recipe %s", err.Error(), id)
 		}

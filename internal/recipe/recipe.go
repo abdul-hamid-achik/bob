@@ -87,8 +87,8 @@ func Render(m manifest.Manifest) ([]Artifact, error) {
 
 // RenderVersion reproduces one supported immutable built-in recipe contract.
 // Normal callers should use Render, which always selects the current version.
-// Keeping the immediately previous go-agent-tool contract renderable lets the
-// migration suite prove byte-for-byte compatibility and safe lock upgrades.
+// Keeping published predecessor contracts renderable lets the migration suite
+// prove byte-for-byte compatibility and safe lock upgrades.
 func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
@@ -107,10 +107,10 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 		}
 		artifacts, err = renderFiles(m)
 	case manifest.IsStackRecipe(m.Recipe):
-		if version != StackRecipeVersion {
+		if version != 1 && version != StackRecipeVersion {
 			return nil, fmt.Errorf("unsupported %s recipe version %d", m.Recipe, version)
 		}
-		artifacts, err = renderStack(m)
+		artifacts, err = renderStackVersion(m, version)
 	default:
 		return nil, fmt.Errorf("unsupported recipe %q%s", m.Recipe, didYouMeanRecipe(m.Recipe))
 	}

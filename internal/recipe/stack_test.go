@@ -1,6 +1,8 @@
 package recipe
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"reflect"
 	"regexp"
 	"sort"
@@ -90,6 +92,8 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 		"ruby":       manifest.RecipeRubyApp,
 		"lua":        manifest.RecipeLuaLib,
 		"rust":       manifest.RecipeRustCLI,
+		"swift":      manifest.RecipeSwiftPkg,
+		"elixir":     manifest.RecipeElixirApp,
 		"static-web": manifest.RecipeStaticWeb,
 	}
 	for stack, wantRecipe := range wantByStack {
@@ -180,11 +184,11 @@ func TestRenderStackSubstitutesProductIdentity(t *testing.T) {
 	if !strings.Contains(readme, "# storefront") || !strings.Contains(readme, "A storefront built with Vue.") {
 		t.Fatalf("README missing product identity:\n%s", readme)
 	}
-	if !strings.Contains(readme, "vue-app@1") {
+	if !strings.Contains(readme, "vue-app@2") {
 		t.Fatalf("README missing recipe identity:\n%s", readme)
 	}
 	ci := byPath[".github/workflows/ci.yml"]
-	if !strings.Contains(ci, "name: CI") || !strings.Contains(ci, "Seeded once by Bob (vue-app@1)") {
+	if !strings.Contains(ci, "name: CI") || !strings.Contains(ci, "Seeded once by Bob (vue-app@2)") {
 		t.Fatalf("CI stub missing header:\n%s", ci)
 	}
 	if strings.Contains(readme, "[[") || strings.Contains(ci, "[[") {
@@ -255,21 +259,25 @@ func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
 			".prettierrc": {`"vueIndentScriptAndStyle": true`},
 		},
 		manifest.RecipePythonApp: {
-			"pyproject.toml":  {`name = "demo"`, `requires-python = ">=3.11"`, "[tool.ruff]", "line-length = 88", "[tool.pytest.ini_options]"},
-			".python-version": {"3.12"},
+			"pyproject.toml":  {`name = "demo"`, `requires-python = ">=3.13"`, `target-version = "py313"`, "[tool.ruff]", "line-length = 88", "[tool.pytest.ini_options]"},
+			".python-version": {"3.13"},
 		},
 		manifest.RecipeRubyApp: {
 			".rubocop.yml":  {"AllCops:", "TargetRubyVersion: 3.3"},
 			".ruby-version": {"3.3.0"},
-			"Gemfile":       {`source "https://rubygems.org"`, "gemspec"},
+			"Gemfile":       {`source "https://rubygems.org"`, `gem "rake"`},
 		},
 		manifest.RecipeLuaLib: {
-			".luacheckrc":  {`std = "lua51"`, `"vim"`},
-			".lua-version": {"5.1"},
+			".luacheckrc":  {`std = "lua54"`},
+			".lua-version": {"5.4"},
 		},
 		manifest.RecipeRustCLI: {
 			"clippy.toml":         {"msrv", "cognitive-complexity-threshold"},
 			"rust-toolchain.toml": {`channel = "stable"`, `"clippy"`, `"rustfmt"`},
+		},
+		manifest.RecipeSwiftPkg: {},
+		manifest.RecipeElixirApp: {
+			".formatter.exs": {`inputs: ["mix.exs"`, `lib,test`},
 		},
 		manifest.RecipeStaticWeb: {
 			".htmlhintrc": {`"doctype-first": true`, `"tag-pair": true`},
@@ -277,7 +285,7 @@ func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
 	}
 	// .editorconfig indent width follows the language convention: four spaces
 	// for Python and Rust, two for every other stack.
-	fourSpace := map[string]bool{manifest.RecipePythonApp: true, manifest.RecipeRustCLI: true}
+	fourSpace := map[string]bool{manifest.RecipePythonApp: true, manifest.RecipeRustCLI: true, manifest.RecipeSwiftPkg: true}
 	for _, id := range manifest.StackRecipeIDs() {
 		m, err := manifest.DefaultStack(id, "demo", "", "A demo repository.", "")
 		if err != nil {
@@ -345,7 +353,127 @@ var stackExtraSeeds = map[string][]string{
 	manifest.RecipeRubyApp:   {".rubocop.yml", ".ruby-version", "Gemfile"},
 	manifest.RecipeLuaLib:    {".lua-version", ".luacheckrc"},
 	manifest.RecipeRustCLI:   {"clippy.toml", "rust-toolchain.toml"},
+	manifest.RecipeSwiftPkg:  {},
+	manifest.RecipeElixirApp: {".formatter.exs"},
 	manifest.RecipeStaticWeb: {".htmlhintrc"},
+}
+
+func TestStackVersionOneBytesRemainImmutable(t *testing.T) {
+	t.Parallel()
+	want := map[string]string{
+		manifest.RecipeTSApp:     "764b2ba20061570fddf446779175216bf83d009b9aaed206525a165616204746",
+		manifest.RecipeJSApp:     "06317c2f5a63eb269b268569c447cbaac407ffa941e46d89e1430750a1849f38",
+		manifest.RecipeVueApp:    "8c9ddc2d86c06360d2148a35f9781fd97a21b7b2b7849b2a37de6554bf81f8a3",
+		manifest.RecipePythonApp: "1760648231b1cfd1f9e2ebf7f9a5898702d21d1d678e980c6652ff539fd1e327",
+		manifest.RecipeRubyApp:   "9d2f50d5b5613bc756692cd8d328a6a6da4fb022a503abe8c7965b121dbceab3",
+		manifest.RecipeLuaLib:    "9f8dd5f4eed41859a809835db0de4722e44dec67e0905e0d6ce481024e1cd417",
+		manifest.RecipeRustCLI:   "849d28eb22215e8eb0980346b539641b3422082e260142786dd42a9da0522c16",
+		manifest.RecipeStaticWeb: "9754db8efde8e30fd1893db27c1007318646f52f4a76e20a574517fde50f8d08",
+	}
+	for id, wantDigest := range want {
+		m, err := manifest.DefaultStack(id, "demo", "", "A local-first, agent-ready repository.", "")
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		artifacts, err := RenderVersion(m, 1)
+		if err != nil {
+			t.Fatalf("%s@1: %v", id, err)
+		}
+		h := sha256.New()
+		for _, artifact := range artifacts {
+			sum := sha256.Sum256(artifact.Content)
+			_, _ = fmt.Fprintf(h, "%x  ./%s\n", sum, artifact.Path)
+		}
+		got := fmt.Sprintf("%x", h.Sum(nil))
+		if got != wantDigest {
+			t.Fatalf("%s@1 digest = %s, want %s", id, got, wantDigest)
+		}
+	}
+	for _, id := range []string{manifest.RecipeSwiftPkg, manifest.RecipeElixirApp} {
+		m, err := manifest.DefaultStack(id, "demo", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := RenderVersion(m, 1); err == nil {
+			t.Fatalf("%s must not claim a version-1 contract", id)
+		}
+	}
+}
+
+func TestNodeStackVersionTwoUsesDeclaredPackageManager(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		manager string
+		want    []string
+	}{
+		{"bun", []string{"setup-bun@", "bun install --frozen-lockfile", "bun run test"}},
+		{"npm", []string{"setup-node@", "npm ci", "npm run test"}},
+		{"pnpm", []string{"setup-node@", "corepack enable", "pnpm install --frozen-lockfile", "pnpm run test"}},
+		{"yarn", []string{"setup-node@", "corepack enable", "yarn install --frozen-lockfile", "yarn test"}},
+	}
+	for _, test := range tests {
+		m, err := manifest.DefaultStack(manifest.RecipeVueApp, "demo", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Runtime.PackageManager = test.manager
+		artifacts, err := Render(m)
+		if err != nil {
+			t.Fatalf("%s: %v", test.manager, err)
+		}
+		var workflow string
+		for _, artifact := range artifacts {
+			if artifact.Path == ".github/workflows/ci.yml" {
+				workflow = string(artifact.Content)
+			}
+		}
+		for _, want := range test.want {
+			if !strings.Contains(workflow, want) {
+				t.Fatalf("%s workflow missing %q:\n%s", test.manager, want, workflow)
+			}
+		}
+	}
+}
+
+func TestStackVersionTwoAlignsKindSpecificTooling(t *testing.T) {
+	t.Parallel()
+	renderByPath := func(t *testing.T, recipeID, kind string) map[string]string {
+		t.Helper()
+		m, err := manifest.DefaultStack(recipeID, "demo", "", "", kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		artifacts, err := Render(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := map[string]string{}
+		for _, artifact := range artifacts {
+			result[artifact.Path] = string(artifact.Content)
+		}
+		return result
+	}
+
+	plugin := renderByPath(t, manifest.RecipeLuaLib, "plugin")
+	for path, want := range map[string]string{".lua-version": "5.1", ".luacheckrc": `std = "lua51"`, ".github/workflows/ci.yml": `luaVersion: "5.1"`} {
+		if !strings.Contains(plugin[path], want) {
+			t.Fatalf("Lua plugin %s missing %q:\n%s", path, want, plugin[path])
+		}
+	}
+
+	rubyApp := renderByPath(t, manifest.RecipeRubyApp, "app")
+	if strings.Contains(rubyApp["Gemfile"], "gemspec") || !strings.Contains(rubyApp["Gemfile"], `gem "rake"`) {
+		t.Fatalf("Ruby app Gemfile is not app-safe:\n%s", rubyApp["Gemfile"])
+	}
+	rubyGem := renderByPath(t, manifest.RecipeRubyApp, "gem")
+	if !strings.Contains(rubyGem["Gemfile"], "gemspec") {
+		t.Fatalf("Ruby gem Gemfile must use gemspec:\n%s", rubyGem["Gemfile"])
+	}
+
+	rustLib := renderByPath(t, manifest.RecipeRustCLI, "lib")
+	if strings.Contains(rustLib[".github/workflows/ci.yml"], "--locked") {
+		t.Fatalf("Rust library CI must work before Cargo.lock exists:\n%s", rustLib[".github/workflows/ci.yml"])
+	}
 }
 
 // expectedStackPaths returns the sorted paths a stack hygiene recipe renders

@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: elixir-app
+product:
+  name: elixir-demo
+  description: A small Elixir application
+runtime:
+  language: elixir
+  kind: app
+distribution:
+  github_actions: true

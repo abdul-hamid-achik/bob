@@ -40,6 +40,8 @@ const (
 	RecipeRubyApp   = "ruby-app"
 	RecipeLuaLib    = "lua-lib"
 	RecipeRustCLI   = "rust-cli"
+	RecipeSwiftPkg  = "swift-package"
+	RecipeElixirApp = "elixir-app"
 	RecipeStaticWeb = "static-web"
 )
 
@@ -60,7 +62,9 @@ var stackRecipeRuntimes = map[string]StackRuntime{
 	RecipePythonApp: {Languages: []string{"python"}, Kinds: []string{"app"}},
 	RecipeRubyApp:   {Languages: []string{"ruby"}, Kinds: []string{"app", "gem"}},
 	RecipeLuaLib:    {Languages: []string{"lua"}, Kinds: []string{"lib", "plugin"}},
-	RecipeRustCLI:   {Languages: []string{"rust"}, Kinds: []string{"cli"}},
+	RecipeRustCLI:   {Languages: []string{"rust"}, Kinds: []string{"cli", "lib", "workspace"}},
+	RecipeSwiftPkg:  {Languages: []string{"swift"}, Kinds: []string{"package"}},
+	RecipeElixirApp: {Languages: []string{"elixir"}, Kinds: []string{"app", "umbrella"}},
 	RecipeStaticWeb: {Languages: []string{"html"}, Kinds: []string{"site"}},
 }
 
@@ -132,8 +136,9 @@ type Product struct {
 }
 
 type Runtime struct {
-	Language string `json:"language" yaml:"language"`
-	Kind     string `json:"kind" yaml:"kind"`
+	Language       string `json:"language" yaml:"language"`
+	Kind           string `json:"kind" yaml:"kind"`
+	PackageManager string `json:"package_manager,omitempty" yaml:"package_manager,omitempty"`
 }
 
 type Surfaces struct {
@@ -368,6 +373,14 @@ func (m Manifest) validateStackRecipe() []string {
 	if !containsValue(runtime.Kinds, m.Runtime.Kind) {
 		problems = append(problems, fmt.Sprintf("%s requires runtime.kind to be one of %s (got %s)%s", m.Recipe, strings.Join(runtime.Kinds, ", "), describeValue(m.Runtime.Kind), suggestionSuffix(m.Runtime.Kind, runtime.Kinds)))
 	}
+	if isJavaScriptFamilyRecipe(m.Recipe) {
+		allowed := []string{"", "bun", "npm", "pnpm", "yarn"}
+		if !containsValue(allowed, m.Runtime.PackageManager) {
+			problems = append(problems, fmt.Sprintf("%s requires runtime.package_manager to be one of bun, npm, pnpm, yarn, or empty (got %s)%s", m.Recipe, describeValue(m.Runtime.PackageManager), suggestionSuffix(m.Runtime.PackageManager, allowed[1:])))
+		}
+	} else if m.Runtime.PackageManager != "" {
+		problems = append(problems, fmt.Sprintf("runtime.package_manager is only supported by ts-app, js-app, and vue-app (got %s for recipe %s)", describeValue(m.Runtime.PackageManager), m.Recipe))
+	}
 	if m.Surfaces != (Surfaces{}) {
 		problems = append(problems, fmt.Sprintf("surfaces is not used by recipe %s", m.Recipe))
 	}
@@ -390,6 +403,10 @@ func (m Manifest) validateStackRecipe() []string {
 		problems = append(problems, "files is only supported by recipe files")
 	}
 	return problems
+}
+
+func isJavaScriptFamilyRecipe(recipeID string) bool {
+	return recipeID == RecipeTSApp || recipeID == RecipeJSApp || recipeID == RecipeVueApp
 }
 
 func containsValue(values []string, value string) bool {

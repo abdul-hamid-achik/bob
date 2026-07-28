@@ -274,7 +274,7 @@ func TestRecipeDescribeIsTypedAndClosedWorld(t *testing.T) {
 	}
 	var stackOutput RecipeDescribeOutput
 	decodeStructured(t, result, &stackOutput)
-	if !stackOutput.OK || stackOutput.Recipe == nil || stackOutput.Recipe.ID != "ts-app" || stackOutput.Recipe.Version != 1 {
+	if !stackOutput.OK || stackOutput.Recipe == nil || stackOutput.Recipe.ID != "ts-app" || stackOutput.Recipe.Version != 2 {
 		t.Fatalf("unexpected stack recipe description: %#v", stackOutput)
 	}
 	if !strings.Contains(stackOutput.Recipe.Description, "seed") {

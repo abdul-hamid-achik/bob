@@ -183,7 +183,16 @@ func newNewCommand(opts *options) *cobra.Command {
 			// Auto-detected recipes match by construction.
 			var warnings []string
 			if manifest.IsStackRecipe(chosen) {
-				if mismatch := initStackMismatch(target, chosen, detection); mismatch != "" {
+				if !detection.Detected() {
+					message := fmt.Sprintf("recipe %s seeds hygiene into an existing %s repository but never scaffolds application source; initialize the application first, then run bob init %s --recipe %s --write", chosen, strings.Join(recipe.Stacks(chosen), ", "), target, chosen)
+					if write {
+						return classifyInvalidInput(fmt.Errorf("new: %s", message))
+					}
+					warnings = append(warnings, message)
+					if !opts.json {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", message)
+					}
+				} else if mismatch := initStackMismatch(target, chosen, detection); mismatch != "" {
 					if write {
 						return classifyInvalidInput(fmt.Errorf("new: %s; run bob init --recipe %s --force to seed it anyway", mismatch, chosen))
 					}
@@ -288,7 +297,12 @@ func buildNewManifest(recipeID, name, module, description string, detection dete
 			}
 		}
 	}
-	return manifest.DefaultStack(recipeID, name, "", description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, "", description, kind)
+	if err != nil {
+		return manifest.Manifest{}, err
+	}
+	applyDetectionToStackManifest(&m, detection)
+	return m, nil
 }
 
 // defaultFilesManifest is the starter contract bob new scaffolds for the
@@ -450,7 +464,25 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 			}
 		}
 	}
-	return manifest.DefaultStack(recipeID, name, module, description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, module, description, kind)
+	if err != nil {
+		return manifest.Manifest{}, err
+	}
+	applyDetectionToStackManifest(&m, detection)
+	return m, nil
+}
+
+// applyDetectionToStackManifest preserves stack details that affect the
+// versioned hygiene contract. Vue repositories without TypeScript markers are
+// JavaScript projects, and JavaScript-family lockfiles select the commands and
+// CI installer that Bob seeds.
+func applyDetectionToStackManifest(m *manifest.Manifest, detection detect.Result) {
+	if m.Recipe == manifest.RecipeVueApp && detection.Primary == "vue" && !detection.Has("typescript") {
+		m.Runtime.Language = "javascript"
+	}
+	if detection.PackageManager != "" && (m.Recipe == manifest.RecipeTSApp || m.Recipe == manifest.RecipeJSApp || m.Recipe == manifest.RecipeVueApp) {
+		m.Runtime.PackageManager = detection.PackageManager
+	}
 }
 
 func newPlanCommand(opts *options) *cobra.Command {
@@ -919,7 +951,7 @@ func newExplainCommand(opts *options) *cobra.Command {
 
 func newLearnCommand(opts *options) *cobra.Command {
 	commands := []map[string]any{
-		{"name": "new", "purpose": "preview or create a new repository from a built-in recipe (--recipe selects one; a target with detected content auto-selects its stack recipe, a greenfield target defaults to go-agent-tool); --write authorizes creation", "mutates": true, "json": true},
+		{"name": "new", "purpose": "preview or create a repository from a built-in recipe (--recipe selects one; detected content auto-selects its stack recipe, while greenfield writes require a full scaffold recipe and default to go-agent-tool); --write authorizes creation", "mutates": true, "json": true},
 		{"name": "init", "purpose": "preview or write a Bob manifest in an existing repository; --write authorizes creation", "mutates": true, "json": true},
 		{"name": "context", "purpose": "describe the bounded workspace-specific repository contract without writing or probing specialists", "mutates": false, "json": true},
 		{"name": "path", "purpose": "classify one exact path through Bob's real ownership and extension contracts", "mutates": false, "json": true},
@@ -1028,7 +1060,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
-			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())

@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: swift-package
+product:
+  name: swift-demo
+  description: A small Swift package
+runtime:
+  language: swift
+  kind: package
+distribution:
+  github_actions: true

@@ -72,7 +72,11 @@ func TestInitJSONPreviewIncludesDetection(t *testing.T) {
 		OK   bool `json:"ok"`
 		Data struct {
 			Manifest struct {
-				Recipe string `json:"recipe"`
+				Recipe  string `json:"recipe"`
+				Runtime struct {
+					Language       string `json:"language"`
+					PackageManager string `json:"package_manager"`
+				} `json:"runtime"`
 			} `json:"manifest"`
 			Detection struct {
 				Primary string `json:"primary"`
@@ -88,6 +92,66 @@ func TestInitJSONPreviewIncludesDetection(t *testing.T) {
 	}
 	if envelope.Data.Manifest.Recipe != "vue-app" || envelope.Data.Detection.Primary != "vue" {
 		t.Fatalf("expected vue-app for a vue repository, got %s", stdout)
+	}
+	if envelope.Data.Manifest.Runtime.Language != "javascript" {
+		t.Fatalf("Vue without TypeScript markers must preserve JavaScript, got %s", stdout)
+	}
+}
+
+func TestInitPreservesJavaScriptPackageManager(t *testing.T) {
+	t.Parallel()
+	root := writeStackFixture(t, map[string]string{
+		"package.json":   `{"dependencies":{"vue":"^3"}}`,
+		"tsconfig.json":  "{}",
+		"pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+	})
+	stdout, _, err := executeForTest("init", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"recipe: vue-app", "language: typescript", "package_manager: pnpm"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("manifest missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestInitAutoSelectsSwiftAndElixir(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		files    map[string]string
+		recipe   string
+		kind     string
+		seedPath string
+	}{
+		{"swift package", map[string]string{"Package.swift": "// swift-tools-version: 6.0\n"}, "swift-package", "package", ".github/workflows/ci.yml"},
+		{"elixir umbrella", map[string]string{"mix.exs": "def project, do: [apps_path: \"apps\"]\n"}, "elixir-app", "umbrella", ".formatter.exs"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeStackFixture(t, test.files)
+			stdout, stderr, err := executeForTest("init", root)
+			if err != nil {
+				t.Fatalf("preview: %v\n%s", err, stderr)
+			}
+			if !strings.Contains(stdout, "recipe: "+test.recipe) || !strings.Contains(stdout, "kind: "+test.kind) {
+				t.Fatalf("unexpected preview:\n%s", stdout)
+			}
+			if _, _, err := executeForTest("init", root, "--write"); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			if _, _, err := executeForTest("apply", root); err != nil {
+				t.Fatalf("apply: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(root, test.seedPath)); err != nil {
+				t.Fatalf("missing seed %s: %v", test.seedPath, err)
+			}
+			if _, _, err := executeForTest("check", root); err != nil {
+				t.Fatalf("check: %v", err)
+			}
+		})
 	}
 }
 

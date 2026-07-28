@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -147,12 +148,68 @@ func TestRunStackRecipesRequireOnlyGit(t *testing.T) {
 			t.Fatalf("stack recipes must not probe Go: %#v", result.Checks)
 		}
 	}
-	if len(names) != 3 || names[0] != "Git" {
+	if len(names) != 2 || names[0] != "Git" || names[1] != "Bun" {
 		t.Fatalf("unexpected stack checks: %v", names)
 	}
 	// A missing Git still fails readiness.
 	result = Run(context.Background(), m, fakeProber{missing: map[string]bool{"git": true}})
 	if result.Ready {
 		t.Fatalf("missing git must make the stack doctor unready: %#v", result)
+	}
+}
+
+func TestRunJavaScriptStackUsesDeclaredPackageManager(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		manager string
+		want    []string
+	}{
+		{"bun", []string{"Git", "Bun"}},
+		{"npm", []string{"Git", "Node", "npm"}},
+		{"pnpm", []string{"Git", "Node", "pnpm"}},
+		{"yarn", []string{"Git", "Node", "Yarn"}},
+	}
+	for _, test := range tests {
+		m, err := manifest.DefaultStack(manifest.RecipeTSApp, "demo", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Runtime.PackageManager = test.manager
+		result := Run(context.Background(), m, fakeProber{})
+		var names []string
+		for _, check := range result.Checks {
+			names = append(names, check.Name)
+		}
+		if !reflect.DeepEqual(names, test.want) {
+			t.Fatalf("%s checks = %v, want %v", test.manager, names, test.want)
+		}
+	}
+}
+
+func TestRunSwiftAndElixirToolchainsAreOptional(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		recipe string
+		tools  []string
+	}{
+		{manifest.RecipeSwiftPkg, []string{"Git", "Swift"}},
+		{manifest.RecipeElixirApp, []string{"Git", "Elixir", "Mix"}},
+	}
+	for _, test := range tests {
+		m, err := manifest.DefaultStack(test.recipe, "demo", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := Run(context.Background(), m, fakeProber{})
+		var names []string
+		for _, check := range result.Checks {
+			names = append(names, check.Name)
+			if check.Name != "Git" && check.Required {
+				t.Fatalf("%s tool %s must be optional", test.recipe, check.Name)
+			}
+		}
+		if !reflect.DeepEqual(names, test.tools) {
+			t.Fatalf("%s checks = %v, want %v", test.recipe, names, test.tools)
+		}
 	}
 }

@@ -17,8 +17,8 @@ const maxPackageJSONBytes = 1 << 20
 
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
-	// ID is a closed identifier: go, rust, python, ruby, lua, vue,
-	// typescript, javascript, or static-web.
+	// ID is a closed identifier: go, rust, swift, elixir, python, ruby, lua,
+	// vue, typescript, javascript, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -82,7 +82,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue outranks the generic typescript/javascript stacks it implies.
-var primaryPrecedence = []string{"go", "rust", "ruby", "python", "lua", "vue", "typescript", "javascript", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "swift", "elixir", "ruby", "python", "lua", "vue", "typescript", "javascript", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -124,6 +124,7 @@ func Detect(root string) Result {
 		}
 		result.Signals = append(result.Signals, signal)
 	}
+	kindHints := map[string]string{}
 
 	// Go.
 	var goMarkers []string
@@ -144,6 +145,30 @@ func Detect(root string) Result {
 		addStack("rust", "Cargo.toml")
 		if containsBounded(filepath.Join(root, "Cargo.toml"), "[workspace]") {
 			result.Monorepo = true
+			kindHints["rust"] = "workspace"
+		} else if containsBounded(filepath.Join(root, "Cargo.toml"), "[lib]") || regularFileExists(filepath.Join(root, "src", "lib.rs")) {
+			kindHints["rust"] = "lib"
+		} else {
+			kindHints["rust"] = "cli"
+		}
+	}
+
+	// Swift packages. Xcode project detection is intentionally excluded: the
+	// swift-package recipe can seed portable SwiftPM commands only when a
+	// Package.swift marker proves that contract.
+	if names["Package.swift"] {
+		addStack("swift", "Package.swift")
+		kindHints["swift"] = "package"
+	}
+
+	// Elixir applications and umbrella projects.
+	if names["mix.exs"] {
+		addStack("elixir", "mix.exs")
+		if containsBounded(filepath.Join(root, "mix.exs"), "apps_path:") || containsBounded(filepath.Join(root, "mix.exs"), "umbrella: true") {
+			result.Monorepo = true
+			kindHints["elixir"] = "umbrella"
+		} else {
+			kindHints["elixir"] = "app"
 		}
 	}
 
@@ -158,7 +183,7 @@ func Detect(root string) Result {
 	if len(rubyMarkers) > 0 {
 		addStack("ruby", rubyMarkers...)
 		if len(gemspecs) > 0 {
-			result.KindHint = "gem"
+			kindHints["ruby"] = "gem"
 		}
 	}
 
@@ -190,7 +215,7 @@ func Detect(root string) Result {
 	if len(luaMarkers) > 0 {
 		addStack("lua", luaMarkers...)
 		if neovimLayout && len(rockspecs) == 0 {
-			result.KindHint = "plugin"
+			kindHints["lua"] = "plugin"
 		}
 	}
 
@@ -273,6 +298,7 @@ func Detect(root string) Result {
 	sortStacks(result.Stacks)
 	if len(result.Stacks) > 0 {
 		result.Primary = result.Stacks[0].ID
+		result.KindHint = kindHints[result.Primary]
 	}
 	if result.Monorepo && (result.Primary == "typescript" || result.Primary == "javascript") && result.KindHint == "" {
 		result.KindHint = "monorepo"
@@ -290,6 +316,11 @@ type packageJSON struct {
 func (p packageJSON) hasDependency(name string) bool {
 	_, ok := p.dependencies[name]
 	return ok
+}
+
+func regularFileExists(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // readPackageJSON parses a bounded package.json. Any read or parse failure

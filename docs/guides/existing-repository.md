@@ -24,7 +24,8 @@ This writes `bob.yaml`. It does not generate infrastructure or create a lock.
 `bob init` detects the repository's stack and defaults to the matching recipe.
 This walkthrough assumes a Go repository, which selects `go-agent-tool` — the
 one recipe that requires `--module`. A TypeScript, JavaScript, Vue, Python,
-Ruby, Lua, Rust, or static-web repository selects the matching seed-once stack
+Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or static-web repository selects the
+matching seed-once stack
 hygiene recipe instead; those recipes never conflict with an existing file,
 because any existing destination satisfies a seed. The conflict walkthrough
 below applies to the lock-owned recipes, `go-agent-tool` and `files`. Passing

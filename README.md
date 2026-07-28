@@ -21,10 +21,10 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds ten recipes —
-> `go-agent-tool`, `files`, and eight stack hygiene recipes (`ts-app`,
+> **Status: early alpha.** The current contract embeds twelve recipes —
+> `go-agent-tool`, `files`, and ten stack hygiene recipes (`ts-app`,
 > `js-app`, `vue-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`,
-> `static-web`) — plus a read-only Studio and nine typed MCP tools. Review
+> `swift-package`, `elixir-app`, `static-web`) — plus a read-only Studio and nine typed MCP tools. Review
 > every plan and resulting diff before publishing.
 
 ## Why Bob exists
@@ -84,8 +84,8 @@ bob check
 ```
 
 To initialize Bob in an empty or existing directory, write only the human-owned
-manifest first. `bob init` detects the repository's stack (Go, TypeScript/Bun,
-JavaScript, Vue, Python, Ruby, Lua, Rust, or a static web site) and defaults
+manifest first. `bob init` detects the repository's stack (Go, TypeScript,
+JavaScript, Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults
 to the matching recipe — the seed-once stack hygiene recipes never own
 application source. When a chosen recipe does not match the detected stack,
 the preview warns and `--write` refuses without `--force`:

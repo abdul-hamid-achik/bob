@@ -7,6 +7,41 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-27
+
+### Added
+
+- `swift-package@2` and `elixir-app@2` seed-once hygiene recipes, with
+  `Package.swift` and `mix.exs` detection, pinned CI stubs, optional toolchain
+  checks in `bob doctor`, catalog metadata, and end-to-end init/apply/check
+  coverage.
+- Immutable rendering coverage for every published stack recipe at version 1,
+  including byte-level regression digests.
+
+### Changed
+
+- All stack hygiene recipes advance to version 2. Existing version-1 seed
+  files remain human-owned and untouched; `bob upgrade` only advances the
+  recipe identity recorded in `bob.lock`.
+- `bob new --write` now refuses a stack hygiene recipe in a greenfield target
+  instead of producing a repository with hygiene files but no application
+  source; preview remains available and points to `bob init` after the real
+  stack has been initialized.
+- JavaScript-family manifests can preserve `runtime.package_manager` as
+  `bun`, `npm`, `pnpm`, or `yarn`; generated commands and CI now honor the
+  detected lockfile, and `bob doctor` probes the matching manager. Vue
+  detection also preserves JavaScript when no TypeScript marker exists.
+- Rust detection distinguishes CLI, library, and workspace layouts. Lua
+  runtime versions now follow library versus Neovim-plugin kind, Ruby Gemfiles
+  follow app versus gem kind, and Python tooling consistently targets 3.13.
+
+### Fixed
+
+- Kind hints from a secondary detected stack can no longer overwrite the
+  primary stack's kind.
+- Public manifest, CLI, context, path, agent, and architecture references now
+  describe the current recipe versions, artifact set, and language matrix.
+
 ## [0.8.0] - 2026-07-27
 
 ### Added
@@ -273,7 +308,8 @@ and the project uses semantic versioning after the first tagged release.
   upgrades from older same-recipe locks.
 - Completed the Homebrew cask metadata and install guidance.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/bob/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/abdul-hamid-achik/bob/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/abdul-hamid-achik/bob/compare/v0.6.0...v0.6.1

@@ -39,6 +39,8 @@ func TestDetectPrimaryStacks(t *testing.T) {
 	}{
 		{"go module", map[string]string{"go.mod": "module example.com/x\n"}, "go"},
 		{"rust crate", map[string]string{"Cargo.toml": "[package]\nname = \"x\"\n"}, "rust"},
+		{"swift package", map[string]string{"Package.swift": "// swift-tools-version: 6.0\n"}, "swift"},
+		{"elixir app", map[string]string{"mix.exs": "defmodule Demo.MixProject do\nend\n"}, "elixir"},
 		{"python pyproject", map[string]string{"pyproject.toml": "[project]\nname = \"x\"\n"}, "python"},
 		{"python requirements", map[string]string{"requirements.txt": "requests\n"}, "python"},
 		{"ruby gemfile", map[string]string{"Gemfile": "source \"https://rubygems.org\"\n"}, "ruby"},
@@ -143,6 +145,45 @@ func TestDetectWorkspaceMarkers(t *testing.T) {
 	result := Detect(fixture(t, pnpm))
 	if !result.Monorepo || result.PackageManager != "pnpm" {
 		t.Fatalf("pnpm workspace should mark a workspace with pnpm: %#v", result)
+	}
+}
+
+func TestDetectRustAndElixirKindHints(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		files    map[string]string
+		primary  string
+		kind     string
+		monorepo bool
+	}{
+		{"rust cli", map[string]string{"Cargo.toml": "[package]\nname = \"demo\"\n", "src/main.rs": "fn main() {}\n"}, "rust", "cli", false},
+		{"rust lib section", map[string]string{"Cargo.toml": "[package]\nname = \"demo\"\n[lib]\n"}, "rust", "lib", false},
+		{"rust lib layout", map[string]string{"Cargo.toml": "[package]\nname = \"demo\"\n", "src/lib.rs": "pub fn demo() {}\n"}, "rust", "lib", false},
+		{"rust workspace", map[string]string{"Cargo.toml": "[workspace]\nmembers = []\n"}, "rust", "workspace", true},
+		{"elixir app", map[string]string{"mix.exs": "def project, do: []\n"}, "elixir", "app", false},
+		{"elixir umbrella", map[string]string{"mix.exs": "def project, do: [apps_path: \"apps\"]\n"}, "elixir", "umbrella", true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			result := Detect(fixture(t, test.files))
+			if result.Primary != test.primary || result.KindHint != test.kind || result.Monorepo != test.monorepo {
+				t.Fatalf("unexpected detection: %#v", result)
+			}
+		})
+	}
+}
+
+func TestDetectKindHintBelongsToPrimaryStack(t *testing.T) {
+	t.Parallel()
+	result := Detect(fixture(t, map[string]string{
+		"Cargo.toml":   "[package]\nname = \"demo\"\n[lib]\n",
+		"demo.gemspec": "Gem::Specification.new\n",
+		"init.lua":     "-- plugin\n",
+	}))
+	if result.Primary != "rust" || result.KindHint != "lib" {
+		t.Fatalf("secondary stack hints must not overwrite the primary hint: %#v", result)
 	}
 }
 
