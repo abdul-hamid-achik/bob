@@ -118,7 +118,7 @@ const ledger = [
     tag: 'AGENT',
     kind: 'read',
     title: 'Agent-native surfaces',
-    body: 'Versioned JSON envelopes on every command, a one-shot bob learn briefing, and six read-only MCP tools. Machines are first-class readers here.',
+    body: 'Versioned JSON envelopes on every command, a one-shot bob learn briefing, and nine read-only MCP tools. Machines are first-class readers here.',
   },
   {
     tag: 'SCOPE',
@@ -252,7 +252,7 @@ const refusals = [
 }</code></pre>
         </div>
         <div>
-          <h2 class="h2">Six MCP tools.<br />Zero of them write.</h2>
+          <h2 class="h2">Nine MCP tools.<br />Zero of them write.</h2>
           <p class="body-copy">
             <code>bob mcp serve</code> exposes a compact, repository-read-only
             surface over stdio. Diagnostics go to stderr; stdout stays
@@ -260,10 +260,11 @@ const refusals = [
           </p>
           <pre class="snippet"><code><span class="c-cmd">$ claude mcp add bob -- bob mcp serve .</span></code></pre>
           <ul class="tools">
-            <li>bob_plan</li><li>bob_check</li><li>bob_inspect</li>
-            <li>bob_stats</li><li>bob_recipe_describe</li><li>bob_validate_manifest</li>
+            <li>bob_context</li><li>bob_path</li><li>bob_playbook</li>
+            <li>bob_inspect</li><li>bob_plan</li><li>bob_check</li>
+            <li>bob_validate_manifest</li><li>bob_recipe_describe</li><li>bob_stats</li>
           </ul>
-          <p class="stamp-line">All six stamped <span class="ro">READ-ONLY</span>.</p>
+          <p class="stamp-line">All nine stamped <span class="ro">READ-ONLY</span>.</p>
         </div>
       </div>
     </section>
