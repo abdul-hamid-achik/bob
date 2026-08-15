@@ -149,7 +149,7 @@ const refusals = [
             Bob has <span class="mark">one job.</span>
           </h1>
           <p class="lede">
-            Turn a small <code>bob.yaml</code> into a public-ready repository —
+            Turn a small <code>bob.yaml</code> into a reviewable repository (early alpha) —
             the packaged Go/Cobra recipe, or a file tree you declare yourself.
             Bob plans before it writes, proves it owns every file it touches,
             and refuses to guess. No model. No magic. A ledger.
