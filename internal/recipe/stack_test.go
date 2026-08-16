@@ -88,6 +88,7 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 		"typescript": manifest.RecipeTSApp,
 		"javascript": manifest.RecipeJSApp,
 		"vue":        manifest.RecipeVueApp,
+		"nuxt":       manifest.RecipeNuxtApp,
 		"python":     manifest.RecipePythonApp,
 		"ruby":       manifest.RecipeRubyApp,
 		"lua":        manifest.RecipeLuaLib,
@@ -258,6 +259,9 @@ func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
 		manifest.RecipeVueApp: {
 			".prettierrc": {`"vueIndentScriptAndStyle": true`},
 		},
+		manifest.RecipeNuxtApp: {
+			".prettierrc": {`"vueIndentScriptAndStyle": true`},
+		},
 		manifest.RecipePythonApp: {
 			"pyproject.toml":  {`name = "demo"`, `requires-python = ">=3.13"`, `target-version = "py313"`, "[tool.ruff]", "line-length = 88", "[tool.pytest.ini_options]"},
 			".python-version": {"3.13"},
@@ -349,6 +353,7 @@ var stackExtraSeeds = map[string][]string{
 	manifest.RecipeTSApp:     {".prettierrc", "tsconfig.json"},
 	manifest.RecipeJSApp:     {".prettierrc"},
 	manifest.RecipeVueApp:    {".prettierrc"},
+	manifest.RecipeNuxtApp:   {".prettierrc"},
 	manifest.RecipePythonApp: {".python-version", "pyproject.toml"},
 	manifest.RecipeRubyApp:   {".rubocop.yml", ".ruby-version", "Gemfile"},
 	manifest.RecipeLuaLib:    {".lua-version", ".luacheckrc"},

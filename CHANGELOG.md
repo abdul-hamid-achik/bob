@@ -7,6 +7,13 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- `nuxt-app@2` seed-once hygiene recipe, with `nuxt.config.*` and `nuxt`
+  dependency detection, Nuxt-aware `.gitignore` (`.nuxt/`, `.output/`), and
+  a Bun-oriented CI stub. Preserves JavaScript or TypeScript and the declared
+  package manager. Catalog, detection, and tests updated.
+
 ## [0.9.0] - 2026-07-27
 
 ### Added

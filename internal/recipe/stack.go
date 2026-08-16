@@ -186,6 +186,18 @@ var stackDefinitions = map[string]stackDefinition{
 			{Path: ".prettierrc", Source: stackPrettierVueRC},
 		},
 	},
+	manifest.RecipeNuxtApp: {
+		ID:            manifest.RecipeNuxtApp,
+		Description:   "Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source",
+		LanguageLabel: "Nuxt (Vue)",
+		Stacks:        []string{"nuxt"},
+		Commands:      []string{"bun install", "bun run dev", "bun run test", "bun run build"},
+		Gitignore:     stackGitignoreNuxt,
+		CIWorkflow:    stackCINuxt,
+		ExtraSeeds: []stackSeed{
+			{Path: ".prettierrc", Source: stackPrettierVueRC},
+		},
+	},
 	manifest.RecipePythonApp: {
 		ID:            manifest.RecipePythonApp,
 		Description:   "Seed-once hygiene for a Python project: docs, aligned Python tooling, and pytest CI; never owns application source",
@@ -399,7 +411,7 @@ func renderStackVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 }
 
 func stackDefinitionForManifest(definition stackDefinition, m manifest.Manifest) stackDefinition {
-	if m.Recipe != manifest.RecipeTSApp && m.Recipe != manifest.RecipeJSApp && m.Recipe != manifest.RecipeVueApp {
+	if m.Recipe != manifest.RecipeTSApp && m.Recipe != manifest.RecipeJSApp && m.Recipe != manifest.RecipeVueApp && m.Recipe != manifest.RecipeNuxtApp {
 		return definition
 	}
 	manager := m.Runtime.PackageManager
@@ -549,6 +561,19 @@ coverage/
 !.env.example
 `
 
+const stackGitignoreNuxt = `node_modules/
+.nuxt/
+.output/
+dist/
+coverage/
+.turbo/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackGitignorePython = `__pycache__/
 *.py[cod]
 .venv/
@@ -680,6 +705,13 @@ const stackCIVue = stackCIHeader + `      - uses: oven-sh/setup-bun@0c5077e51419
       - run: bun run build
 `
 
+const stackCINuxt = stackCIHeader + `      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun install --frozen-lockfile
+      # TODO: align these with your package.json scripts (nuxt build, vitest...).
+      - run: bun run test
+      - run: bun run build
+`
+
 func nodeCommands(manager, recipeID string) []string {
 	install := manager + " install"
 	run := manager + " run"
@@ -687,7 +719,7 @@ func nodeCommands(manager, recipeID string) []string {
 		run = "yarn"
 	}
 	switch recipeID {
-	case manifest.RecipeVueApp:
+	case manifest.RecipeVueApp, manifest.RecipeNuxtApp:
 		return []string{install, run + " dev", run + " test", run + " build"}
 	case manifest.RecipeJSApp:
 		return []string{install, run + " test"}
@@ -722,6 +754,10 @@ func nodeCIWorkflow(manager, recipeID string) string {
 	switch recipeID {
 	case manifest.RecipeVueApp:
 		workflow += "      # TODO: align these with your package.json scripts (vite build, vitest...).\n"
+		workflow += "      - run: " + run + " test\n"
+		workflow += "      - run: " + run + " build\n"
+	case manifest.RecipeNuxtApp:
+		workflow += "      # TODO: align these with your package.json scripts (nuxt build, vitest...).\n"
 		workflow += "      - run: " + run + " test\n"
 		workflow += "      - run: " + run + " build\n"
 	case manifest.RecipeJSApp:
