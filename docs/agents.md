@@ -47,7 +47,7 @@ bob learn --json
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
 | `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@5`, and the ten stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`, `swift-package`, `elixir-app`, and `static-web`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@5`, and the eleven stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`, `swift-package`, `elixir-app`, and `static-web`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |

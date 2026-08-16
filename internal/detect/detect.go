@@ -18,7 +18,7 @@ const maxPackageJSONBytes = 1 << 20
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
 	// ID is a closed identifier: go, rust, swift, elixir, python, ruby, lua,
-	// vue, typescript, javascript, or static-web.
+	// nuxt, vue, typescript, javascript, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -81,8 +81,8 @@ func (r Result) Describe() string {
 // primaryPrecedence orders detected stacks for Primary selection. Compiled
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
-// vue outranks the generic typescript/javascript stacks it implies.
-var primaryPrecedence = []string{"go", "rust", "swift", "elixir", "ruby", "python", "lua", "vue", "typescript", "javascript", "static-web"}
+// vue/nuxt outrank the generic typescript/javascript stacks they imply.
+var primaryPrecedence = []string{"go", "rust", "swift", "elixir", "ruby", "python", "lua", "nuxt", "vue", "typescript", "javascript", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -261,6 +261,27 @@ func Detect(root string) Result {
 	}
 	if hasSassFiles(root, entries) {
 		addSignal("sass")
+	}
+
+	// Nuxt: nuxt.config files or nuxt dependency. Nuxt wins over Vue and
+	// generic typescript/javascript, which stay listed after it.
+	hasNuxtConfig := names["nuxt.config.ts"] || names["nuxt.config.js"] || names["nuxt.config.mjs"]
+	nuxtByDependency := pkg.hasDependency("nuxt")
+	if hasNuxtConfig || nuxtByDependency {
+		markers := make([]string, 0, 2)
+		if hasNuxtConfig {
+			if names["nuxt.config.ts"] {
+				markers = append(markers, "nuxt.config.ts")
+			} else if names["nuxt.config.js"] {
+				markers = append(markers, "nuxt.config.js")
+			} else if names["nuxt.config.mjs"] {
+				markers = append(markers, "nuxt.config.mjs")
+			}
+		}
+		if nuxtByDependency {
+			markers = append(markers, "package.json (nuxt dependency)")
+		}
+		addStack("nuxt", markers...)
 	}
 
 	// Vue: a vue dependency or .vue files (root or shallow src/). Vue wins
