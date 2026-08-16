@@ -56,7 +56,7 @@ distribution:
 Three kinds of recipe are embedded: `go-agent-tool@5`, documented below;
 `files@1`, a plain file-tree recipe documented in its own section further
 down; and the stack hygiene recipes (`ts-app@2`, `js-app@2`, `vue-app@2`,
-`python-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
+`nuxt-app@2`, `python-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
 `swift-package@2`, `elixir-app@2`, `static-web@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
@@ -209,7 +209,7 @@ watching Bob report `content_update` on the next plan.
 
 ## The stack hygiene recipes
 
-`ts-app@2`, `js-app@2`, `vue-app@2`, `python-app@2`, `ruby-app@2`,
+`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `python-app@2`, `ruby-app@2`,
 `lua-lib@2`, `rust-cli@2`, `swift-package@2`, `elixir-app@2`, and
 `static-web@2` share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
@@ -240,10 +240,10 @@ Schema, relative to `go-agent-tool`:
   below. Validation names the allowed values when either is wrong, and
   `bob recipe show <id>` prints each recipe's stack.
 - `runtime.package_manager` is optional and supported only by `ts-app`,
-  `js-app`, and `vue-app`. Its values are `bun`, `npm`, `pnpm`, or `yarn`.
+  `js-app`, `vue-app`, and `nuxt-app`. Its values are `bun`, `npm`, `pnpm`, or `yarn`.
   When detection sees a corresponding lockfile, `bob init` writes that value
-  and version 2 uses it for seeded commands and CI. If omitted, `ts-app` and
-  `vue-app` default to Bun while `js-app` defaults to npm. `bob doctor` probes
+  and version 2 uses it for seeded commands and CI. If omitted, `ts-app`,
+  `vue-app`, and `nuxt-app` default to Bun while `js-app` defaults to npm. `bob doctor` probes
   that selected manager (and Node where the manager requires it) as optional
   stack tooling.
 
@@ -252,6 +252,7 @@ Schema, relative to `go-agent-tool`:
   | `ts-app` | `typescript` | `app` or `monorepo` |
   | `js-app` | `javascript` | `app` or `monorepo` |
   | `vue-app` | `typescript` or `javascript` | `web-app` |
+  | `nuxt-app` | `typescript` or `javascript` | `web-app` |
   | `python-app` | `python` | `app` |
   | `ruby-app` | `ruby` | `app` or `gem` |
   | `lua-lib` | `lua` | `lib` or `plugin` |
@@ -264,17 +265,17 @@ Schema, relative to `go-agent-tool`:
   detected hint (a Node workspace selects `monorepo`, a `.gemspec` selects
   `gem`, a Neovim plugin layout selects `plugin`, Cargo distinguishes
   `cli`/`lib`/`workspace`, and Mix detects `umbrella`); otherwise it defaults
-  to the recipe's first kind. A Vue repository without `tsconfig.json`
+  to the recipe's first kind. A Vue or Nuxt repository without `tsconfig.json`
   selects `runtime.language: javascript`.
 - `surfaces` and `integrations` are unused and must stay zero-valued.
 - `distribution.github_actions` is the only supported distribution toggle;
   `goreleaser`, `homebrew`, and `docs` are not supported.
 
 `bob init` detects the repository stack from marker files (`go.mod`,
-`package.json`/`tsconfig.json`/lockfiles, a `vue` dependency or `.vue` files,
-`pyproject.toml`, `Gemfile`/`*.gemspec`, `*.rockspec`/`init.lua`/`lua/`,
-`Cargo.toml`, `Package.swift`, `mix.exs`, or a bare `index.html`) and defaults
-to the matching recipe.
+`package.json`/`tsconfig.json`/lockfiles, a `nuxt` dependency or `nuxt.config.*`,
+a `vue` dependency or `.vue` files, `pyproject.toml`, `Gemfile`/`*.gemspec`,
+`*.rockspec`/`init.lua`/`lua/`, `Cargo.toml`, `Package.swift`, `mix.exs`, or a
+bare `index.html`) and defaults to the matching recipe.
 When the chosen recipe's stack does not match the detected one, the preview
 warns and `--write` refuses without `--force`.
 

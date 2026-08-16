@@ -50,6 +50,9 @@ func TestDetectPrimaryStacks(t *testing.T) {
 		{"javascript app", map[string]string{"package.json": `{"dependencies":{"express":"^4"}}`}, "javascript"},
 		{"vue by dependency", map[string]string{"package.json": `{"dependencies":{"vue":"^3"}}`}, "vue"},
 		{"vue by src files", map[string]string{"package.json": "{}", "src/App.vue": "<template/>"}, "vue"},
+		{"nuxt by config ts", map[string]string{"package.json": "{}", "nuxt.config.ts": "export default {}"}, "nuxt"},
+		{"nuxt by config js", map[string]string{"package.json": "{}", "nuxt.config.js": "module.exports = {}"}, "nuxt"},
+		{"nuxt by dependency", map[string]string{"package.json": `{"dependencies":{"nuxt":"^3"}}`}, "nuxt"},
 		{"static html only", map[string]string{"index.html": "<!doctype html>"}, "static-web"},
 		{"static with css tooling", map[string]string{
 			"index.html":   "<!doctype html>",
@@ -96,6 +99,27 @@ func TestDetectVueWinsOverGenericTypeScript(t *testing.T) {
 	}
 	if !containsString(result.Signals, "vite") || !containsString(result.Signals, "tsconfig") {
 		t.Fatalf("expected vite and tsconfig signals, got %v", result.Signals)
+	}
+}
+
+func TestDetectNuxtWinsOverVueAndTypeScript(t *testing.T) {
+	t.Parallel()
+	result := Detect(fixture(t, map[string]string{
+		"package.json":   `{"dependencies":{"nuxt":"^3","vue":"^3"},"devDependencies":{"typescript":"^5"}}`,
+		"nuxt.config.ts": "export default defineNuxtConfig({})  ",
+		"tsconfig.json":  "{}",
+	}))
+	if result.Primary != "nuxt" {
+		t.Fatalf("primary = %q, want nuxt; stacks: %#v", result.Primary, result.Stacks)
+	}
+	if !result.Has("vue") {
+		t.Fatalf("vue should stay listed after nuxt: %#v", result.Stacks)
+	}
+	if !result.Has("typescript") {
+		t.Fatalf("typescript should stay listed: %#v", result.Stacks)
+	}
+	if !containsString(result.Signals, "tsconfig") {
+		t.Fatalf("expected tsconfig signal, got %v", result.Signals)
 	}
 }
 

@@ -36,6 +36,7 @@ const (
 	RecipeTSApp     = "ts-app"
 	RecipeJSApp     = "js-app"
 	RecipeVueApp    = "vue-app"
+	RecipeNuxtApp   = "nuxt-app"
 	RecipePythonApp = "python-app"
 	RecipeRubyApp   = "ruby-app"
 	RecipeLuaLib    = "lua-lib"
@@ -59,6 +60,7 @@ var stackRecipeRuntimes = map[string]StackRuntime{
 	RecipeTSApp:     {Languages: []string{"typescript"}, Kinds: []string{"app", "monorepo"}},
 	RecipeJSApp:     {Languages: []string{"javascript"}, Kinds: []string{"app", "monorepo"}},
 	RecipeVueApp:    {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
+	RecipeNuxtApp:   {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
 	RecipePythonApp: {Languages: []string{"python"}, Kinds: []string{"app"}},
 	RecipeRubyApp:   {Languages: []string{"ruby"}, Kinds: []string{"app", "gem"}},
 	RecipeLuaLib:    {Languages: []string{"lua"}, Kinds: []string{"lib", "plugin"}},
@@ -406,7 +408,7 @@ func (m Manifest) validateStackRecipe() []string {
 }
 
 func isJavaScriptFamilyRecipe(recipeID string) bool {
-	return recipeID == RecipeTSApp || recipeID == RecipeJSApp || recipeID == RecipeVueApp
+	return recipeID == RecipeTSApp || recipeID == RecipeJSApp || recipeID == RecipeVueApp || recipeID == RecipeNuxtApp
 }
 
 func containsValue(values []string, value string) bool {
