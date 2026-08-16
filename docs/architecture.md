@@ -52,8 +52,8 @@ Every recipe renders its complete desired artifact set in memory,
 deterministically and under a version. Three kinds are embedded: the current
 `go-agent-tool@5` has a static human-owned command extension contract and a
 generated regression test that keeps a blank scaffold lint-clean;
-`files@1` materializes an arbitrary manifest-declared file tree; and the ten
-stack hygiene recipes (`ts-app@2` through `vue-app@2`, including SwiftPM and
+`files@1` materializes an arbitrary manifest-declared file tree; and the eleven
+stack hygiene recipes (`ts-app@2` through `static-web@2`, including Nuxt, SwiftPM and
 Elixir/Mix) render only seed-once hygiene artifacts and never own application
 source. The original eight version-1 stack contracts remain renderable for
 immutable compatibility. There is no
