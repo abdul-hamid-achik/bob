@@ -84,7 +84,7 @@ func TestStackDefinitionsStayInSyncWithManifestSchema(t *testing.T) {
 func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 	t.Parallel()
 	wantByStack := map[string]string{
-		"go":         "go-agent-tool",
+		"go":         manifest.RecipeGoHygiene,
 		"typescript": manifest.RecipeTSApp,
 		"javascript": manifest.RecipeJSApp,
 		"vue":        manifest.RecipeVueApp,
@@ -108,6 +108,9 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 	}
 	if stacks := Stacks("go-agent-tool"); !reflect.DeepEqual(stacks, []string{"go"}) {
 		t.Fatalf("Stacks(go-agent-tool) = %v", stacks)
+	}
+	if stacks := Stacks(manifest.RecipeGoHygiene); !reflect.DeepEqual(stacks, []string{"go"}) {
+		t.Fatalf("Stacks(go-hygiene) = %v", stacks)
 	}
 	if stacks := Stacks("files"); len(stacks) != 0 {
 		t.Fatalf("files recipe must claim no stacks, got %v", stacks)
@@ -286,10 +289,14 @@ func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
 		manifest.RecipeStaticWeb: {
 			".htmlhintrc": {`"doctype-first": true`, `"tag-pair": true`},
 		},
+		manifest.RecipeGoHygiene: {
+			".golangci.yml": {"linters:", "gofmt", "govet", "errcheck", "staticcheck"},
+		},
 	}
-	// .editorconfig indent width follows the language convention: four spaces
-	// for Python and Rust, two for every other stack.
+	// .editorconfig indent follows the language convention: tabs for Go, four
+	// spaces for Python/Rust/Swift, two for every other stack.
 	fourSpace := map[string]bool{manifest.RecipePythonApp: true, manifest.RecipeRustCLI: true, manifest.RecipeSwiftPkg: true}
+	tabIndent := map[string]bool{manifest.RecipeGoHygiene: true}
 	for _, id := range manifest.StackRecipeIDs() {
 		m, err := manifest.DefaultStack(id, "demo", "", "A demo repository.", "")
 		if err != nil {
@@ -317,12 +324,18 @@ func TestRenderStackSeedsLanguageToolingContent(t *testing.T) {
 		if !strings.Contains(editorconfig, "root = true") || !strings.Contains(editorconfig, "charset = utf-8") {
 			t.Fatalf("%s: .editorconfig missing defaults:\n%s", id, editorconfig)
 		}
-		wantIndent := "indent_size = 2"
-		if fourSpace[id] {
-			wantIndent = "indent_size = 4"
-		}
-		if !strings.Contains(editorconfig, wantIndent) {
-			t.Fatalf("%s: .editorconfig missing %q:\n%s", id, wantIndent, editorconfig)
+		if tabIndent[id] {
+			if !strings.Contains(editorconfig, "indent_style = tab") {
+				t.Fatalf("%s: .editorconfig missing tabs:\n%s", id, editorconfig)
+			}
+		} else {
+			wantIndent := "indent_size = 2"
+			if fourSpace[id] {
+				wantIndent = "indent_size = 4"
+			}
+			if !strings.Contains(editorconfig, wantIndent) {
+				t.Fatalf("%s: .editorconfig missing %q:\n%s", id, wantIndent, editorconfig)
+			}
 		}
 		for path, wants := range markers[id] {
 			content, ok := byPath[path]

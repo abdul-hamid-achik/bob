@@ -265,6 +265,46 @@ func TestDetectDescribeNamesPrimaryMarkers(t *testing.T) {
 	}
 }
 
+func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
+	t.Parallel()
+	// Plain go.mod without Bob markers should detect as "go" without kind hint
+	plainGo := Detect(fixture(t, map[string]string{
+		"go.mod": "module example.com/mylib\n",
+	}))
+	if plainGo.Primary != "go" || plainGo.KindHint != "" {
+		t.Fatalf("plain Go repo: expected go without kind hint, got %#v", plainGo)
+	}
+
+	// Go repo with bob.yaml containing go-agent-tool should have agent-tool hint
+	withBobYaml := Detect(fixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\n",
+		"bob.yaml": "schema_version: 1\nrecipe: go-agent-tool\nproduct:\n  name: demo\n",
+	}))
+	if withBobYaml.Primary != "go" || withBobYaml.KindHint != "agent-tool" {
+		t.Fatalf("go-agent-tool via bob.yaml: expected go with agent-tool hint, got %#v", withBobYaml)
+	}
+
+	// Go repo with Cobra CLI layout (cmd/ + internal/cli/root.go) should have agent-tool hint
+	withCobraLayout := Detect(fixture(t, map[string]string{
+		"go.mod":                "module example.com/cli\n",
+		"cmd/":                  "",
+		"internal/":             "",
+		"internal/cli/root.go":  "package cli\n",
+	}))
+	if withCobraLayout.Primary != "go" || withCobraLayout.KindHint != "agent-tool" {
+		t.Fatalf("Cobra CLI layout: expected go with agent-tool hint, got %#v", withCobraLayout)
+	}
+
+	// Go repo with cmd/ but no internal/cli should NOT have agent-tool hint
+	justCmd := Detect(fixture(t, map[string]string{
+		"go.mod": "module example.com/app\n",
+		"cmd/":   "",
+	}))
+	if justCmd.Primary != "go" || justCmd.KindHint != "" {
+		t.Fatalf("cmd/ without internal/cli: expected go without hint, got %#v", justCmd)
+	}
+}
+
 func containsString(values []string, value string) bool {
 	for _, candidate := range values {
 		if candidate == value {
