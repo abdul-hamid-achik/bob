@@ -286,10 +286,10 @@ func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
 
 	// Go repo with Cobra CLI layout (cmd/ + internal/cli/root.go) should have agent-tool hint
 	withCobraLayout := Detect(fixture(t, map[string]string{
-		"go.mod":                "module example.com/cli\n",
-		"cmd/":                  "",
-		"internal/":             "",
-		"internal/cli/root.go":  "package cli\n",
+		"go.mod":               "module example.com/cli\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
 	}))
 	if withCobraLayout.Primary != "go" || withCobraLayout.KindHint != "agent-tool" {
 		t.Fatalf("Cobra CLI layout: expected go with agent-tool hint, got %#v", withCobraLayout)

@@ -300,7 +300,7 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
 			files: map[string]string{
 				"go.mod":               "module example.com/cli\ngo 1.26\n",
-				"cmd/demo/main.go":    "package main\n",
+				"cmd/demo/main.go":     "package main\n",
 				"internal/cli/root.go": "package cli\n",
 			},
 			expectRecipe: "go-agent-tool",
@@ -309,7 +309,7 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 		{
 			name: "cmd/ without internal/cli/ → go-hygiene",
 			files: map[string]string{
-				"go.mod":            "module example.com/app\ngo 1.26\n",
+				"go.mod":             "module example.com/app\ngo 1.26\n",
 				"cmd/server/main.go": "package main\n",
 			},
 			expectRecipe: "go-hygiene",
