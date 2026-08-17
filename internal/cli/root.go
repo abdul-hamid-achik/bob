@@ -264,6 +264,10 @@ func chooseNewRecipe(explicit string, detection detect.Result) (string, error) {
 		return explicit, nil
 	}
 	if detection.Detected() {
+		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
+		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
+			return manifest.RecipeGoAgentTool, nil
+		}
 		if id, ok := recipe.ForStack(detection.Primary); ok {
 			return id, nil
 		}
@@ -413,6 +417,10 @@ func chooseInitRecipe(explicit string, detection detect.Result) (string, error) 
 		return explicit, nil
 	}
 	if detection.Detected() {
+		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
+		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
+			return manifest.RecipeGoAgentTool, nil
+		}
 		if id, ok := recipe.ForStack(detection.Primary); ok {
 			return id, nil
 		}
@@ -1060,7 +1068,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
-			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web, go-hygiene) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())

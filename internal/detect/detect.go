@@ -138,6 +138,24 @@ func Detect(root string) Result {
 		if names["go.work"] {
 			result.Monorepo = true
 		}
+		// Detect go-agent-tool marker: existing bob.yaml with go-agent-tool
+		// recipe, OR typical Cobra CLI layout (cmd/ + internal/cli/).
+		isGoAgentTool := false
+		if names["bob.yaml"] {
+			bobPath := filepath.Join(root, "bob.yaml")
+			if containsBounded(bobPath, "recipe: go-agent-tool") {
+				isGoAgentTool = true
+			}
+		}
+		if !isGoAgentTool && dirs["cmd"] && dirs["internal"] {
+			// Check for Cobra CLI structure: internal/cli/root.go
+			if regularFileExists(filepath.Join(root, "internal", "cli", "root.go")) {
+				isGoAgentTool = true
+			}
+		}
+		if isGoAgentTool {
+			kindHints["go"] = "agent-tool"
+		}
 	}
 
 	// Rust.

@@ -227,3 +227,78 @@ func TestNewAutoDetectedScaffoldConverges(t *testing.T) {
 		t.Fatalf("check after new: err=%v output=%s", err, stdout)
 	}
 }
+
+func TestNewGoHygieneVsGoAgentTool(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		files        map[string]string
+		expectRecipe string
+		needModule   bool
+	}{
+		{
+			name:         "plain go.mod → go-hygiene",
+			files:        map[string]string{"go.mod": "module example.com/lib\ngo 1.26\n"},
+			expectRecipe: "go-hygiene",
+			needModule:   false,
+		},
+		{
+			name: "bob.yaml with go-agent-tool → go-agent-tool",
+			files: map[string]string{
+				"go.mod":   "module example.com/cli\ngo 1.26\n",
+				"bob.yaml": "schema_version: 1\nrecipe: go-agent-tool\nproduct:\n  name: demo\n  module: example.com/cli\n",
+			},
+			expectRecipe: "go-agent-tool",
+			needModule:   true,
+		},
+		{
+			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
+			files: map[string]string{
+				"go.mod":               "module example.com/cli\ngo 1.26\n",
+				"cmd/demo/main.go":     "package main\n",
+				"internal/cli/root.go": "package cli\n",
+			},
+			expectRecipe: "go-agent-tool",
+			needModule:   true,
+		},
+		{
+			name: "cmd/ without internal/cli/ → go-hygiene",
+			files: map[string]string{
+				"go.mod":             "module example.com/app\ngo 1.26\n",
+				"cmd/server/main.go": "package main\n",
+			},
+			expectRecipe: "go-hygiene",
+			needModule:   false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			target := filepath.Join(t.TempDir(), "demo")
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			for path, content := range test.files {
+				full := filepath.Join(target, filepath.FromSlash(path))
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"new", "demo", "--dir", target}
+			if test.needModule {
+				args = append(args, "--module", "example.com/cli")
+			}
+			stdout, stderr, err := executeForTest(args...)
+			if err != nil {
+				t.Fatalf("new preview: %v\n%s", err, stderr)
+			}
+			wantLine := "recipe: " + test.expectRecipe
+			if !strings.Contains(stdout, wantLine) {
+				t.Fatalf("expected %q in preview:\n%s", wantLine, stdout)
+			}
+		})
+	}
+}

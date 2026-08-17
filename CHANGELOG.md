@@ -9,6 +9,12 @@ and the project uses semantic versioning after the first tagged release.
 
 ### Added
 
+- `go-hygiene@2` seed-once hygiene recipe for existing Go repositories:
+  seeds README, AGENTS, SECURITY, `.gitignore`, `.editorconfig` (with tab
+  indentation), `.golangci.yml`, and a golangci-lint CI stub. Never owns
+  application source, cmd/, or internal/cli/. Detection distinguishes
+  `go-agent-tool` (existing bob.yaml with that recipe, OR cmd/ + internal/cli/
+  Cobra layout) from plain Go repositories, which now default to `go-hygiene`.
 - `nuxt-app@2` seed-once hygiene recipe, with `nuxt.config.*` and `nuxt`
   dependency detection, Nuxt-aware `.gitignore` (`.nuxt/`, `.output/`), and
   a Bun-oriented CI stub. Preserves JavaScript or TypeScript and the declared

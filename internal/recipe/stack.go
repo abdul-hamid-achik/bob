@@ -284,13 +284,27 @@ var stackDefinitions = map[string]stackDefinition{
 			{Path: ".htmlhintrc", Source: stackHTMLHintRC},
 		},
 	},
+	manifest.RecipeGoHygiene: {
+		ID:            manifest.RecipeGoHygiene,
+		Description:   "Seed-once hygiene for an existing Go repository: docs, .gitignore, and golangci-lint CI; never owns application source",
+		LanguageLabel: "Go (existing service, library, or application)",
+		Stacks:        []string{"go"},
+		Commands:      []string{"go mod tidy", "go fmt ./...", "go vet ./...", "go test ./..."},
+		Gitignore:     stackGitignoreGo,
+		CIWorkflow:    stackCIGo,
+		ExtraSeeds: []stackSeed{
+			{Path: ".golangci.yml", Source: stackGolangciConfig},
+		},
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
 // stacksByRecipe the reverse claim used by the init mismatch guard.
-// go-agent-tool participates even though it is not a stack hygiene recipe.
+// go-agent-tool participates in stacksByRecipe even though it is not a stack
+// hygiene recipe, but is not in recipeByStack: it must be explicitly selected
+// rather than auto-detected.
 var (
-	recipeByStack  = map[string]string{"go": "go-agent-tool"}
+	recipeByStack  = map[string]string{}
 	stacksByRecipe = map[string][]string{"go-agent-tool": {"go"}}
 )
 
@@ -851,9 +865,8 @@ const stackCIStaticWeb = stackCIHeader + `      # TODO: replace with your real v
       - run: test -f index.html
 `
 
-// stackEditorConfig is seeded for every stack. The indent width follows the
-// language convention: four spaces for Python, Rust, and Swift; two for the
-// rest.
+// stackEditorConfig is seeded for every stack. The indent follows the language
+// convention: tabs for Go, four spaces for Python/Rust/Swift, two for the rest.
 const stackEditorConfig = `# Seeded once by Bob ([[.RecipeID]]@[[.RecipeVersion]]). Yours to own and extend;
 # Bob never updates or overwrites it.
 root = true
@@ -863,10 +876,12 @@ charset = utf-8
 end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
-indent_style = space
+[[if eq .RecipeID "go-hygiene"]]indent_style = tab
+indent_size = 4
+[[else]]indent_style = space
 [[if or (eq .RecipeID "python-app") (eq .RecipeID "rust-cli") (eq .RecipeID "swift-package")]]indent_size = 4
 [[else]]indent_size = 2
-[[end]]
+[[end]][[end]]
 [*.md]
 trim_trailing_whitespace = false
 `
@@ -1022,4 +1037,70 @@ const stackHTMLHintRC = `{
 const stackElixirFormatter = `[
   inputs: ["mix.exs", "{config,lib,test}/**/*.{ex,exs}"]
 ]
+`
+
+const stackGitignoreGo = `# Go build artifacts
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Go coverage and profiling
+*.prof
+coverage.txt
+htmlcov/
+
+# Dependency and vendor directories
+/vendor/
+
+# IDE and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+!.env.example
+`
+
+const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
+        with:
+          go-version: stable
+      - run: go mod download
+      # TODO: align these checks with your project's standards.
+      - run: go fmt ./...
+      - run: go vet ./...
+      - run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      - uses: golangci/golangci-lint-action@e6bba7d6934198d6e88b2d02e3316f2943a7f53f # v6.8.0
+        with:
+          version: latest
+`
+
+const stackGolangciConfig = `run:
+  timeout: 5m
+  go: "1.24"
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+
+linters-settings:
+  gofmt:
+    simplify: true
+  govet:
+    enable-all: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
 `
