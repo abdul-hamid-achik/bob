@@ -272,3 +272,66 @@ func TestInitStackRecipeAcceptsOptionalModule(t *testing.T) {
 		t.Fatalf("unexpected preview:\n%s", stdout)
 	}
 }
+
+func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		files        map[string]string
+		expectRecipe string
+		requireWrite bool
+	}{
+		{
+			name:         "plain go.mod → go-hygiene",
+			files:        map[string]string{"go.mod": "module example.com/lib\ngo 1.26\n"},
+			expectRecipe: "go-hygiene",
+			requireWrite: true,
+		},
+		{
+			name: "bob.yaml with go-agent-tool → go-agent-tool",
+			files: map[string]string{
+				"go.mod":   "module example.com/cli\ngo 1.26\n",
+				"bob.yaml": "schema_version: 1\nrecipe: go-agent-tool\nproduct:\n  name: demo\n  module: example.com/cli\n",
+			},
+			expectRecipe: "go-agent-tool",
+			requireWrite: false, // bob.yaml already exists
+		},
+		{
+			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
+			files: map[string]string{
+				"go.mod":               "module example.com/cli\ngo 1.26\n",
+				"cmd/demo/main.go":    "package main\n",
+				"internal/cli/root.go": "package cli\n",
+			},
+			expectRecipe: "go-agent-tool",
+			requireWrite: true,
+		},
+		{
+			name: "cmd/ without internal/cli/ → go-hygiene",
+			files: map[string]string{
+				"go.mod":            "module example.com/app\ngo 1.26\n",
+				"cmd/server/main.go": "package main\n",
+			},
+			expectRecipe: "go-hygiene",
+			requireWrite: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeStackFixture(t, test.files)
+			args := []string{"init", root}
+			if test.expectRecipe == "go-agent-tool" {
+				args = append(args, "--module", "example.com/cli")
+			}
+			stdout, stderr, err := executeForTest(args...)
+			if err != nil {
+				t.Fatalf("init preview: %v\n%s", err, stderr)
+			}
+			wantLine := "recipe: " + test.expectRecipe
+			if !strings.Contains(stdout, wantLine) {
+				t.Fatalf("expected %q in preview:\n%s", wantLine, stdout)
+			}
+		})
+	}
+}
