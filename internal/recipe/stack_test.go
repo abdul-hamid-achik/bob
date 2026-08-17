@@ -374,6 +374,7 @@ var stackExtraSeeds = map[string][]string{
 	manifest.RecipeSwiftPkg:  {},
 	manifest.RecipeElixirApp: {".formatter.exs"},
 	manifest.RecipeStaticWeb: {".htmlhintrc"},
+	manifest.RecipeGoHygiene: {".golangci.yml"},
 }
 
 func TestStackVersionOneBytesRemainImmutable(t *testing.T) {

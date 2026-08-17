@@ -1073,8 +1073,7 @@ const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28
       - run: go fmt ./...
       - run: go vet ./...
       - run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@e6bba7d6934198d6e88b2d02e3316f2943a7f53f # v6
+      - uses: golangci/golangci-lint-action@e6bba7d6934198d6e88b2d02e3316f2943a7f53f # v6.8.0
         with:
           version: latest
 `
