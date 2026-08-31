@@ -232,7 +232,7 @@ func TestPlanHumanOutputShowsCauses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, fmt.Sprintf("conflict   README.md")) || !strings.Contains(stdout, "[managed_hash_mismatch] contract_drift") {
+	if !strings.Contains(stdout, "conflict   README.md") || !strings.Contains(stdout, "[managed_hash_mismatch] contract_drift") {
 		t.Fatalf("plan human output lacks cause classification:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "[missing] scaffold") && !strings.Contains(stdout, "[in_sync] convergence") {
