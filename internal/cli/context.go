@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	contextpkg "github.com/abdul-hamid-achik/bob/internal/context"
 	"github.com/abdul-hamid-achik/bob/internal/engine"
@@ -14,6 +15,30 @@ type planJSON struct {
 	PlanDigestVersion int               `json:"plan_digest_version"`
 	PlanDigest        string            `json:"plan_digest"`
 	Diffs             []engine.FileDiff `json:"diffs,omitempty"`
+}
+
+// repositoryVerdict renders the single human verdict line for the repository
+// block. It keeps the historical state/managed/conflicts/lock-changed fields
+// and adds the conflict classification, per-family conflict counts, and the
+// create tally so the compact answer distinguishes "metadata drift" from
+// "recipe proposes scaffold" without a second bob plan round trip.
+func repositoryVerdict(repo contextpkg.Repository) string {
+	var verdict strings.Builder
+	verdict.WriteString(repo.State)
+	if repo.ConflictClass != "" && repo.ConflictClass != "none" {
+		verdict.WriteString(" (" + repo.ConflictClass)
+		if !repo.LockExists {
+			verdict.WriteString("; no lock — recipe never applied")
+		}
+		verdict.WriteString(")")
+	}
+	fmt.Fprintf(&verdict, "; managed: %d; conflicts: %d", repo.ManagedFiles, repo.ConflictCount)
+	if repo.ConflictCount > 0 {
+		fmt.Fprintf(&verdict, " (unmanaged %d, managed %d, hazard %d)",
+			repo.ConflictFamilyCounts["unmanaged_divergence"], repo.ConflictFamilyCounts["contract_drift"], repo.ConflictFamilyCounts["ownership_hazard"])
+	}
+	fmt.Fprintf(&verdict, "; lock changed: %t; creates: %d", repo.LockChanged, repo.ActionCounts.Create)
+	return verdict.String()
 }
 
 func planJSONProjection(displayed, complete engine.PlanResult) planJSON {
@@ -56,7 +81,7 @@ func printContext(w io.Writer, result contextpkg.Result) error {
 	if _, err := fmt.Fprintf(w, "%s@%d  %s\n", result.Recipe.ID, result.Recipe.Version, result.Product.Name); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "repository: %s; managed: %d; conflicts: %d; lock changed: %t\n", result.Repository.State, result.Repository.ManagedFiles, result.Repository.ConflictCount, result.Repository.LockChanged); err != nil {
+	if _, err := fmt.Fprintf(w, "repository: %s\n", repositoryVerdict(result.Repository)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "contract: %s\nplan: %s (v%d)\ncontext: %s\n", result.ContractDigest, result.Repository.PlanDigest, result.Repository.PlanDigestVersion, result.ContextDigest); err != nil {

@@ -2,6 +2,7 @@ package recipe
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -160,6 +161,49 @@ func TestValidateMetadataRejectsBrokenContracts(t *testing.T) {
 	}
 }
 
+// TestDeclaredSurfaceCapabilities proves surfaces.mcp and surfaces.studio are
+// projected as descriptive capabilities: selection follows the manifest
+// boolean, no artifact is claimed (the recipe renders nothing for them), and
+// the limitation names the descriptive contract.
+func TestDeclaredSurfaceCapabilities(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		id      string
+		enabled bool
+		mutate  func(*manifest.Manifest)
+	}{
+		{"surface.mcp", false, func(m *manifest.Manifest) {}},
+		{"surface.mcp", true, func(m *manifest.Manifest) { m.Surfaces.MCP = true }},
+		{"surface.studio", false, func(m *manifest.Manifest) {}},
+		{"surface.studio", true, func(m *manifest.Manifest) { m.Surfaces.Studio = true }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.id, func(t *testing.T) {
+			t.Parallel()
+			m := manifest.Default("acme", "github.com/acme/acme", "Acme")
+			tc.mutate(&m)
+			metadata, err := ResolveMetadata(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			capability := findCapability(t, metadata, tc.id)
+			want := "disabled"
+			if tc.enabled {
+				want = "enabled"
+			}
+			if capability.Selection != want {
+				t.Fatalf("selection = %q, want %q", capability.Selection, want)
+			}
+			if len(capability.ArtifactIDs) != 0 {
+				t.Fatalf("declared surface claims artifacts: %#v", capability.ArtifactIDs)
+			}
+			if !containsString(capability.Limitations, "declared surface; the recipe neither generates nor verifies it") {
+				t.Fatalf("limitations = %#v", capability.Limitations)
+			}
+		})
+	}
+}
+
 func maximalGoAgentManifest() manifest.Manifest {
 	m := manifest.Default("acme", "github.com/acme/acme", "Acme")
 	m.Integrations.BrowserVerification = "cairntrace"
@@ -167,6 +211,73 @@ func maximalGoAgentManifest() manifest.Manifest {
 	m.Integrations.Artifacts = "fcheap"
 	m.Distribution.Homebrew = true
 	return m
+}
+
+// TestSurfaceMCPEvidenceRules pins the default read-only evidence the recipe
+// declares for the descriptive MCP surface: conventional package paths, a
+// cmd/mcp glob, and the bounded Contains probe of the recipe-known
+// entrypoint (the rule that catches subcommand-style MCP servers).
+func TestSurfaceMCPEvidenceRules(t *testing.T) {
+	t.Parallel()
+	metadata, err := ResolveMetadata(manifest.Default("acme", "github.com/acme/acme", "Acme"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability := findCapability(t, metadata, "surface.mcp")
+	want := []EvidenceRule{
+		{Path: "cmd/<product>/main.go", Contains: "mcp"},
+		{Path: "cmd/mcp/**"},
+		{Path: "internal/cli/mcp.go"},
+		{Path: "internal/mcp"},
+	}
+	if !reflect.DeepEqual(capability.Evidence, want) {
+		t.Fatalf("evidence = %#v, want %#v", capability.Evidence, want)
+	}
+	studio := findCapability(t, metadata, "surface.studio")
+	if len(studio.Evidence) != 0 {
+		t.Fatalf("surface.studio evidence = %#v", studio.Evidence)
+	}
+}
+
+// TestValidateMetadataEvidenceRules proves metadata validation keeps
+// evidence rules bounded and path-safe before any evaluation happens.
+func TestValidateMetadataEvidenceRules(t *testing.T) {
+	t.Parallel()
+	m := manifest.Default("acme", "github.com/acme/acme", "Acme")
+	artifacts, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		rules []EvidenceRule
+		want  string
+	}{
+		{"absolute path", []EvidenceRule{{Path: "/etc/passwd"}}, "invalid path template"},
+		{"escaping path", []EvidenceRule{{Path: "../outside"}}, "invalid path template"},
+		{".git target", []EvidenceRule{{Path: ".git/hooks/mcp"}}, "invalid path template"},
+		{"too many rules", []EvidenceRule{
+			{Path: "internal/mcp"}, {Path: "internal/cli/mcp.go"}, {Path: "cmd/mcp/**"},
+			{Path: "a/1"}, {Path: "a/2"}, {Path: "a/3"}, {Path: "a/4"}, {Path: "a/5"}, {Path: "a/6"},
+		}, "more than 8 evidence rules"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			metadata, err := ResolveMetadata(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range metadata.Capabilities {
+				if metadata.Capabilities[i].ID == "surface.mcp" {
+					metadata.Capabilities[i].Evidence = tt.rules
+				}
+			}
+			if err := ValidateMetadata(metadata, artifacts); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+		})
+	}
 }
 
 func findCapability(t *testing.T, metadata Metadata, id string) CapabilityDefinition {

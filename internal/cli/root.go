@@ -1303,7 +1303,11 @@ func printPlan(w io.Writer, plan engine.PlanResult, showContent, conflictsOnly b
 		if conflictsOnly && action.Kind != engine.ActionConflict {
 			continue
 		}
-		if _, err := fmt.Fprintf(w, "%-10s %s\n", action.Kind, action.Path); err != nil {
+		// Each row carries its machine-readable cause and family so a human
+		// reader can tell drift from scaffold proposal without a JSON round
+		// trip — the same [code] convention printConflicts uses for apply
+		// refusals, plus the shared family classifier.
+		if _, err := fmt.Fprintf(w, "%-10s %-40s [%s] %s\n", action.Kind, action.Path, action.Code, action.Family()); err != nil {
 			return err
 		}
 		if showContent && (action.Kind == engine.ActionCreate || action.Kind == engine.ActionUpdate || action.Kind == engine.ActionConflict) && action.DesiredPreview != "" {
@@ -1409,11 +1413,18 @@ func conflictWarnings(plan engine.PlanResult) []string {
 	if plan.ConflictCount == 0 {
 		return nil
 	}
-	return []string{fmt.Sprintf("%d conflict(s) block apply", plan.ConflictCount)}
+	warnings := []string{fmt.Sprintf("%d conflict(s) block apply", plan.ConflictCount)}
+	if plan.ConflictClass() == engine.ConflictClassUnmanagedDivergence && !plan.LockExists() {
+		warnings = append(warnings, "recipe was never applied; files at these paths are human-owned — apply will not overwrite them")
+	}
+	return warnings
 }
 
 func planNextActions(plan engine.PlanResult, workspace string) []string {
 	if plan.HasConflicts() {
+		if plan.ConflictClass() == engine.ConflictClassUnmanagedDivergence && !plan.LockExists() {
+			return []string{"recipe was never applied; files at these paths are human-owned — apply will not overwrite them", withWorkspaceArg("rerun bob plan", workspace)}
+		}
 		return []string{"resolve unmanaged or modified-file conflicts", withWorkspaceArg("rerun bob plan", workspace)}
 	}
 	for _, action := range plan.Actions {

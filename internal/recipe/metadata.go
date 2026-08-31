@@ -12,6 +12,10 @@ import (
 
 const MetadataSchemaVersion = 1
 
+// EvidenceRuleLimit bounds how many read-only evidence rules one capability
+// may declare. The evaluator honors the same cap defensively.
+const EvidenceRuleLimit = 8
+
 type Metadata struct {
 	SchemaVersion   int                        `json:"schema_version"`
 	Recipe          MetadataRecipeRef          `json:"recipe"`
@@ -29,14 +33,26 @@ type MetadataRecipeRef struct {
 }
 
 type CapabilityDefinition struct {
-	ID             string   `json:"id"`
-	Category       string   `json:"category"`
-	Selection      string   `json:"selection"`
-	Summary        string   `json:"summary"`
-	ManifestFields []string `json:"manifest_fields"`
-	ArtifactIDs    []string `json:"artifact_ids"`
-	Binary         string   `json:"binary,omitempty"`
-	Limitations    []string `json:"limitations"`
+	ID             string         `json:"id"`
+	Category       string         `json:"category"`
+	Selection      string         `json:"selection"`
+	Summary        string         `json:"summary"`
+	ManifestFields []string       `json:"manifest_fields"`
+	ArtifactIDs    []string       `json:"artifact_ids"`
+	Binary         string         `json:"binary,omitempty"`
+	Limitations    []string       `json:"limitations"`
+	Evidence       []EvidenceRule `json:"evidence,omitempty"`
+}
+
+// EvidenceRule declares one read-only heuristic a surface capability uses to
+// notice repository reality the manifest does not declare. Path is a
+// repository-relative path template (validated by the same path-template
+// rules extension points use; <product> resolves to the manifest product
+// name and * globs within one path segment). A non-empty Contains requires
+// the bounded literal to appear in the resolved regular file.
+type EvidenceRule struct {
+	Path     string `json:"path"`
+	Contains string `json:"contains,omitempty"`
 }
 
 type ArtifactDescriptor struct {
@@ -171,6 +187,8 @@ func resolveGoAgentMetadata(m manifest.Manifest, artifacts []Artifact) Metadata 
 		capability("repository.whole_file_ownership", "repository", "required", "Content-hash ownership of complete recipe artifacts", []string{"recipe"}, ""),
 		capability("surface.cli", "surface", "required", "Cobra command-line entry point", []string{"surfaces.cli"}, ""),
 		capability("surface.json", "surface", "required", "Machine-readable command output", []string{"surfaces.json"}, ""),
+		declaredSurface("surface.mcp", "Declared MCP server surface", "surfaces.mcp", m.Surfaces.MCP, defaultMCPEvidenceRules()),
+		declaredSurface("surface.studio", "Declared interactive TUI surface", "surfaces.studio", m.Surfaces.Studio, nil),
 	}
 	byID := make(map[string]*CapabilityDefinition, len(definitions))
 	for i := range definitions {
@@ -250,6 +268,32 @@ func capability(id, category, selection, summary string, fields []string, binary
 		limitations = []string{"Bob does not initialize, query, or verify this specialist tool", "binary availability does not imply usable specialist state"}
 	}
 	return CapabilityDefinition{ID: id, Category: category, Selection: selection, Summary: summary, ManifestFields: fields, ArtifactIDs: []string{}, Binary: binary, Limitations: limitations}
+}
+
+// declaredSurface builds a descriptive surface capability: the manifest
+// boolean declares a product surface the recipe neither renders nor owns, in
+// exactly the sense an integration selection declares a specialist seam. It
+// claims no artifacts, so context materialization reports not_applicable.
+func declaredSurface(id, summary, field string, selected bool, evidence []EvidenceRule) CapabilityDefinition {
+	return CapabilityDefinition{
+		ID: id, Category: "surface", Selection: selectedBool(selected), Summary: summary,
+		ManifestFields: []string{field}, ArtifactIDs: []string{}, Evidence: evidence,
+		Limitations: []string{"declared surface; the recipe neither generates nor verifies it"},
+	}
+}
+
+// defaultMCPEvidenceRules is the read-only heuristic set for surface.mcp:
+// conventional MCP package layouts plus one bounded Contains probe of the
+// recipe-known entrypoint, which is what catches subcommand-style MCP
+// servers (for example a `headless mcp` subcommand) that no path rule
+// would find.
+func defaultMCPEvidenceRules() []EvidenceRule {
+	return []EvidenceRule{
+		{Path: "internal/mcp"},
+		{Path: "internal/cli/mcp.go"},
+		{Path: "cmd/mcp/**"},
+		{Path: "cmd/<product>/main.go", Contains: "mcp"},
+	}
 }
 
 func selectedBool(value bool) string {
@@ -374,6 +418,7 @@ func sortMetadata(metadata *Metadata) {
 		metadata.Capabilities[i].ManifestFields = uniqueSorted(metadata.Capabilities[i].ManifestFields)
 		metadata.Capabilities[i].ArtifactIDs = uniqueSorted(metadata.Capabilities[i].ArtifactIDs)
 		metadata.Capabilities[i].Limitations = uniqueSorted(metadata.Capabilities[i].Limitations)
+		metadata.Capabilities[i].Evidence = sortedEvidence(metadata.Capabilities[i].Evidence)
 	}
 	sort.Slice(metadata.Artifacts, func(i, j int) bool { return metadata.Artifacts[i].ID < metadata.Artifacts[j].ID })
 	for i := range metadata.Artifacts {
@@ -425,6 +470,23 @@ func uniqueSorted(values []string) []string {
 	return result
 }
 
+// sortedEvidence canonicalizes evidence-rule order without inventing the
+// explicit empty list (a nil list stays omitted on the wire); evaluation
+// covers every rule, so declaration order carries no meaning.
+func sortedEvidence(rules []EvidenceRule) []EvidenceRule {
+	if rules == nil {
+		return nil
+	}
+	ordered := append([]EvidenceRule{}, rules...)
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].Path != ordered[j].Path {
+			return ordered[i].Path < ordered[j].Path
+		}
+		return ordered[i].Contains < ordered[j].Contains
+	})
+	return ordered
+}
+
 // ValidateMetadata proves IDs, paths, and cross-references against the exact
 // rendered artifact set. It is exported so recipe contract tests can exercise
 // malformed metadata without adding a second validation implementation.
@@ -447,6 +509,14 @@ func ValidateMetadata(metadata Metadata, rendered []Artifact) error {
 		}
 		if err := addMetadataID(allIDs, item.ID, "metadata"); err != nil {
 			return err
+		}
+		if len(item.Evidence) > EvidenceRuleLimit {
+			return fmt.Errorf("capability %q declares more than %d evidence rules", item.ID, EvidenceRuleLimit)
+		}
+		for _, rule := range item.Evidence {
+			if err := validatePathTemplate(rule.Path); err != nil {
+				return fmt.Errorf("capability %q evidence: %w", item.ID, err)
+			}
 		}
 	}
 	artifacts := map[string]struct{}{}

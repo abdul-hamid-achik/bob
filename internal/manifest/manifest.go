@@ -287,9 +287,9 @@ func (m Manifest) validateGoAgentToolRecipe() []string {
 	if !m.Surfaces.JSON {
 		problems = append(problems, "go-agent-tool requires surfaces.json=true")
 	}
-	if m.Surfaces.MCP || m.Surfaces.Studio {
-		problems = append(problems, "mcp and studio surfaces are reserved for a later recipe version")
-	}
+	// surfaces.mcp and surfaces.studio are descriptive declarations of product
+	// reality: like integrations, the recipe neither generates nor verifies
+	// them, so any boolean is valid and only surfaces.cli/json are required.
 	validateChoice := func(field, value string, allowed ...string) {
 		for _, candidate := range allowed {
 			if value == candidate {

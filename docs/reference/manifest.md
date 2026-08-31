@@ -77,9 +77,15 @@ guessing.
 The current recipe requires `runtime.language: go`, `runtime.kind: cli`,
 `surfaces.cli: true`, and `surfaces.json: true`.
 
-Generated project MCP and Studio surfaces remain unsupported in schema 1, so
-`surfaces.mcp` and `surfaces.studio` must be `false`. This does not conflict with
-Bob itself exposing read-only MCP tools.
+`surfaces.mcp` and `surfaces.studio` are descriptive declarations of product
+reality, in the same sense an integration selection declares a seam: the
+go-agent-tool recipe neither generates nor verifies them, so any boolean is
+valid. Setting `mcp: true` records that the product ships an MCP surface —
+for example a `headless mcp` subcommand — without changing what Bob owns.
+`bob context` additionally warns when a disabled surface has declared
+repository evidence (see the [workspace context
+reference](context.md#structured-actions-and-notices)). Declaring a product
+surface does not conflict with Bob itself exposing read-only MCP tools.
 
 ## Integrations
 

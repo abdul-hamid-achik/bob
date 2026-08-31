@@ -30,7 +30,11 @@ schema version 1:
     "state": "clean",
     "clean": true,
     "lock_changed": false,
+    "lock_exists": true,
     "conflict_count": 0,
+    "conflict_class": "none",
+    "conflict_family_counts": {"ownership_hazard": 0, "contract_drift": 0, "unmanaged_divergence": 0},
+    "action_counts": {"create": 0, "update": 0, "adopt": 0, "unchanged": 30, "conflict": 0},
     "managed_files": 30,
     "plan_digest_version": 1,
     "plan_digest": "sha256:..."
@@ -62,6 +66,28 @@ matches natural-language tasks. Full procedures are available through
 | `drifted` | A conflict-free plan would create, adopt, or update state. |
 | `conflicted` | At least one ownership conflict blocks apply. |
 
+`repository.conflict_class` classifies those conflicts by cause:
+`none` when conflict-free; `ownership_hazard` when every conflict is an
+existing symlink or special file; `contract_drift` when every conflict is a
+Bob-owned file that drifted from `bob.lock` (or a retired file the lock still
+owns); `unmanaged_divergence` when every conflict is a recipe proposal over a
+file Bob never owned — a repository that evolved independently of the recipe;
+`mixed` when more than one family is present. `repository.conflict_family_counts`
+carries the per-family tally behind the class, and the conflicted-state
+continuation action's `reason_code` is `conflict_` plus the dominant family
+(`conflict_unmanaged_divergence`, and so on, with precedence
+`ownership_hazard` > `contract_drift` > `unmanaged_divergence`).
+
+Two further fields disambiguate the verdict without changing the state enum:
+`repository.action_counts` tallies actions by kind (create, update, adopt,
+unchanged, conflict) so the compact profile answers "how many entries are
+creates?" without a second `bob plan` round trip, and `repository.lock_exists`
+distinguishes "lock drifted" from "recipe never applied" —
+`lock_changed` is true for both. When every conflict is an
+`unmanaged_divergence` and no lock exists, plan and apply guidance says so
+directly: the recipe was never applied, the files at those paths are
+human-owned, and apply will not overwrite them.
+
 `repository.plan_digest` is the `sha256:`-labelled version of the exact plan
 identity shared by CLI and MCP plan/check. It is not an approval or a
 verification receipt.
@@ -87,6 +113,8 @@ The `go-agent-tool@5` catalog exposes these stable capability IDs:
 ```text
 surface.cli
 surface.json
+surface.mcp
+surface.studio
 distribution.github_actions
 distribution.goreleaser
 distribution.homebrew
@@ -100,6 +128,10 @@ integration.fcheap
 repository.public_hygiene
 repository.whole_file_ownership
 ```
+
+`surface.mcp` and `surface.studio` are descriptive capabilities: their
+selection follows the manifest boolean, they claim no artifacts, and the
+recipe neither generates nor verifies the declared surface.
 
 `files@1` exposes only `repository.declared_file_tree` and
 `repository.whole_file_ownership`; it does not borrow application-specific
@@ -152,4 +184,20 @@ review actions. `requires_explicit_authority` and `blocked_by` remain explicit
 so an agent does not infer authority from ordering.
 
 Notices carry stable `id`, `code`, and `severity` fields plus explanatory text.
-Consumers branch on codes, not messages.
+Consumers branch on codes, not messages. Current codes:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `binary_unavailable` | warning | A selected capability's declared binary is not on `PATH`; Bob did not run or verify it. |
+| `surface_evidence_mismatch` | warning | A disabled descriptive surface (for example `surface.mcp`) has declared read-only repository evidence — conventional package paths, or a bounded literal match in the recipe-known entrypoint. Flip the manifest boolean to true or remove the surface. |
+
+Surface-evidence rules are recipe metadata evaluated read-only and offline:
+existence rules stat resolved paths (with `<product>` resolved from the
+manifest and single-segment globs), and `contains` rules read only the
+rule-declared file under a byte cap. They are heuristics — warning severity
+because a false positive must be tolerable — and the corrective text is
+derived from the same manifest validator every load path uses, so the notice
+can never advise flipping a flag the schema would reject. Under byte-budget
+pressure a notice may lose its explanatory message before it is dropped;
+the code, severity, capability, and paths survive longer because consumers
+branch on codes.

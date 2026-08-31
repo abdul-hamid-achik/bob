@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	contextpkg "github.com/abdul-hamid-achik/bob/internal/context"
+	"github.com/abdul-hamid-achik/bob/internal/engine"
 	"github.com/abdul-hamid-achik/bob/internal/guidance"
 	"github.com/abdul-hamid-achik/bob/internal/pathinfo"
 	"github.com/abdul-hamid-achik/bob/internal/playbook"
@@ -214,7 +215,22 @@ func guidanceErrorCode(err error, fallback string) string {
 // contextTextContent avoids serializing the complete compact contract twice in
 // one MCP result. structuredContent remains the exact typed contract; the text
 // block is a deterministic identity/state projection for text-only clients.
+// The repository projection deliberately omits the per-family conflict
+// breakdown: the 8 KiB gateway budget favors state essentials here, and the
+// breakdown remains available in structuredContent.
 func contextTextContent(out *ContextOutput) []sdkmcp.Content {
+	type textRepository struct {
+		State             string              `json:"state"`
+		Clean             bool                `json:"clean"`
+		LockChanged       bool                `json:"lock_changed"`
+		LockExists        bool                `json:"lock_exists"`
+		ConflictCount     int                 `json:"conflict_count"`
+		ConflictClass     string              `json:"conflict_class"`
+		ActionCounts      engine.ActionCounts `json:"action_counts"`
+		ManagedFiles      int                 `json:"managed_files"`
+		PlanDigestVersion int                 `json:"plan_digest_version"`
+		PlanDigest        string              `json:"plan_digest"`
+	}
 	type textContext struct {
 		SchemaVersion  int                      `json:"schema_version"`
 		Profile        contextpkg.Profile       `json:"profile"`
@@ -222,7 +238,7 @@ func contextTextContent(out *ContextOutput) []sdkmcp.Content {
 		ContractDigest string                   `json:"contract_digest"`
 		ContextDigest  string                   `json:"context_digest"`
 		Recipe         recipe.MetadataRecipeRef `json:"recipe"`
-		Repository     contextpkg.Repository    `json:"repository"`
+		Repository     textRepository           `json:"repository"`
 		Truncation     contextpkg.Truncation    `json:"truncation"`
 		Detail         string                   `json:"detail_location"`
 	}
@@ -234,11 +250,20 @@ func contextTextContent(out *ContextOutput) []sdkmcp.Content {
 	}
 	projection := textOutput{SchemaVersion: out.SchemaVersion, OK: out.OK, Authority: out.Authority}
 	if out.Context != nil {
+		repository := out.Context.Repository
 		projection.Context = textContext{
 			SchemaVersion: out.Context.SchemaVersion, Profile: out.Context.Profile, Workspace: out.Context.Workspace,
 			ContractDigest: out.Context.ContractDigest, ContextDigest: out.Context.ContextDigest,
-			Recipe: out.Context.Recipe, Repository: out.Context.Repository, Truncation: out.Context.Truncation,
-			Detail: "structuredContent",
+			Recipe: out.Context.Recipe,
+			Repository: textRepository{
+				State: repository.State, Clean: repository.Clean, LockChanged: repository.LockChanged,
+				LockExists: repository.LockExists, ConflictCount: repository.ConflictCount,
+				ConflictClass: repository.ConflictClass, ActionCounts: repository.ActionCounts,
+				ManagedFiles: repository.ManagedFiles, PlanDigestVersion: repository.PlanDigestVersion,
+				PlanDigest: repository.PlanDigest,
+			},
+			Truncation: out.Context.Truncation,
+			Detail:     "structuredContent",
 		}
 	}
 	data, err := json.Marshal(projection)

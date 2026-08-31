@@ -8,9 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/abdul-hamid-achik/bob/internal/engine"
 	"github.com/abdul-hamid-achik/bob/internal/guidance"
@@ -64,13 +67,19 @@ type Product struct {
 }
 
 type Repository struct {
-	State             string `json:"state"`
-	Clean             bool   `json:"clean"`
-	LockChanged       bool   `json:"lock_changed"`
-	ConflictCount     int    `json:"conflict_count"`
-	ManagedFiles      int    `json:"managed_files"`
-	PlanDigestVersion int    `json:"plan_digest_version"`
-	PlanDigest        string `json:"plan_digest"`
+	State         string `json:"state"`
+	Clean         bool   `json:"clean"`
+	LockChanged   bool   `json:"lock_changed"`
+	LockExists    bool   `json:"lock_exists"`
+	ConflictCount int    `json:"conflict_count"`
+	ConflictClass string `json:"conflict_class"`
+	// ConflictFamilyCounts carries the per-family conflict tally behind
+	// ConflictClass; all three conflict families are always present.
+	ConflictFamilyCounts map[string]int      `json:"conflict_family_counts"`
+	ActionCounts         engine.ActionCounts `json:"action_counts"`
+	ManagedFiles         int                 `json:"managed_files"`
+	PlanDigestVersion    int                 `json:"plan_digest_version"`
+	PlanDigest           string              `json:"plan_digest"`
 }
 
 type Capability struct {
@@ -189,7 +198,9 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 		SchemaVersion: SchemaVersion, Profile: ProfileFull, Workspace: root, Recipe: metadata.Recipe,
 		Product: Product{Name: m.Product.Name, Module: m.Product.Module, Runtime: m.Runtime.Language, Kind: m.Runtime.Kind, Visibility: m.Product.Visibility},
 		Repository: Repository{
-			State: state, Clean: clean, LockChanged: plan.LockChanged, ConflictCount: plan.ConflictCount,
+			State: state, Clean: clean, LockChanged: plan.LockChanged, LockExists: plan.LockExists(),
+			ConflictCount: plan.ConflictCount, ConflictClass: plan.ConflictClass(),
+			ConflictFamilyCounts: plan.ConflictFamilyCounts(), ActionCounts: plan.ActionCounts(),
 			ManagedFiles: len(plan.DesiredLock.Files), PlanDigestVersion: digest.Version, PlanDigest: prefixed(digest.SHA256),
 		},
 		Capabilities: []Capability{}, EntryPoints: []EntryPoint{}, ExtensionPoints: []ExtensionPoint{},
@@ -223,6 +234,14 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 				Message: "selected capability binary is unavailable; Bob did not run or verify it", CapabilityID: definition.ID, Paths: []string{},
 			})
 		}
+		if definition.Selection == "disabled" && len(definition.Evidence) > 0 {
+			if matched := evaluateEvidenceRules(root, m, definition.Evidence); len(matched) > 0 {
+				result.Notices = append(result.Notices, Notice{
+					ID: "surface_evidence_mismatch:" + definition.ID, Severity: "warning", Code: "surface_evidence_mismatch",
+					Message: surfaceEvidenceMessage(m, definition), CapabilityID: definition.ID, Paths: matched,
+				})
+			}
+		}
 	}
 	for _, artifact := range metadata.Artifacts {
 		if hasRole(artifact.Roles, "entrypoint") || hasRole(artifact.Roles, "composition_root") {
@@ -239,7 +258,11 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 	}
 	switch state {
 	case "conflicted":
-		result.Actions = append(result.Actions, commandAction(root, "review_plan", "ownership_conflict"))
+		// The reason code carries the dominant conflict family (precedence
+		// ownership_hazard > contract_drift > unmanaged_divergence) so agents
+		// routing on reason codes get the same classification as readers of
+		// repository.conflict_class.
+		result.Actions = append(result.Actions, commandAction(root, "review_plan", "conflict_"+string(plan.DominantConflictFamily())))
 	case "drifted":
 		result.Actions = append(result.Actions, commandAction(root, "review_plan", "repository_drift"))
 	}
@@ -251,6 +274,97 @@ func commandAction(root, id, reason string) Action {
 	return Action{ID: id, Kind: "command", Effect: "read_only", CWD: root,
 		Argv: []string{"bob", "plan", root, "--json"}, ReasonCode: reason,
 		RequiresExplicitAuthority: false, BlockedBy: []string{}}
+}
+
+// evidenceReadLimit bounds the bytes a Contains rule may read. Bounded reads
+// are in-contract for read-only commands: the planner already reads bounded
+// current-content previews.
+const evidenceReadLimit = 64 << 10
+
+// evaluateEvidenceRules applies a capability's declared read-only evidence
+// rules against the workspace: existence rules os.Stat the resolved path,
+// glob rules take the first sorted match, and Contains rules read only the
+// rule-declared file under a byte cap. It never runs a subprocess and never
+// mutates anything. The returned paths are repository-relative, sorted, and
+// name what was found.
+func evaluateEvidenceRules(root string, m manifest.Manifest, rules []recipe.EvidenceRule) []string {
+	if len(rules) > recipe.EvidenceRuleLimit {
+		rules = rules[:recipe.EvidenceRuleLimit]
+	}
+	var matched []string
+	for _, rule := range rules {
+		resolved := strings.ReplaceAll(rule.Path, "<product>", m.Product.Name)
+		if resolved == "" {
+			continue
+		}
+		absolute := filepath.Join(root, filepath.FromSlash(resolved))
+		switch {
+		case rule.Contains != "":
+			if evidenceFileContains(absolute, rule.Contains) {
+				matched = append(matched, resolved)
+			}
+		case strings.Contains(resolved, "*"):
+			if hits, err := filepath.Glob(absolute); err == nil && len(hits) > 0 {
+				if relative, err := filepath.Rel(root, hits[0]); err == nil {
+					matched = append(matched, filepath.ToSlash(relative))
+				}
+			}
+		default:
+			if _, err := os.Stat(absolute); err == nil {
+				matched = append(matched, resolved)
+			}
+		}
+	}
+	sort.Strings(matched)
+	return matched
+}
+
+// evidenceFileContains reports whether the bounded prefix of one regular
+// file contains the literal. Missing, non-regular, or unreadable files never
+// match; a false negative is acceptable for a heuristic, a subprocess is not.
+func evidenceFileContains(path, needle string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	data, err := io.ReadAll(io.LimitReader(file, evidenceReadLimit))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), needle)
+}
+
+// surfaceEvidenceMessage derives the notice's corrective text from the same
+// manifest validator every load path uses: it clones the manifest, flips the
+// capability's own surface boolean, and revalidates. The notice can therefore
+// never advise flipping a flag the schema would reject, and cannot disagree
+// with what bob actually accepts.
+func surfaceEvidenceMessage(m manifest.Manifest, definition recipe.CapabilityDefinition) string {
+	field := ""
+	if len(definition.ManifestFields) > 0 {
+		field = definition.ManifestFields[0]
+	}
+	clone := m
+	switch field {
+	case "surfaces.mcp":
+		clone.Surfaces.MCP = true
+	case "surfaces.studio":
+		clone.Surfaces.Studio = true
+	default:
+		// Empty or unknown field: the flip-the-boolean derivation has nothing
+		// to key on, so say something actionable instead of interpolating an
+		// empty field name into "flip  to true" or "cannot express : true".
+		return fmt.Sprintf("%s is disabled but repository evidence suggests the surface exists; flip the declared surface in bob.yaml or remove the capability", definition.ID)
+	}
+	if clone.Validate() == nil {
+		return fmt.Sprintf("%s is disabled but repository evidence suggests the surface exists; flip %s to true in bob.yaml or remove the surface", definition.ID, field)
+	}
+	return fmt.Sprintf("%s is disabled but repository evidence suggests the surface exists; the current %s recipe cannot express %s: true", definition.ID, m.Recipe, field)
 }
 
 func materialization(definition recipe.CapabilityDefinition, artifacts map[string]recipe.ArtifactDescriptor, actions map[string]engine.Action) string {
@@ -374,22 +488,42 @@ func truncate(result *Result, limit int) {
 		case len(result.Artifacts) > 0:
 			truncateArtifactPrefix(result, limit)
 		case stripCapabilityDetail(result):
-		case len(result.Notices) > 0:
-			result.Notices = result.Notices[:len(result.Notices)-1]
-			omit(result, "notices", 1)
 		case len(result.Invariants) > 1:
+			// Recipe boilerplate yields before workspace-specific notices:
+			// a surface-evidence or binary warning is the reason the caller
+			// ran the command, while invariants repeat across every
+			// repository of the recipe.
 			result.Invariants = result.Invariants[:len(result.Invariants)-1]
 			omit(result, "invariants", 1)
+		case stripNoticeMessages(result):
 		case len(result.ExtensionPoints) > 1:
 			result.ExtensionPoints = result.ExtensionPoints[:len(result.ExtensionPoints)-1]
 			omit(result, "extension_points", 1)
 		case len(result.EntryPoints) > 1:
 			result.EntryPoints = result.EntryPoints[:len(result.EntryPoints)-1]
 			omit(result, "entry_points", 1)
+		case len(result.Notices) > 0:
+			result.Notices = result.Notices[:len(result.Notices)-1]
+			omit(result, "notices", 1)
 		default:
 			return
 		}
 	}
+}
+
+// stripNoticeMessages removes one notice's explanatory text, keeping its
+// code, severity, capability, and paths. Consumers branch on codes, not
+// messages, and the context digest already excludes notice messages, so a
+// message-less notice still carries its full machine meaning.
+func stripNoticeMessages(result *Result) bool {
+	for i := range result.Notices {
+		if result.Notices[i].Message != "" {
+			result.Notices[i].Message = ""
+			omit(result, "notice_messages", 1)
+			return true
+		}
+	}
+	return false
 }
 
 func truncateArtifactPrefix(result *Result, limit int) {
@@ -469,6 +603,7 @@ func digestContract(m manifest.Manifest, metadata recipe.Metadata) string {
 		Capabilities          []struct {
 			ID, Category, Selection, Binary string
 			ManifestFields, ArtifactIDs     []string
+			Evidence                        []recipe.EvidenceRule
 		} `json:"capabilities"`
 		Artifacts       []recipe.ArtifactDescriptor `json:"artifacts"`
 		InvariantIDs    []string                    `json:"invariant_ids"`
@@ -493,8 +628,9 @@ func digestContract(m manifest.Manifest, metadata recipe.Metadata) string {
 		identity.Capabilities = append(identity.Capabilities, struct {
 			ID, Category, Selection, Binary string
 			ManifestFields, ArtifactIDs     []string
+			Evidence                        []recipe.EvidenceRule
 		}{
-			capability.ID, capability.Category, capability.Selection, capability.Binary, capability.ManifestFields, capability.ArtifactIDs,
+			capability.ID, capability.Category, capability.Selection, capability.Binary, capability.ManifestFields, capability.ArtifactIDs, capability.Evidence,
 		})
 	}
 	for _, invariant := range metadata.Invariants {

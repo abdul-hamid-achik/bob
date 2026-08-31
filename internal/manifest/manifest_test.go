@@ -44,12 +44,103 @@ func TestLoadRejectsUnknownFields(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsUnsupportedSurface(t *testing.T) {
+// TestValidateAcceptsDescriptiveSurfaces pins the descriptive-surfaces
+// contract: surfaces.mcp and surfaces.studio are human-owned declarations of
+// product reality that the go-agent-tool recipe neither generates nor
+// verifies, so any combination of their booleans validates.
+func TestValidateAcceptsDescriptiveSurfaces(t *testing.T) {
 	t.Parallel()
+	tests := []struct {
+		name   string
+		mcp    bool
+		studio bool
+	}{
+		{"mcp only", true, false},
+		{"studio only", false, true},
+		{"both", true, true},
+		{"neither", false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+			m.Surfaces.MCP = tt.mcp
+			m.Surfaces.Studio = tt.studio
+			if err := m.Validate(); err != nil {
+				t.Fatalf("expected descriptive surfaces to validate, got %v", err)
+			}
+		})
+	}
+}
+
+// TestDescriptiveSurfaceEncodeRoundTrip proves a manifest declaring mcp: true
+// survives the strict encode/decode cycle, so the wire format expresses the
+// declaration instead of rejecting it at load time.
+func TestDescriptiveSurfaceEncodeRoundTrip(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
 	m := Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
 	m.Surfaces.MCP = true
-	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "reserved") {
-		t.Fatalf("expected reserved-surface error, got %v", err)
+	m.Surfaces.Studio = true
+	if err := WriteFile(filepath.Join(root, Filename), m, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Surfaces.MCP || !got.Surfaces.Studio || !got.Surfaces.CLI || !got.Surfaces.JSON {
+		t.Fatalf("round trip lost surface declarations: %#v", got.Surfaces)
+	}
+}
+
+// TestEncodeAlwaysWritesAllSurfaces locks the byte-stability claim behind
+// descriptive surfaces: Encode renders every surface key explicitly, so
+// relaxing mcp/studio validation cannot change bytes for existing manifests.
+// The golden pins the whole rendering byte-for-byte, not just the surface
+// substrings — any rendering change now fails here first.
+func TestEncodeAlwaysWritesAllSurfaces(t *testing.T) {
+	t.Parallel()
+	m := Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")
+	data, err := Encode(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"cli: true", "json: true", "mcp: false", "studio: false"} {
+		if !bytes.Contains(data, []byte(key)) {
+			t.Fatalf("encode omitted surface key %q: %s", key, data)
+		}
+	}
+	const golden = `schema_version: 1
+recipe: go-agent-tool
+product:
+    name: acme-tool
+    module: github.com/acme/acme-tool
+    description: Build useful things.
+    visibility: public
+    license: MIT
+runtime:
+    language: go
+    kind: cli
+surfaces:
+    cli: true
+    json: true
+    mcp: false
+    studio: false
+integrations:
+    code_structure: codemap
+    semantic_search: vecgrep
+    terminal_verification: glyphrun
+    browser_verification: none
+    secrets: none
+    artifacts: none
+distribution:
+    github_actions: true
+    goreleaser: true
+    homebrew: false
+    docs: markdown`
+	if string(data) != golden {
+		t.Fatalf("Encode(Default(...)) bytes drifted from golden:\n%s", data)
 	}
 }
 

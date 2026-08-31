@@ -117,7 +117,7 @@ func TestCompactContextMaximumRecipeMCPWireBudget(t *testing.T) {
 	}
 	var output ContextOutput
 	decodeStructured(t, result, &output)
-	if output.Context == nil || len(output.Context.Capabilities) != 14 || output.Context.Profile != "compact" {
+	if output.Context == nil || len(output.Context.Capabilities) != 16 || output.Context.Profile != "compact" {
 		t.Fatalf("maximum compact context = %#v", output.Context)
 	}
 	data, err := json.Marshal(output.Context)

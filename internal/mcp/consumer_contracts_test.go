@@ -241,8 +241,8 @@ func validateContext(t *testing.T, envelope consumerEnvelope, state string, clea
 			t.Fatalf("digest = %q", digest)
 		}
 	}
-	if len(context.Capabilities) != 14 || len(context.EntryPoints) != 2 || len(context.ExtensionPoints) != 3 || len(context.Invariants) != 5 || len(context.Playbooks) != 7 {
-		t.Fatalf("context catalog sizes: capabilities=%d entry_points=%d extension_points=%d invariants=%d playbooks=%d", len(context.Capabilities), len(context.EntryPoints), len(context.ExtensionPoints), len(context.Invariants), len(context.Playbooks))
+	if len(context.Capabilities) != 16 || len(context.EntryPoints) != 2 || len(context.ExtensionPoints) != 3 || len(context.Invariants)+context.Truncation.Omitted["invariants"] != 5 || len(context.Playbooks) != 7 {
+		t.Fatalf("context catalog sizes: capabilities=%d entry_points=%d extension_points=%d invariants=%d(+%d omitted) playbooks=%d", len(context.Capabilities), len(context.EntryPoints), len(context.ExtensionPoints), len(context.Invariants), context.Truncation.Omitted["invariants"], len(context.Playbooks))
 	}
 	for _, capability := range context.Capabilities {
 		if capability.ID == "" || capability.Selection == "" || capability.Materialization == "" || capability.Availability == "" || capability.Verification != "not_assessed" {
@@ -272,7 +272,15 @@ func validateContext(t *testing.T, envelope consumerEnvelope, state string, clea
 	if state == "clean" && len(context.Actions) != 0 || state != "clean" && (len(context.Actions) != 1 || context.Actions[0].ID == "" || context.Actions[0].Effect != "read_only" || context.Actions[0].CWD != "/workspace" || len(context.Actions[0].Argv) == 0 || context.Actions[0].ReasonCode == "") {
 		t.Fatalf("context actions = %#v", context.Actions)
 	}
-	if context.Truncation.Profile != "compact" || context.Truncation.ByteLimit != 6144 || context.Truncation.Truncated || context.Truncation.Omitted == nil {
+	// Truncation may honestly record dropped invariants or notice messages
+	// under the compact byte budget; anything else would mean an identity or
+	// guidance field was clipped.
+	for field := range context.Truncation.Omitted {
+		if field != "invariants" && field != "notice_messages" {
+			t.Fatalf("context truncation clipped %q: %#v", field, context.Truncation)
+		}
+	}
+	if context.Truncation.Profile != "compact" || context.Truncation.ByteLimit != 6144 || context.Truncation.Omitted == nil {
 		t.Fatalf("context truncation = %#v", context.Truncation)
 	}
 }

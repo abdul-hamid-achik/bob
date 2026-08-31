@@ -7,8 +7,40 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-30
+
 ### Added
 
+- Descriptive MCP and Studio surfaces: `surfaces.mcp` and `surfaces.studio`
+  may now be `true` in a go-agent-tool manifest. They declare product
+  reality the recipe neither generates nor verifies (like integration
+  seams), surface as `surface.mcp`/`surface.studio` capabilities in
+  `bob context`, and require no schema or recipe version bump — rendered
+  artifacts and existing plan digests are byte-identical.
+- Conflict classification in `bob context`: additive
+  `repository.conflict_class`
+  (`none|ownership_hazard|contract_drift|unmanaged_divergence|mixed`),
+  `repository.conflict_family_counts`, `repository.action_counts`, and
+  `repository.lock_exists` fields distinguish "Bob-owned file drifted" from
+  "recipe proposes scaffold over a human-owned repository" while the
+  `repository.state` enum stays wire-compatible. The conflicted-state
+  continuation `reason_code` now carries the class
+  (`conflict_unmanaged_divergence` and siblings).
+- Per-entry causes in `bob plan` human output: every row now renders
+  `kind path [code] family` using a shared engine classifier
+  (`ownership_hazard`, `contract_drift`, `unmanaged_divergence`,
+  `scaffold`, `convergence`), so drift and scaffold proposals are
+  distinguishable without a JSON round trip. Plan and apply guidance is
+  class-aware: all-unmanaged-divergence conflicts with no lock now say the
+  recipe was never applied and the files are human-owned.
+- Read-only surface-evidence reconciliation in `bob context`: recipe
+  metadata declares bounded evidence rules per surface capability (path
+  existence, single-segment globs, and byte-capped literal matches);
+  `surface.mcp` ships defaults that catch conventional `internal/mcp`
+  layouts and `mcp` mentions in the recipe-known entrypoint. A disabled
+  surface with matching evidence emits a `surface_evidence_mismatch`
+  warning notice whose corrective text is derived from the manifest
+  validator itself. Context remains read-only and runs no subprocesses.
 - `go-hygiene@2` seed-once hygiene recipe for existing Go repositories:
   seeds README, AGENTS, SECURITY, `.gitignore`, `.editorconfig` (with tab
   indentation), `.golangci.yml`, and a golangci-lint CI stub. Never owns
@@ -19,6 +51,14 @@ and the project uses semantic versioning after the first tagged release.
   dependency detection, Nuxt-aware `.gitignore` (`.nuxt/`, `.output/`), and
   a Bun-oriented CI stub. Preserves JavaScript or TypeScript and the declared
   package manager. Catalog, detection, and tests updated.
+
+### Changed
+
+- Compact-context byte-budget truncation now drops recipe-boilerplate
+  invariants and notice explanatory messages before dropping whole
+  notices, so workspace-specific warnings survive the 6 KiB compact
+  profile (and the 8 KiB MCP gateway bound) while remaining deterministic
+  and recorded in `truncation.omitted` (`invariants`, `notice_messages`).
 
 ## [0.9.0] - 2026-07-27
 
