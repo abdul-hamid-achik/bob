@@ -85,7 +85,7 @@ func (s *Server) handleContext(_ stdcontext.Context, _ *sdkmcp.CallToolRequest, 
 	if authErr != nil {
 		return s.contextFailure("", authErr.code, authErr)
 	}
-	result, err := contextpkg.Load(root, contextpkg.Options{Profile: profile, LookPath: s.lookPath})
+	result, err := contextpkg.Load(root, contextpkg.Options{Profile: profile, LookPath: s.lookPath, ByteLimit: s.contextByteLimit})
 	if err != nil {
 		return s.contextFailure(root, guidanceErrorCode(err, "context_failed"), err)
 	}

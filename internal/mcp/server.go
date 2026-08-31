@@ -26,12 +26,13 @@ shell path with "bob apply <workspace> --expect-plan-digest sha256:<digest>", th
 impact analysis, indexing, and verification remain owned by those tools and Cortex.`
 
 type Server struct {
-	authority workspaceAuthority
-	runner    inspectpkg.Runner
-	recorder  telemetry.Recorder
-	telemetry *telemetry.Store
-	lookPath  func(string) (string, error)
-	srv       *sdkmcp.Server
+	authority        workspaceAuthority
+	runner           inspectpkg.Runner
+	recorder         telemetry.Recorder
+	telemetry        *telemetry.Store
+	lookPath         func(string) (string, error)
+	contextByteLimit int
+	srv              *sdkmcp.Server
 }
 
 // ServerOptions narrows the filesystem authority granted to the MCP server.
@@ -41,7 +42,11 @@ type ServerOptions struct {
 	AllowAnyWorkspace bool
 	Recorder          telemetry.Recorder
 	Telemetry         *telemetry.Store
-	lookPath          func(string) (string, error)
+	// ContextByteLimit, when positive, overrides the context profile's
+	// projection budget for every bob_context call. Tests use it to make
+	// truncation deterministic; production leaves it at zero.
+	ContextByteLimit int
+	lookPath         func(string) (string, error)
 }
 
 // NewServer constructs the compact read-only MCP surface.
@@ -79,7 +84,8 @@ func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, opt
 	s := &Server{
 		authority: authority, runner: runner,
 		recorder: telemetry.BestEffort(options.Recorder), telemetry: options.Telemetry,
-		lookPath: options.lookPath,
+		lookPath:         options.lookPath,
+		contextByteLimit: options.ContextByteLimit,
 	}
 	s.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "bob", Version: version.Version},

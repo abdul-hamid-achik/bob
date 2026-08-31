@@ -28,9 +28,15 @@ func TestConsumerContractFixturesMatchRealOutputs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cleanSession := connectWithOptions(t, cleanRoot, &offlineRunner{}, ServerOptions{lookPath: lookPath})
-	driftSession := connectWithOptions(t, driftRoot, &offlineRunner{}, ServerOptions{lookPath: lookPath})
-	conflictSession := connectWithOptions(t, conflictRoot, &offlineRunner{}, ServerOptions{lookPath: lookPath})
+	// The byte limit is forced high so truncation never runs: the serialized
+	// result embeds absolute workspace paths, and a payload hovering at the
+	// 6 KiB compact boundary truncated differently depending on the machine's
+	// temp-path length (fixtureCall already normalizes the root to
+	// /workspace, so an untruncated output is byte-portable).
+	fixtureOptions := ServerOptions{lookPath: lookPath, ContextByteLimit: 1 << 20}
+	cleanSession := connectWithOptions(t, cleanRoot, &offlineRunner{}, fixtureOptions)
+	driftSession := connectWithOptions(t, driftRoot, &offlineRunner{}, fixtureOptions)
+	conflictSession := connectWithOptions(t, conflictRoot, &offlineRunner{}, fixtureOptions)
 
 	cleanContext := fixtureCall(t, cleanSession, cleanRoot, "bob_context", map[string]any{}, false)
 	fixtures := map[string][]byte{

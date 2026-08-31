@@ -36,6 +36,10 @@ const (
 type Options struct {
 	Profile  Profile
 	LookPath func(string) (string, error)
+	// ByteLimit, when positive, overrides the profile's projection budget.
+	// Tests use it to make truncation deterministic; production callers
+	// leave it at zero for the documented profile limits.
+	ByteLimit int
 }
 
 type Result struct {
@@ -172,9 +176,16 @@ func Load(root string, options Options) (Result, error) {
 	full := compose(canonical, m, plan, metadata, lookPath)
 	full.ContractDigest = digestContract(m, metadata)
 	full.ContextDigest = digestContext(full)
-	projected := project(full, profile, limit)
-	if size := jsonSize(projected); size > limit {
-		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("context %s result exceeds %d-byte bound", profile, limit))
+	// An override larger than the profile limit disables truncation (tests
+	// pinning fixtures need decisions independent of absolute path length);
+	// the profile limit still guards the final size check.
+	projected := project(full, profile, limit, options.ByteLimit)
+	bound := limit
+	if options.ByteLimit > bound {
+		bound = options.ByteLimit
+	}
+	if size := jsonSize(projected); size > bound {
+		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("context %s result exceeds %d-byte bound", profile, bound))
 	}
 	return projected, nil
 }
@@ -449,7 +460,7 @@ func profileLimit(profile Profile) (int, error) {
 	}
 }
 
-func project(full Result, profile Profile, limit int) Result {
+func project(full Result, profile Profile, limit int, decisionLimit int) Result {
 	result := clone(full)
 	result.Profile = profile
 	result.Truncation = Truncation{Profile: profile, ByteLimit: limit, Omitted: map[string]int{}}
@@ -478,7 +489,13 @@ func project(full Result, profile Profile, limit int) Result {
 	case ProfileStandard:
 		result.Artifacts = nil
 	}
-	truncate(&result, limit)
+	// decisionLimit can exceed the profile limit (test overrides): the
+	// published metadata keeps the profile's documented bound while the
+	// override only controls whether truncation runs at all.
+	if decisionLimit < limit {
+		decisionLimit = limit
+	}
+	truncate(&result, decisionLimit)
 	return result
 }
 
