@@ -43,8 +43,9 @@ implemented.
 The human-owned `bob.yaml` declares project identity, an embedded recipe
 (`go-agent-tool`, `files`, or a stack hygiene recipe), CLI/JSON surfaces,
 optional integration seams, and distribution choices. Schema version 1 is
-strict: unknown fields and unsupported combinations fail validation. MCP and
-Studio must be disabled.
+strict: unknown fields and unsupported combinations fail validation.
+`surfaces.mcp` and `surfaces.studio` on `go-agent-tool` are descriptive
+product declarations; they do not generate or enable a server or UI.
 
 ### Embedded recipes
 
@@ -52,8 +53,8 @@ Every recipe renders its complete desired artifact set in memory,
 deterministically and under a version. Three kinds are embedded: the current
 `go-agent-tool@6` has a static human-owned command extension contract and a
 generated regression test that keeps a blank scaffold lint-clean;
-`files@1` materializes an arbitrary manifest-declared file tree; and the eleven
-stack hygiene recipes (`ts-app@2` through `static-web@2`, including Nuxt, SwiftPM and
+`files@1` materializes an arbitrary manifest-declared file tree; and the twelve
+stack hygiene recipes (`ts-app@2` through `go-hygiene@2`, including Nuxt, SwiftPM and
 Elixir/Mix) render only seed-once hygiene artifacts and never own application
 source. The original eight version-1 stack contracts remain renderable for
 immutable compatibility. There is no

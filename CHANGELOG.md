@@ -31,6 +31,10 @@ and the project uses semantic versioning after the first tagged release.
   boolean `go-agent-tool` flag.
 - Documented Go floor is 1.26.6, matching `go.mod`. Generated
   `go-agent-tool` modules stay on the published 1.26.5 security floor.
+- Public getting-started, homepage, existing-repository, and
+  any-repository copy now lead with stack hygiene for existing language
+  repositories. The existing-repository conflict example no longer uses
+  `README.md` (seed-once on both stack recipes and `go-agent-tool@6`).
 
 ### Fixed
 

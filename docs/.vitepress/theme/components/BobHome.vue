@@ -12,7 +12,7 @@ const transcript: Row[] = [
   { text: '  + create   .github/workflows/ci.yml', cls: 'create' },
   { text: '  + create   cmd/payments-cli/main.go', cls: 'create' },
   { text: '  + create   Taskfile.yml', cls: 'create' },
-  { text: '  ~ update   README.md', cls: 'update' },
+  { text: '  ~ update   internal/cli/root.go', cls: 'update' },
   { text: '  ! conflict docs/index.md   unmanaged file differs', cls: 'conflict', pause: 700 },
   { text: '', cls: 'meta' },
   { text: 'plan: 3 create · 1 update · 1 conflict · 0 files written', cls: 'meta', pause: 900 },
@@ -131,6 +131,7 @@ const ledger = [
 const refusals = [
   'Run a model, call a network, or guess.',
   'Overwrite a file it cannot prove it owns.',
+  'Generate your Next.js, FastAPI, or Cargo app. Hygiene, not the product.',
   'Touch .git, bob.yaml, or anything outside the workspace.',
   'Write half a plan. One conflict, zero writes.',
   'Manage your secrets.',
@@ -150,12 +151,14 @@ const refusals = [
           </h1>
           <p class="lede">
             Turn a small <code>bob.yaml</code> into a reviewable repository (early alpha) —
-            the packaged Go/Cobra recipe, or a file tree you declare yourself.
+            a packaged Go/Cobra CLI, seed-once hygiene on an existing
+            TypeScript, Python, Rust, Go, or HTML repo, or a file tree you declare.
             Bob plans before it writes, proves it owns every file it touches,
             and refuses to guess. No model. No magic. A ledger.
           </p>
           <div class="cta-row">
             <a class="btn btn-safety" href="/getting-started">Get started</a>
+            <a class="btn btn-draft" href="/guides/existing-repository">Existing repo</a>
             <a class="btn btn-draft" href="/agents">For coding agents</a>
           </div>
           <button class="install" type="button" @click="copyInstall" aria-label="Copy install command">
@@ -213,6 +216,43 @@ const refusals = [
           <span class="key read">blue — read-only authority</span>
           <span class="key write">orange — explicit mutation</span>
         </p>
+      </div>
+    </section>
+
+    <!-- THREE PATHS ------------------------------------------------------ -->
+    <section class="grid-section paths">
+      <div class="wrap">
+        <h2 class="h2">Three recipes. Same ledger.</h2>
+        <p class="body-copy paths-lede">
+          Bob does not generate your application. It makes the repository
+          contract visible and refuses to smash living files.
+        </p>
+        <div class="cards">
+          <a class="card read path-card" href="/guides/existing-repository">
+            <span class="card-tag">STACK</span>
+            <h3>Existing repo</h3>
+            <p>
+              TypeScript, Python, Rust, Go, HTML, and the rest. Seed docs and
+              ignore files once. Never own <code>src/</code>.
+            </p>
+          </a>
+          <a class="card write path-card" href="/guides/any-repository">
+            <span class="card-tag">FILES</span>
+            <h3>Declared tree</h3>
+            <p>
+              You write the paths in <code>bob.yaml</code>. Bob materializes
+              them with the same plan, apply, and lock rules.
+            </p>
+          </a>
+          <a class="card read path-card" href="/getting-started">
+            <span class="card-tag">FACTORY</span>
+            <h3>Go/Cobra CLI</h3>
+            <p>
+              The deep recipe. Public-ready command structure, CI, and
+              release plumbing — living files stay in human hands after seed.
+            </p>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -287,7 +327,8 @@ const refusals = [
           <h2 class="display display-small">Put on the hard hat.</h2>
           <p class="body-copy">
             One manifest, one plan, one explicit apply. Review the diff like a
-            professional and ship a repository you can defend.
+            professional. Already have a TypeScript or Python repo? Seed
+            hygiene — do not ask Bob to invent the app.
           </p>
         </div>
         <div class="final-code">
@@ -295,7 +336,10 @@ const refusals = [
 <span class="c-cmd">$ brew install --cask bob</span>
 <span class="c-meta"># or</span>
 <span class="c-cmd">$ go install github.com/abdul-hamid-achik/bob/cmd/bob@latest</span></code></pre>
-          <a class="btn btn-safety" href="/getting-started">Build something reviewable</a>
+          <div class="cta-row">
+            <a class="btn btn-safety" href="/getting-started">Build something reviewable</a>
+            <a class="btn btn-draft" href="/guides/existing-repository">Bring Bob to an existing repo</a>
+          </div>
         </div>
       </div>
       <p class="foot-line">Deterministic plans · Explicit authority · Honest integration boundaries</p>
@@ -683,6 +727,25 @@ const refusals = [
   font-size: 0.88rem;
   line-height: 1.6;
   margin: 0;
+}
+.paths-lede {
+  max-width: 62ch;
+  margin: -6px 0 28px;
+}
+.path-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.path-card:hover {
+  border-color: var(--draft);
+  transform: translateY(-2px);
+}
+.path-card code {
+  color: var(--draft);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.86em;
 }
 
 /* Agents */

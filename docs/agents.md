@@ -12,6 +12,9 @@ that contract well.
 If you are an agent reading this to decide what to do next: run
 `bob learn --json`, then `bob context --json`, before you plan anything. The
 first call describes Bob; the second describes the repository contract.
+On an existing TypeScript, Python, Rust, or Go application, prefer
+[Existing Repository](./guides/existing-repository.md) — stack hygiene,
+not `go-agent-tool` — unless the workspace already is a Cobra CLI.
 
 ## `bob learn`
 
@@ -361,9 +364,10 @@ without re-verifying each session:
 
 ## See also
 
-- [Build any repository](./guides/any-repository.md) for the `files` recipe —
-  the second embedded recipe, for anything that isn't a Go/Cobra CLI — with an
-  agent-focused section on looping `check --json --conflicts-only`.
+- [Build any repository](./guides/any-repository.md) for the three catalog
+  paths — stack hygiene on an existing language repo, `files` for a declared
+  tree, and `go-agent-tool` for a new Go/Cobra CLI — with an agent-focused
+  section on looping `check --json --conflicts-only`.
 - [MCPHub & local-agent](./guides/mcphub-local-agent.md) for wiring the same
   nine tools through MCPHub and scoping them to a local-agent gateway.
 - [Ownership & Safety](./ownership-and-safety.md) for the full plan-state

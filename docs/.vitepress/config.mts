@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 const site = 'https://bobcli.dev'
 const ogImage = `${site}/og.png`
 const description =
-  'Bob is a deterministic repository factory for agent-native developer tools. It plans before it writes, proves ownership of every file it touches, and detects drift in CI. Model-free, local, MIT.'
+  'Bob is a deterministic repository factory. It plans before it writes, proves ownership of every file it touches, and seeds hygiene on existing TypeScript, Python, Rust, or Go repositories without owning application source. Model-free, local, MIT.'
 
 export default defineConfig({
   title: 'Bob',
@@ -25,7 +25,7 @@ export default defineConfig({
       {
         name: 'keywords',
         content:
-          'bob cli, repository factory, deterministic scaffolding, code generation, drift detection, MCP tools, agent-native, go cli generator, bob.yaml',
+          'bob cli, repository factory, deterministic scaffolding, stack hygiene, typescript, python, rust, go, drift detection, MCP tools, agent-native, go cli generator, bob.yaml',
       },
     ],
     ['meta', { property: 'og:type', content: 'website' }],

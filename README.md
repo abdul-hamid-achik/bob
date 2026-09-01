@@ -21,11 +21,12 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds twelve recipes —
-> `go-agent-tool`, `files`, and ten stack hygiene recipes (`ts-app`,
-> `js-app`, `vue-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`,
-> `swift-package`, `elixir-app`, `static-web`) — plus a read-only Studio and nine typed MCP tools. Review
-> every plan and resulting diff before publishing.
+> **Status: early alpha.** The current contract embeds fourteen recipes —
+> `go-agent-tool`, `files`, and twelve stack hygiene recipes (`ts-app`,
+> `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`,
+> `rust-cli`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`) —
+> plus a read-only Studio and nine typed MCP tools. Review every plan and
+> resulting diff before publishing.
 
 ## Why Bob exists
 
@@ -42,6 +43,10 @@ Bob owns the construction lifecycle instead:
 - `bob apply` changes only absent, identical, or previously managed files;
 - `bob check` fails when generated infrastructure drifts;
 - `bob doctor` reports required and optional tool availability honestly.
+
+On an existing TypeScript, Python, Rust, Go, or HTML repository, Bob's job is
+the same ownership ledger: seed-once hygiene, a readable contract, and
+`bob check` — not generating the application.
 
 Bob does not run an LLM, infer application behavior, manage secrets, or declare a
 feature verified. Agent runtimes may drive Bob; evidence tools verify the result.
@@ -85,14 +90,17 @@ bob check
 
 To initialize Bob in an empty or existing directory, write only the human-owned
 manifest first. `bob init` detects the repository's stack (Go, TypeScript,
-JavaScript, Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults
-to the matching recipe — the seed-once stack hygiene recipes never own
-application source. When a chosen recipe does not match the detected stack,
-the preview warns and `--write` refuses without `--force`:
+JavaScript, Vue, Nuxt, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a
+static web site) and defaults to the matching recipe — the seed-once stack
+hygiene recipes never own application source. A plain Go module selects
+`go-hygiene`; only a Cobra `cmd/` + `internal/cli` layout (or an existing
+`recipe: go-agent-tool`) selects the factory. When a chosen recipe does not
+match the detected stack, the preview warns and `--write` refuses without
+`--force`:
 
 ```bash
-bob init . --name acme-tool --module github.com/acme/acme-tool --write  # Go repo -> go-agent-tool
-bob init . --write            # e.g. a Bun/Turborepo monorepo -> ts-app, no module needed
+bob init . --write            # e.g. a Bun/Turborepo monorepo -> ts-app; a plain Go module -> go-hygiene
+bob init . --name acme-tool --module github.com/acme/acme-tool --write  # Cobra layout -> go-agent-tool
 bob plan
 bob plan --content  # bounded desired-content previews
 bob plan --diff     # bounded unified diffs

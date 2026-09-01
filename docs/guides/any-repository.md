@@ -1,36 +1,53 @@
 ---
-description: The files recipe — declare any file tree in bob.yaml and get plan/apply/lock safety without a Go/Cobra scaffold.
+description: Three ways to bring Bob to any language — stack hygiene on an existing repo, a declared file tree, or a Go/Cobra factory.
 ---
 
 # Build any repository
 
-`go-agent-tool` has opinions: Go, Cobra, a CLI shape. Most of the time that's
-the point. Sometimes it isn't — you need a web service's config bundle, a set
-of scripts, a non-Go project, or just three files in the right place with the
-right permissions. `recipe: files` is Bob's answer: declare the tree, get the
-same plan/apply/lock ownership safety, own none of the Go scaffolding you
-didn't ask for.
+Bob is not a TypeScript, Python, or Rust app generator. It is an ownership
+ledger you can put on those repositories. There are three catalog paths:
 
-## When to reach for `files` instead of `go-agent-tool`
+1. **Existing language repo** — `bob init` detects TypeScript, JavaScript,
+   Vue, Nuxt, Python, Ruby, Lua, Rust, Swift, Elixir, static HTML, or Go and
+   writes the matching stack hygiene recipe. Those recipes seed README,
+   AGENTS, SECURITY, `.gitignore`, `.editorconfig`, and optional CI once.
+   They never own `src/` or application source. `bob new --write` refuses a
+   stack recipe on an empty directory because that would create hygiene
+   without an app.
+2. **A tree you already know** — `recipe: files`. Declare paths in
+   `bob.yaml` and get the same plan/apply/lock safety with none of the Go
+   scaffolding.
+3. **A new public Go/Cobra CLI** — `go-agent-tool`. That recipe has opinions
+   on purpose. Use it when you want the factory, not when you want Bob to
+   invent a FastAPI or Next.js shape.
 
-- You're not building a Go/Cobra CLI. `go-agent-tool` isn't going to bend
-  into a shape it wasn't designed for, and `files` doesn't care what language
-  or shape you're building.
-- You want Bob's ownership guarantees — safe create, safe update, refuse on
-  conflict — applied to a tree you already know the contents of.
-- You want a *repeatable* materialization of a small file set (config,
-  scripts, boilerplate) with variable substitution, not a code generator.
+The rest of this page is the `files` path. Stack recipes on a repo that
+already exists are [Existing Repository](./existing-repository.md). The
+Go factory is [Getting Started](../getting-started.md). The stack
+contract itself is in the [manifest
+reference](../reference/manifest.md#the-stack-hygiene-recipes).
 
-Reach for `go-agent-tool` instead when you actually want the thing it builds:
-a public-ready Go CLI with CI, release plumbing, and the ecosystem seams. It
-still only comes from `bob new`/`bob init`. `files` manifests are never
-scaffolded for you — you write them, or your agent does. That's the deal:
-`bob recipe show files` prints a copyable example so nobody has to derive the
-schema from source.
+## When to reach for `files` instead of a stack recipe
+
+- You want Bob to own specific files you wrote, not just seed hygiene once.
+- You need a *repeatable* materialization of a small file set (config,
+  scripts, boilerplate) with variable substitution.
+- The repository is not one of the detected stacks, or you do not want the
+  stack README/AGENTS/CI seeds.
+
+Reach for a stack recipe when the application already exists and you want
+agent-operable docs and ignore files without Bob touching source. Reach for
+`go-agent-tool` when you actually want the thing it builds: a public-ready
+Go CLI with CI, release plumbing, and the ecosystem seams.
+
+`files` manifests can be authored directly; `bob recipe show files` prints a
+copyable example so nobody has to derive the schema from source. `bob new
+--recipe files` can also scaffold the minimal files manifest.
 
 ## Write the manifest by hand
 
-There is no `bob new --recipe files`. Start from the example:
+`bob new --recipe files` scaffolds a starter `bob.yaml` with one README
+declaration. To author the real tree, start from the example:
 
 ```bash
 bob recipe show files

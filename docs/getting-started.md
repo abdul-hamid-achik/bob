@@ -1,17 +1,23 @@
 ---
-description: Install Bob and go from an empty directory to a converged, agent-ready Go repository.
+description: Install Bob, scaffold a Go/Cobra CLI, or bring seed-once hygiene to an existing TypeScript, Python, Rust, or Go repository.
 ---
 
 # Getting Started
 
-Bob does not brainstorm. Give it a name, a module path, and a description, and
-it hands back a plan. Approve the plan, and it builds without hidden steps.
+Bob does not brainstorm. Give it a name and a recipe, and it hands back a
+plan. Approve the plan, and it writes only what it can prove it owns.
+
+The walkthrough below builds a new Go/Cobra CLI — the deepest recipe. If the
+application already exists, use
+[Existing Repository](./guides/existing-repository.md) instead.
 
 ## Prerequisites
 
 - macOS or Linux
-- Go 1.26.6 or newer
 - Git
+- Go 1.26.6 or newer if you install from source or scaffold `go-agent-tool`.
+  The Homebrew cask does not need a local Go toolchain to run `bob init` on
+  an existing TypeScript, Python, or Rust repository.
 - Task is optional; direct Go commands work too
 
 Install the release through the Homebrew tap:
@@ -78,9 +84,25 @@ A newly created project reports only `unchanged` actions, with no lock change.
 `bob check` exits `0`. Run it again if you don't believe it. Run it a third
 time out of spite. It stays `0`. That is the feature.
 
+## Existing repository
+
+For TypeScript, Python, Rust, Go, HTML, and the other detected stacks,
+`bob init` writes a hygiene recipe and never owns application source:
+
+```bash
+bob init --write
+bob apply
+bob check
+```
+
+The full detection table, the Go `go-hygiene` versus `go-agent-tool`
+split, and how to keep a conflicting file are in
+[Existing Repository](./guides/existing-repository.md). For a declared
+file tree, see [Build any repository](./guides/any-repository.md).
+
 ## What Bob created
 
-The default manifest creates:
+The default `go-agent-tool` walkthrough above creates:
 
 - a Go/Cobra CLI with human and JSON output;
 - tests and explicit dependency injection;
@@ -104,6 +126,7 @@ plans anything.
 
 ## Next steps
 
+- Bring Bob into a repo that already exists with [Existing Repository](./guides/existing-repository.md).
 - Read [Ownership & Safety](./ownership-and-safety.md) before changing managed files.
 - Review [Configuration & local telemetry](./configuration.md) before opting into local stats.
 - Open [Bob Studio](./studio.md) for a read-only interactive workspace view.

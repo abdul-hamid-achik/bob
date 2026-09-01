@@ -124,10 +124,14 @@ become a task runner.
 
 ## Current foundation
 
-The `go-agent-tool` recipe generates a Go/Cobra
-CLI with JSON output, version and doctor commands, tests, public documentation,
-Task tasks, CI, optional GoReleaser configuration, and an optional Glyphrun
-behavior spec.
+Three recipe kinds are embedded. Stack hygiene recipes (`ts-app`, `js-app`,
+`vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`,
+`swift-package`, `elixir-app`, `static-web`, `go-hygiene`) seed docs, ignore
+files, and optional CI once onto an existing language repository and never
+own application source. `files` materializes a tree declared in `bob.yaml`.
+`go-agent-tool` is the deep factory: a Go/Cobra CLI with JSON output, version
+and doctor commands, tests, public documentation, Task tasks, CI, optional
+GoReleaser configuration, and an optional Glyphrun behavior spec.
 
 The manifest may select optional integration seams and development tools. Bob
 can render those files and probe selected tools, but it does not run external
@@ -177,8 +181,9 @@ whole-file ownership, or explicit mutation.
 ## Success criteria
 
 Bob is successful when a user can preview and create a small public Go tool,
-review the complete plan, apply it, run `bob check`, and understand which files
-the root `bob.lock` proves Bob owns.
+or bring seed-once hygiene to an existing TypeScript, Python, Rust, or Go
+repository, review the complete plan, apply it, run `bob check`, and
+understand which files the root `bob.lock` proves Bob owns.
 
 ## Naming and positioning
 
