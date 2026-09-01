@@ -141,13 +141,13 @@ was behaviorally imported.
 
 Recipe version 4 introduced a deterministic human-owned command-registration
 seam. New Cobra commands live in extension files; the generated root and
-registry remain complete Bob-owned artifacts. Current version 5 preserves that
-contract and adds a generated registry regression test, so a newly rendered
-repository passes its own configured linter while proving the extension seam
-is reachable. It retains the public repository structure established in
-version 3: community templates, a Code of Conduct, Dependabot, non-mutating
-verification, vulnerability scanning, pinned CI actions, release configuration,
-and a security-patched Go baseline.
+registry remain complete Bob-owned artifacts. Current version 6 preserves that
+contract, keeps the version-5 registry regression test, and seed-once-owns
+living files so day-2 README and module edits do not block apply. It retains
+the public repository structure established in version 3: community templates,
+a Code of Conduct, Dependabot, non-mutating verification, vulnerability
+scanning, pinned CI actions, release configuration, and a security-patched Go
+baseline.
 
 ## Current boundaries
 

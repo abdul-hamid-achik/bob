@@ -28,7 +28,7 @@ type Artifact struct {
 // goAgentToolRecipeVersion is the current go-agent-tool recipe contract
 // version. engine.RecipeVersion mirrors this value as a deprecated
 // compatibility alias; recipe.Version is the source of truth.
-const goAgentToolRecipeVersion = 5
+const goAgentToolRecipeVersion = 6
 
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
@@ -97,7 +97,7 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 	var err error
 	switch {
 	case m.Recipe == "go-agent-tool":
-		if version != 3 && version != 4 && version != goAgentToolRecipeVersion {
+		if version != 3 && version != 4 && version != 5 && version != goAgentToolRecipeVersion {
 			return nil, fmt.Errorf("unsupported go-agent-tool recipe version %d", version)
 		}
 		artifacts, err = renderGoAgentTool(m, version)
@@ -133,6 +133,36 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 		}
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
+	return applyOwnershipRelease(artifacts, m.Ownership.Release)
+}
+
+// applyOwnershipRelease marks named recipe artifacts as seed-once so a human
+// can keep edited content without a permanent managed_hash_mismatch. Unknown
+// paths fail rather than silently no-op.
+func applyOwnershipRelease(artifacts []Artifact, released []string) ([]Artifact, error) {
+	if len(released) == 0 {
+		return artifacts, nil
+	}
+	index := make(map[string]int, len(artifacts))
+	for i, artifact := range artifacts {
+		index[artifact.Path] = i
+	}
+	seen := make(map[string]struct{}, len(released))
+	for _, raw := range released {
+		path, err := safePath(raw)
+		if err != nil {
+			return nil, fmt.Errorf("ownership.release %q: %w", raw, err)
+		}
+		if _, duplicate := seen[path]; duplicate {
+			return nil, fmt.Errorf("ownership.release declares duplicate path %q", path)
+		}
+		seen[path] = struct{}{}
+		i, ok := index[path]
+		if !ok {
+			return nil, fmt.Errorf("ownership.release %q is not a recipe artifact", path)
+		}
+		artifacts[i].Seed = true
+	}
 	return artifacts, nil
 }
 

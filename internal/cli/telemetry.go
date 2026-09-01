@@ -14,23 +14,11 @@ import (
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 )
 
-// goAgentToolTelemetryVersion reports the go-agent-tool recipe version.
-// telemetry.Recipe is a closed enum that does not yet represent other
-// recipes, so callers only set the recipe flag when the manifest's recipe is
-// actually go-agent-tool; recipe.Version is looked up for that fixed id.
-func goAgentToolTelemetryVersion() int {
-	version, err := recipe.Version("go-agent-tool")
-	if err != nil {
-		// go-agent-tool is always a known recipe id; this is unreachable.
-		return 0
-	}
-	return version
-}
-
 type commandMetrics struct {
-	workspace string
-	actions   telemetry.ActionCounts
-	recipe    bool
+	workspace     string
+	actions       telemetry.ActionCounts
+	recipe        telemetry.Recipe
+	recipeVersion int
 }
 
 func loadTelemetryRuntime() (*telemetry.Store, telemetry.Recorder, string) {
@@ -65,9 +53,9 @@ func recordCLI(ctx context.Context, deps Dependencies, args []string, duration t
 	}
 	if deps.metrics != nil {
 		event.Actions = deps.metrics.actions
-		if deps.metrics.recipe {
-			event.Recipe = telemetry.RecipeGoAgentTool
-			event.RecipeVersion = goAgentToolTelemetryVersion()
+		if deps.metrics.recipe != "" {
+			event.Recipe = deps.metrics.recipe
+			event.RecipeVersion = deps.metrics.recipeVersion
 		}
 		if deps.Telemetry != nil && deps.metrics.workspace != "" {
 			if workspaceID, err := deps.Telemetry.WorkspaceID(deps.metrics.workspace); err == nil {
@@ -148,7 +136,7 @@ func capturePlanMetrics(opts *options, workspace string, plan engine.PlanResult)
 		return
 	}
 	opts.metrics.workspace = workspace
-	opts.metrics.recipe = plan.Recipe.ID == "go-agent-tool"
+	captureRecipeIdentity(opts, plan.Recipe.ID, plan.Recipe.Version)
 	opts.metrics.actions = telemetry.ActionCounts{}
 	for _, action := range plan.Actions {
 		switch action.Kind {
@@ -171,7 +159,7 @@ func captureInspectMetrics(opts *options, report inspectpkg.Report) {
 		return
 	}
 	opts.metrics.workspace = report.Workspace
-	opts.metrics.recipe = report.Repository.Recipe == "go-agent-tool"
+	captureRecipeIdentity(opts, report.Repository.Recipe, 0)
 	opts.metrics.actions = telemetry.ActionCounts{
 		Create: report.Repository.Actions.Create, Update: report.Repository.Actions.Update,
 		Adopt: report.Repository.Actions.Adopt, Unchanged: report.Repository.Actions.Unchanged,
@@ -179,10 +167,25 @@ func captureInspectMetrics(opts *options, report inspectpkg.Report) {
 	}
 }
 
-func captureWorkspaceMetrics(opts *options, workspace string, recipeSelected bool) {
+func captureWorkspaceMetrics(opts *options, workspace, recipeID string) {
 	if opts == nil || opts.metrics == nil {
 		return
 	}
 	opts.metrics.workspace = workspace
-	opts.metrics.recipe = recipeSelected
+	captureRecipeIdentity(opts, recipeID, 0)
+}
+
+func captureRecipeIdentity(opts *options, recipeID string, version int) {
+	if opts == nil || opts.metrics == nil || recipeID == "" {
+		return
+	}
+	if version < 1 {
+		lookedUp, err := recipe.Version(recipeID)
+		if err != nil {
+			return
+		}
+		version = lookedUp
+	}
+	opts.metrics.recipe = telemetry.Recipe(recipeID)
+	opts.metrics.recipeVersion = version
 }

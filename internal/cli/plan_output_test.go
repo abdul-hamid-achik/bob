@@ -201,6 +201,17 @@ func TestPrintContextHumanVerdictLine(t *testing.T) {
 				ActionCounts:         engine.ActionCounts{Unchanged: 29}, ManagedFiles: 30},
 			want: "repository: conflicted (mixed); managed: 30; conflicts: 2 (unmanaged 1, managed 1, hazard 0); lock changed: true; creates: 0",
 		},
+		{
+			name: "compact names top conflicts",
+			repo: contextpkg.Repository{State: "conflicted", LockExists: true, ConflictCount: 2, ConflictClass: "contract_drift",
+				ConflictFamilyCounts: map[string]int{"ownership_hazard": 0, "contract_drift": 2, "unmanaged_divergence": 0},
+				ActionCounts:         engine.ActionCounts{Unchanged: 28}, ManagedFiles: 30,
+				TopConflicts: []contextpkg.ConflictPreview{
+					{Path: "internal/cli/root.go", Code: "managed_hash_mismatch", Family: "contract_drift"},
+					{Path: "Taskfile.yml", Code: "managed_hash_mismatch", Family: "contract_drift"},
+				}},
+			want: "repository: conflicted (contract_drift); managed: 30; conflicts: 2 (unmanaged 0, managed 2, hazard 0); top: internal/cli/root.go, Taskfile.yml; lock changed: false; creates: 0",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,14 +236,14 @@ func TestPlanHumanOutputShowsCauses(t *testing.T) {
 	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("plan", target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "conflict   README.md") || !strings.Contains(stdout, "[managed_hash_mismatch] contract_drift") {
+	if !strings.Contains(stdout, "conflict   internal/cli/root.go") || !strings.Contains(stdout, "[managed_hash_mismatch] contract_drift") {
 		t.Fatalf("plan human output lacks cause classification:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "[missing] scaffold") && !strings.Contains(stdout, "[in_sync] convergence") {

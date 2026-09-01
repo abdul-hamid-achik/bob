@@ -29,7 +29,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob studio [path]` | Repository-read-only interactive UI | Monitor Overview, Plan, and aggregate Stats. |
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
-| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@5`, and the stack hygiene recipes). |
+| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@6`, and the stack hygiene recipes). |
 | `bob recipe show <id>` | Read-only | Describe one recipe; `files` includes its schema and a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
 | `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
@@ -44,9 +44,11 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 $ bob recipe list
 elixir-app@2  Seed-once hygiene for an Elixir application or umbrella: Mix formatting, tests, ignores, and CI; never owns application source
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
-go-agent-tool@5  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
+go-agent-tool@6  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
+go-hygiene@2  Seed-once hygiene for an existing Go repository: docs, .gitignore, and golangci-lint CI; never owns application source
 js-app@2  Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source
 lua-lib@2  Seed-once hygiene for a Lua library or Neovim plugin with kind-aligned runtime configuration; never owns application source
+nuxt-app@2  Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source
 python-app@2  Seed-once hygiene for a Python project: docs, aligned Python tooling, and pytest CI; never owns application source
 ruby-app@2  Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source
 rust-cli@2  Seed-once hygiene for a Rust CLI, library, or workspace: Cargo checks and CI; never owns application source

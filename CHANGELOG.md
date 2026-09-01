@@ -7,6 +7,40 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- `go-agent-tool@6` seeds living files once (`README.md`, `CHANGELOG.md`,
+  `AGENTS.md`, `CLAUDE.md`, `go.mod`, `go.sum`) and then leaves them in human
+  hands. Composition files stay Bob-owned. Published `@3`, `@4`, and `@5`
+  remain byte-identical and renderable.
+- `ownership.release` on `go-agent-tool` and `files` manifests marks named
+  recipe paths as seed-once so `resolve-ownership-conflict` can keep human
+  content without blocking later apply.
+- Compact `bob context` names the first three conflicting paths in
+  `repository.top_conflicts` and on the human verdict line.
+- This repository now dogfoods `go-hygiene@2` with `bob.yaml` / `bob.lock`,
+  and `bob check` runs in the verify gate.
+
+### Changed
+
+- `bob init` reads the Go module path from an existing `go.mod` when
+  `--module` is omitted.
+- MCP `recipe_describe` reports empty `surfaces` for stack hygiene recipes
+  that reject any surface declaration.
+- Telemetry records the actual catalog recipe id and version instead of a
+  boolean `go-agent-tool` flag.
+- Documented Go floor is 1.26.6, matching `go.mod`. Generated
+  `go-agent-tool` modules stay on the published 1.26.5 security floor.
+
+### Fixed
+
+- `workspace.Resolve` follows a symlink ancestor when the target does not
+  exist yet, so `bob new` works under `/tmp`.
+- Recipe smoke tests skip an unusable host `golangci-lint` shim instead of
+  failing with exit 126.
+- Apply failures no longer print a duplicated `apply: apply:` prefix.
+- `bob doctor` honors `cmd.Context()` instead of `context.Background()`.
+
 ## [0.10.0] - 2026-08-30
 
 ### Added

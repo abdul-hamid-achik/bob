@@ -36,6 +36,13 @@ func repositoryVerdict(repo contextpkg.Repository) string {
 	if repo.ConflictCount > 0 {
 		fmt.Fprintf(&verdict, " (unmanaged %d, managed %d, hazard %d)",
 			repo.ConflictFamilyCounts["unmanaged_divergence"], repo.ConflictFamilyCounts["contract_drift"], repo.ConflictFamilyCounts["ownership_hazard"])
+		if len(repo.TopConflicts) > 0 {
+			paths := make([]string, 0, len(repo.TopConflicts))
+			for _, preview := range repo.TopConflicts {
+				paths = append(paths, preview.Path)
+			}
+			fmt.Fprintf(&verdict, "; top: %s", strings.Join(paths, ", "))
+		}
 	}
 	fmt.Fprintf(&verdict, "; lock changed: %t; creates: %d", repo.LockChanged, repo.ActionCounts.Create)
 	return verdict.String()

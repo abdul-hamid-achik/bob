@@ -10,7 +10,7 @@ it hands back a plan. Approve the plan, and it builds without hidden steps.
 ## Prerequisites
 
 - macOS or Linux
-- Go 1.26.5 or newer
+- Go 1.26.6 or newer
 - Git
 - Task is optional; direct Go commands work too
 

@@ -153,10 +153,34 @@ func renderGoAgentTool(m manifest.Manifest, version int) ([]Artifact, error) {
 		}
 	}
 
+	if version >= 6 {
+		seedGoAgentLivingFiles(artifacts)
+	}
+
 	// Render is the public sorting and path-safety boundary, but keeping the
 	// producer ordered makes direct recipe tests and future callers deterministic.
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
 	return artifacts, nil
+}
+
+// goAgentLivingFiles are created once by go-agent-tool@6 and then left in
+// human hands. They change on the first week of a real repository; lock-owning
+// them made every subsequent bob check/apply fail.
+var goAgentLivingFiles = map[string]struct{}{
+	"AGENTS.md":    {},
+	"CHANGELOG.md": {},
+	"CLAUDE.md":    {},
+	"README.md":    {},
+	"go.mod":       {},
+	"go.sum":       {},
+}
+
+func seedGoAgentLivingFiles(artifacts []Artifact) {
+	for i := range artifacts {
+		if _, living := goAgentLivingFiles[artifacts[i].Path]; living {
+			artifacts[i].Seed = true
+		}
+	}
 }
 
 func executeRecipeTemplate(name, source string, data any) ([]byte, error) {

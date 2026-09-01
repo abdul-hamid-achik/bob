@@ -40,6 +40,9 @@ type Result struct {
 	// PackageManager is the JavaScript-family package manager implied by the
 	// lockfile present, when one is.
 	PackageManager string `json:"package_manager,omitempty"`
+	// Module is the Go module path from go.mod when a Go stack is detected
+	// and the first `module` directive is a well-formed path.
+	Module string `json:"module,omitempty"`
 	// Signals are secondary observations (sass, tailwind, postcss, vite,
 	// tsconfig...) that do not select a recipe but inform a human.
 	Signals []string `json:"signals,omitempty"`
@@ -138,6 +141,7 @@ func Detect(root string) Result {
 		if names["go.work"] {
 			result.Monorepo = true
 		}
+		result.Module = readGoModule(filepath.Join(root, "go.mod"))
 		// Detect go-agent-tool marker: existing bob.yaml with go-agent-tool
 		// recipe, OR typical Cobra CLI layout (cmd/ + internal/cli/).
 		isGoAgentTool := false
@@ -468,6 +472,33 @@ func hasSassFiles(root string, entries []os.DirEntry) bool {
 
 // containsBounded reports whether the first bounded chunk of the file at
 // path contains needle. Read failures report false.
+// readGoModule returns the first `module` path from a bounded go.mod, or
+// empty when the file is missing, unreadable, or the directive is not a
+// well-formed path. Detection stays advisory: a malformed go.mod never
+// fails init.
+func readGoModule(path string) string {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxPackageJSONBytes {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "module ") {
+			continue
+		}
+		module := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+		if module == "" || strings.ContainsAny(module, " \t") {
+			return ""
+		}
+		return module
+	}
+	return ""
+}
+
 func containsBounded(path, needle string) bool {
 	file, err := os.Open(path)
 	if err != nil {

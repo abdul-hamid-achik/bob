@@ -224,7 +224,7 @@ func validateContext(t *testing.T, envelope consumerEnvelope, state string, clea
 	if err := json.Unmarshal(envelope.Context, &context); err != nil {
 		t.Fatal(err)
 	}
-	if context.SchemaVersion != 1 || context.Profile != "compact" || context.Workspace != "/workspace" || context.Recipe.ID != "go-agent-tool" || context.Recipe.Version != 5 {
+	if context.SchemaVersion != 1 || context.Profile != "compact" || context.Workspace != "/workspace" || context.Recipe.ID != "go-agent-tool" || context.Recipe.Version != 6 {
 		t.Fatalf("context identity = %#v", context)
 	}
 	if context.Product.Name != "acme" || context.Product.Module != "github.com/acme/acme" || context.Product.Runtime != "go" || context.Product.Kind != "cli" || context.Product.Visibility != "public" {
@@ -334,7 +334,7 @@ func validatePath(t *testing.T, envelope consumerEnvelope, classification, state
 	if err := json.Unmarshal(envelope.Path, &path); err != nil {
 		t.Fatal(err)
 	}
-	if path.SchemaVersion != 1 || path.Workspace != "/workspace" || path.Path == "" || path.Classification != classification || path.State != state || path.HumanEditEffect == "" || path.Ownership.Recipe.ID != "go-agent-tool" || path.Ownership.Recipe.Version != 5 {
+	if path.SchemaVersion != 1 || path.Workspace != "/workspace" || path.Path == "" || path.Classification != classification || path.State != state || path.HumanEditEffect == "" || path.Ownership.Recipe.ID != "go-agent-tool" || path.Ownership.Recipe.Version != 6 {
 		t.Fatalf("path contract = %#v", path)
 	}
 	if len(path.RelatedPlaybooks) != 1 || path.RelatedPlaybooks[0] != "add-cli-command" || len(path.Actions) != 1 || path.Actions[0].ID != "show_playbook:add-cli-command" || path.Actions[0].Effect != "read_only" || path.Actions[0].CWD != "/workspace" || len(path.Actions[0].Argv) == 0 {
@@ -414,7 +414,7 @@ func validateReadyPlaybook(t *testing.T, envelope consumerEnvelope) {
 	if err := json.Unmarshal(envelope.Plan, &plan); err != nil {
 		t.Fatal(err)
 	}
-	if plan.SchemaVersion != 1 || plan.Workspace != "/workspace" || plan.Recipe.ID != "go-agent-tool" || plan.Recipe.Version != 5 || plan.Playbook.ID != "add-cli-command" || !plan.Playbook.Applicable || !plan.Playbook.Available || plan.Playbook.ScopeClass != "small" || plan.Playbook.Risk != "medium" || plan.Values["command_name"] != "hello" || len(plan.Playbook.Steps) != 5 {
+	if plan.SchemaVersion != 1 || plan.Workspace != "/workspace" || plan.Recipe.ID != "go-agent-tool" || plan.Recipe.Version != 6 || plan.Playbook.ID != "add-cli-command" || !plan.Playbook.Applicable || !plan.Playbook.Available || plan.Playbook.ScopeClass != "small" || plan.Playbook.Risk != "medium" || plan.Values["command_name"] != "hello" || len(plan.Playbook.Steps) != 5 {
 		t.Fatalf("playbook plan = %#v", plan)
 	}
 	if len(plan.Playbook.Inputs) != 1 || plan.Playbook.Inputs[0].Name != "command_name" || !plan.Playbook.Inputs[0].Required || plan.Playbook.Inputs[0].Type != "identifier" || plan.Playbook.Inputs[0].Validation != "lowercase-kebab" || len(plan.Playbook.Boundary.Create) != 2 || len(plan.Playbook.Boundary.Forbidden) < 3 || len(plan.Playbook.VerificationHints) == 0 || len(plan.Playbook.FailureModes) == 0 || len(plan.Playbook.CapabilityIDs) != 2 || len(plan.Playbook.ExtensionPointIDs) != 1 {

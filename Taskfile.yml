@@ -86,6 +86,7 @@ tasks:
       - task: test
       - task: race
       - task: build-check
+      - task: bob-check
       - task: vuln
 
   build-check:
@@ -95,6 +96,11 @@ tasks:
         output="$(mktemp)"
         trap 'rm -f "$output"' EXIT
         go build -trimpath -ldflags "{{.LDFLAGS}}" -o "$output" {{.MAIN}}
+
+  bob-check:
+    desc: Check this repository's Bob workspace contract
+    cmds:
+      - go run {{.MAIN}} check
 
   build:
     desc: Build ./bin/bob

@@ -31,7 +31,7 @@ func scaffoldUpgradeV4Workspace(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v4 := strings.Replace(string(data), "  version: 5\n", "  version: 4\n", 1)
+	v4 := strings.Replace(string(data), "  version: 6\n", "  version: 4\n", 1)
 	if v4 == string(data) {
 		t.Fatal("temporary v4 lock did not contain the current recipe version")
 	}
@@ -61,14 +61,14 @@ func TestUpgradeCLIJSONAppliesPublishedRecipeMigration(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if !envelope.OK || envelope.Command != "upgrade" || envelope.Data.FromVersion != 4 || envelope.Data.ToVersion != 5 || !envelope.Data.Applied {
+	if !envelope.OK || envelope.Command != "upgrade" || envelope.Data.FromVersion != 4 || envelope.Data.ToVersion != 6 || !envelope.Data.Applied {
 		t.Fatalf("upgrade envelope = %#v", envelope)
 	}
 	if len(envelope.Data.Written) != 1 || envelope.Data.Written[0] != "internal/cli/registry_test.go" {
 		t.Fatalf("written = %v", envelope.Data.Written)
 	}
 	lock, err := engine.LoadLock(root)
-	if err != nil || lock.Recipe.Version != 5 {
+	if err != nil || lock.Recipe.Version != 6 {
 		t.Fatalf("upgraded lock = %#v, %v", lock, err)
 	}
 }
@@ -77,7 +77,7 @@ func TestUpgradeCLIDryRunAndCurrentNoOp(t *testing.T) {
 	t.Parallel()
 	root := scaffoldUpgradeV4Workspace(t)
 	stdout, _, err := executeForTest("upgrade", root, "--dry-run")
-	if err != nil || !strings.Contains(stdout, "dry-run: would upgrade recipe go-agent-tool from v4 to v5") {
+	if err != nil || !strings.Contains(stdout, "dry-run: would upgrade recipe go-agent-tool from v4 to v6") {
 		t.Fatalf("dry-run output=%q err=%v", stdout, err)
 	}
 	lock, err := engine.LoadLock(root)
@@ -96,7 +96,7 @@ func TestUpgradeCLIDryRunAndCurrentNoOp(t *testing.T) {
 func TestUpgradeCLIConflictUsesUpgradeRecoveryGuidance(t *testing.T) {
 	t.Parallel()
 	root := scaffoldUpgradeV4Workspace(t)
-	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("--json", "upgrade", root)

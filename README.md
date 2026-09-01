@@ -63,7 +63,7 @@ go install github.com/abdul-hamid-achik/bob/cmd/bob@latest
 
 ## Quick start
 
-Prerequisites: macOS or Linux and Go 1.26.5 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
+Prerequisites: macOS or Linux and Go 1.26.6 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
 are optional and reported by `bob doctor` when selected.
 
 ```bash

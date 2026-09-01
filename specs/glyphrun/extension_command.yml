@@ -1,7 +1,7 @@
 version: 1
 name: bob_v5_extension_command
 intent: |
-    a go-agent-tool@5 repository accepts a human-owned Cobra command file
+    a go-agent-tool@6 repository accepts a human-owned Cobra command file
     without editing Bob-owned composition files or dirtying Bob convergence.
 target:
     cmd:
@@ -51,9 +51,9 @@ outcomes:
       verify:
         screen:
             contains: clean=true
-    - id: recipe_remains_v5
-      description: the convergence plan retains the current v5 recipe identity
+    - id: recipe_remains_v6
+      description: the convergence plan retains the current v6 recipe identity
       verify:
         screen:
-            contains: recipe_version=5
-contractHash: sha256:a1f20d369c3a570612fcbc78ea1ff801207e227f448be127ab734efd60d1f470
+            contains: recipe_version=6
+contractHash: sha256:b6c851d4ecd2e24efeb4b81c38235e77043c9b64b7b4bca7dfbaffb8b17cccfe

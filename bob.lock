@@ -1,0 +1,5 @@
+schema_version: 1
+recipe:
+    id: go-hygiene
+    version: 2
+files: []

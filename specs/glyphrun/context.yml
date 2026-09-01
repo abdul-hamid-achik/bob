@@ -26,7 +26,7 @@ outcomes:
       description: context reports the exact built-in recipe contract
       verify:
         screen:
-            contains: go-agent-tool@5
+            contains: go-agent-tool@6
     - id: reports_drift
       description: the unapplied example is reported as drifted
       verify:
@@ -42,4 +42,4 @@ outcomes:
       verify:
         screen:
             contains: cli.command_files
-contractHash: sha256:101d48122587a158d83204fb4439d44ea057516c429a1db492322cc9a1a59dc6
+contractHash: sha256:06a5f4ede929f4190d4ae33c99c3b1b4396d56daf0b79609d32348e4d1ca8797

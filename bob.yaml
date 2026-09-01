@@ -1,0 +1,11 @@
+schema_version: 1
+recipe: go-hygiene
+product:
+  name: bob
+  module: github.com/abdul-hamid-achik/bob
+  description: Deterministic repository factory and lifecycle reconciler
+runtime:
+  language: go
+  kind: app
+distribution:
+  github_actions: false

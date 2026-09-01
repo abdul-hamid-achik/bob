@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -202,7 +201,7 @@ func newNewCommand(opts *options) *cobra.Command {
 					}
 				}
 			}
-			captureWorkspaceMetrics(opts, target, chosen == manifest.RecipeGoAgentTool)
+			captureWorkspaceMetrics(opts, target, chosen)
 			artifacts, err := recipe.Render(m)
 			if err != nil {
 				return fmt.Errorf("new: %w", classifyInvalidInput(err))
@@ -341,7 +340,6 @@ func newInitCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("init: inspect target: %w", err)
 			}
 			root = canonicalRoot
-			captureWorkspaceMetrics(opts, root, true)
 			if name == "" {
 				absolute, absErr := filepath.Abs(root)
 				if absErr != nil {
@@ -355,6 +353,7 @@ func newInitCommand(opts *options) *cobra.Command {
 			if err != nil {
 				return classifyInvalidInput(fmt.Errorf("init: %w", err))
 			}
+			captureWorkspaceMetrics(opts, root, chosen)
 			mismatch := initStackMismatch(root, chosen, detection)
 			if mismatch != "" && write && !force {
 				return classifyInvalidInput(fmt.Errorf("init: %s; pass --force to write anyway", mismatch))
@@ -459,6 +458,9 @@ func initStackMismatch(root, recipeID string, detection detect.Result) string {
 func buildInitManifest(recipeID, name, module, description string, detection detect.Result) (manifest.Manifest, error) {
 	if recipeID == manifest.RecipeGoAgentTool {
 		if module == "" {
+			module = detection.Module
+		}
+		if module == "" {
 			return manifest.Manifest{}, errors.New("--module is required for recipe go-agent-tool")
 		}
 		return manifest.Default(name, module, description), nil
@@ -555,7 +557,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 			opts.trackWorkspace(root)
 			result, err := engine.ApplyWorkspaceWithOptions(root, engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest})
 			if result.Plan.Recipe.ID != "" {
-				captureWorkspaceMetrics(opts, root, result.Plan.Recipe.ID == manifest.RecipeGoAgentTool)
+				captureWorkspaceMetrics(opts, root, result.Plan.Recipe.ID)
 			}
 			if err != nil {
 				var mismatch *engine.PlanDigestMismatchError
@@ -603,7 +605,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 					}
 					return failure
 				}
-				return fmt.Errorf("apply: %w", err)
+				return err
 			}
 			if opts.json {
 				return emitJSON(cmd.OutOrStdout(), "apply", result.Receipt, nil, []string{"review the repository diff", withWorkspaceArg("run bob check", root)})
@@ -635,7 +637,7 @@ func newRemoveCommand(opts *options) *cobra.Command {
 				}
 				return fmt.Errorf("remove: %w", err)
 			}
-			captureWorkspaceMetrics(opts, root, false)
+			captureWorkspaceMetrics(opts, root, "")
 			incomplete := len(result.Skipped) > 0 || len(result.Conflicts) > 0
 			warnings := removeWarnings(result)
 			if opts.json {
@@ -739,7 +741,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			if err != nil {
 				return classifyInvalidInput(err)
 			}
-			captureWorkspaceMetrics(opts, root, m.Recipe == manifest.RecipeGoAgentTool)
+			captureWorkspaceMetrics(opts, root, m.Recipe)
 			if !needsUpgrade {
 				if opts.json {
 					return emitJSON(cmd.OutOrStdout(), "upgrade", engine.UpgradeResult{FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{}}, nil, []string{"repository is already at the current recipe version"})
@@ -893,11 +895,11 @@ func newDoctorCommand(opts *options, prober doctor.Prober) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			m, err := manifest.Load(root)
-			captureWorkspaceMetrics(opts, root, m.Recipe == "go-agent-tool")
+			captureWorkspaceMetrics(opts, root, m.Recipe)
 			if err != nil {
 				return fmt.Errorf("doctor: %w", classifyInvalidInput(err))
 			}
-			result := doctor.Run(context.Background(), m, prober)
+			result := doctor.Run(cmd.Context(), m, prober)
 			warnings := []string(nil)
 			if result.Degraded {
 				warnings = []string{"one or more optional tools are unavailable or failed their version probe"}

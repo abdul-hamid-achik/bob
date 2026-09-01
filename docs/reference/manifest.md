@@ -53,11 +53,11 @@ distribution:
 | `schema_version` | `1` | Selects the strict manifest schema. |
 | `recipe` | `go-agent-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Three kinds of recipe are embedded: `go-agent-tool@5`, documented below;
+Three kinds of recipe are embedded: `go-agent-tool@6`, documented below;
 `files@1`, a plain file-tree recipe documented in its own section further
 down; and the stack hygiene recipes (`ts-app@2`, `js-app@2`, `vue-app@2`,
 `nuxt-app@2`, `python-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
-`swift-package@2`, `elixir-app@2`, `static-web@2`),
+`swift-package@2`, `elixir-app@2`, `static-web@2`, and `go-hygiene@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
 guessing.
@@ -113,6 +113,25 @@ writes the sign on the door; it doesn't open the shop.
 
 Changing a field changes only files declared by the recipe. `bob plan` shows
 the exact ownership decision before `bob apply` writes anything.
+
+`go-agent-tool@6` creates `README.md`, `CHANGELOG.md`, `AGENTS.md`,
+`CLAUDE.md`, `go.mod`, and `go.sum` once and never lock-owns them. Later
+human edits stay clean. Composition files (`internal/cli/root.go`,
+`internal/cli/registry.go`, and their tests) remain Bob-owned.
+
+### `ownership.release`
+
+`ownership.release` is an additive list of recipe artifact paths. Each named
+path becomes seed-once: Bob creates it if missing, then never lock-owns or
+updates it. Unknown paths, reserved paths, and stack-recipe use are validation
+errors. Use it when `resolve-ownership-conflict` should keep human content
+instead of restoring Bob-owned bytes.
+
+```yaml
+ownership:
+  release:
+    - Taskfile.yml
+```
 
 Everything above this line is specific to `recipe: go-agent-tool`. It does not
 apply to `recipe: files`, described next.
@@ -197,6 +216,9 @@ Identical to the engine's existing rules, because it's the same engine:
 
 ### Ownership, plainly stated
 
+`ownership.release` works the same as on `go-agent-tool`: listed declared
+paths become seed-once and leave `bob.lock`.
+
 Bob owns file existence, mode, and byte-for-byte convergence for every
 declared path — the same plan/apply/lock guarantees as `go-agent-tool`. What
 Bob does **not** own is what the content means, and it does not evolve that
@@ -216,8 +238,8 @@ watching Bob report `content_update` on the next plan.
 ## The stack hygiene recipes
 
 `ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `python-app@2`, `ruby-app@2`,
-`lua-lib@2`, `rust-cli@2`, `swift-package@2`, `elixir-app@2`, and
-`static-web@2` share one deliberately small contract for repositories whose
+`lua-lib@2`, `rust-cli@2`, `swift-package@2`, `elixir-app@2`,
+`static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
 **seed-once** artifacts `README.md`, `AGENTS.md`, `SECURITY.md`, `.gitignore`,
 and `.editorconfig`, plus stack-specific formatter, linter, or runtime
@@ -266,6 +288,7 @@ Schema, relative to `go-agent-tool`:
   | `swift-package` | `swift` | `package` |
   | `elixir-app` | `elixir` | `app` or `umbrella` |
   | `static-web` | `html` | `site` |
+  | `go-hygiene` | `go` | `service`, `lib`, or `app` |
 
   `bob init` picks the kind from detection where the recipe supports the
   detected hint (a Node workspace selects `monorepo`, a `.gemspec` selects

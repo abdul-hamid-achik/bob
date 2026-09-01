@@ -195,7 +195,7 @@ func resolveGoAgentMetadata(m manifest.Manifest, artifacts []Artifact) Metadata 
 		byID[definitions[i].ID] = &definitions[i]
 	}
 	for _, artifact := range artifacts {
-		descriptor := describeGoAgentArtifact(artifact.Path, m)
+		descriptor := describeGoAgentArtifact(artifact, m)
 		metadata.Artifacts = append(metadata.Artifacts, descriptor)
 		for _, capabilityID := range descriptor.CapabilityIDs {
 			definition := byID[capabilityID]
@@ -310,7 +310,8 @@ func selectedChoice(value, enabled string) string {
 	return "disabled"
 }
 
-func describeGoAgentArtifact(path string, m manifest.Manifest) ArtifactDescriptor {
+func describeGoAgentArtifact(artifact Artifact, m manifest.Manifest) ArtifactDescriptor {
+	path := artifact.Path
 	id := goAgentArtifactID(path)
 	roles := []string{"repository_support"}
 	capabilities := []string{"repository.whole_file_ownership"}
@@ -362,7 +363,11 @@ func describeGoAgentArtifact(path string, m manifest.Manifest) ArtifactDescripto
 	if strings.HasPrefix(path, ".github/") && !strings.HasPrefix(path, ".github/workflows/") {
 		capabilities = append(capabilities, "repository.public_hygiene")
 	}
-	return ArtifactDescriptor{ID: id, Path: path, Roles: uniqueSorted(roles), Ownership: "bob_whole_file", CapabilityIDs: uniqueSorted(capabilities)}
+	ownership := "bob_whole_file"
+	if artifact.Seed {
+		ownership = "bob_seed_once"
+	}
+	return ArtifactDescriptor{ID: id, Path: path, Roles: uniqueSorted(roles), Ownership: ownership, CapabilityIDs: uniqueSorted(capabilities)}
 }
 
 func goAgentArtifactID(path string) string {

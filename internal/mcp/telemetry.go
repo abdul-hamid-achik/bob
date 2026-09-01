@@ -9,7 +9,7 @@ import (
 	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 )
 
-func (s *Server) recordOperation(ctx context.Context, operation telemetry.Operation, root string, outcome telemetry.Outcome, reason telemetry.Reason, counts inspectpkg.ActionCounts, recipe bool, started time.Time) {
+func (s *Server) recordOperation(ctx context.Context, operation telemetry.Operation, root string, outcome telemetry.Outcome, reason telemetry.Reason, counts inspectpkg.ActionCounts, recipeID string, recipeVersion int, started time.Time) {
 	if s == nil || s.recorder == nil {
 		return
 	}
@@ -21,9 +21,16 @@ func (s *Server) recordOperation(ctx context.Context, operation telemetry.Operat
 			Unchanged: counts.Unchanged, Conflict: counts.Conflict,
 		},
 	}
-	if recipe {
-		event.Recipe = telemetry.RecipeGoAgentTool
-		event.RecipeVersion = currentRecipeVersion()
+	if recipeID != "" {
+		if recipeVersion < 1 {
+			if version, err := recipe.Version(recipeID); err == nil {
+				recipeVersion = version
+			}
+		}
+		if recipeVersion >= 1 {
+			event.Recipe = telemetry.Recipe(recipeID)
+			event.RecipeVersion = recipeVersion
+		}
 	}
 	if root != "" && s.telemetry != nil && s.telemetry.Enabled() {
 		if workspaceID, err := s.telemetry.WorkspaceID(root); err == nil {
@@ -31,20 +38,6 @@ func (s *Server) recordOperation(ctx context.Context, operation telemetry.Operat
 		}
 	}
 	_ = s.recorder.Record(ctx, event)
-}
-
-// currentRecipeVersion reports the go-agent-tool recipe version. Callers only
-// set the recipe flag when the manifest's recipe is actually go-agent-tool
-// (telemetry.Recipe is a closed enum that does not yet represent other
-// recipes), so recipe.Version is looked up for that fixed id rather than a
-// manifest that may not be in hand at the telemetry call site.
-func currentRecipeVersion() int {
-	version, err := recipe.Version(string(telemetry.RecipeGoAgentTool))
-	if err != nil {
-		// go-agent-tool is always a known recipe id; this is unreachable.
-		return 0
-	}
-	return version
 }
 
 func reasonFromToolCode(code string) telemetry.Reason {

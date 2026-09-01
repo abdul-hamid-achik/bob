@@ -84,6 +84,16 @@ type Repository struct {
 	ManagedFiles         int                 `json:"managed_files"`
 	PlanDigestVersion    int                 `json:"plan_digest_version"`
 	PlanDigest           string              `json:"plan_digest"`
+	// TopConflicts is a deterministic prefix of conflicting paths so a
+	// compact context can name the blockers without a second plan call.
+	TopConflicts []ConflictPreview `json:"top_conflicts,omitempty"`
+}
+
+// ConflictPreview is one plan conflict without file bodies.
+type ConflictPreview struct {
+	Path   string `json:"path"`
+	Code   string `json:"code"`
+	Family string `json:"family,omitempty"`
 }
 
 type Capability struct {
@@ -213,6 +223,7 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 			ConflictCount: plan.ConflictCount, ConflictClass: plan.ConflictClass(),
 			ConflictFamilyCounts: plan.ConflictFamilyCounts(), ActionCounts: plan.ActionCounts(),
 			ManagedFiles: len(plan.DesiredLock.Files), PlanDigestVersion: digest.Version, PlanDigest: prefixed(digest.SHA256),
+			TopConflicts: topConflicts(plan, 3),
 		},
 		Capabilities: []Capability{}, EntryPoints: []EntryPoint{}, ExtensionPoints: []ExtensionPoint{},
 		Invariants: []Invariant{}, Playbooks: playbookpkg.Summaries(metadata, plan),
@@ -279,6 +290,25 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 	}
 	sort.Slice(result.Notices, func(i, j int) bool { return result.Notices[i].ID < result.Notices[j].ID })
 	return result
+}
+
+func topConflicts(plan engine.PlanResult, limit int) []ConflictPreview {
+	if limit <= 0 || plan.ConflictCount == 0 {
+		return nil
+	}
+	previews := make([]ConflictPreview, 0, min(limit, plan.ConflictCount))
+	for _, action := range plan.Actions {
+		if action.Kind != engine.ActionConflict {
+			continue
+		}
+		previews = append(previews, ConflictPreview{
+			Path: action.Path, Code: action.Code, Family: string(action.Family()),
+		})
+		if len(previews) == limit {
+			break
+		}
+	}
+	return previews
 }
 
 func commandAction(root, id, reason string) Action {

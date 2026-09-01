@@ -66,8 +66,15 @@ func TestNewWriteAndCheckLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	stdout, _, err = executeForTest("check", target)
+	if err != nil {
+		t.Fatalf("living README.md is seed-once and must not conflict: %v\n%s", err, stdout)
+	}
+	if err := os.WriteFile(filepath.Join(target, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err = executeForTest("check", target)
 	if err == nil || !strings.Contains(stdout, "conflict") {
-		t.Fatalf("expected drift conflict, got err=%v output=%s", err, stdout)
+		t.Fatalf("expected drift conflict on Bob-owned root.go, got err=%v output=%s", err, stdout)
 	}
 }
 
@@ -464,7 +471,7 @@ func TestCheckJSONReportsFailedOutcomeOnDrift(t *testing.T) {
 	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("changed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("--json", "check", target)

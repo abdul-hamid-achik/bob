@@ -345,7 +345,7 @@ func TestUpgradeGuideExposesObservedAndCurrentRecipeIdentities(t *testing.T) {
 	if got := *guide.RecipeIdentities.Observed; got.ID != manifest.RecipeGoAgentTool || got.Version != 3 {
 		t.Fatalf("observed recipe = %#v", got)
 	}
-	if got := guide.RecipeIdentities.Current; got.ID != manifest.RecipeGoAgentTool || got.Version != 5 {
+	if got := guide.RecipeIdentities.Current; got.ID != manifest.RecipeGoAgentTool || got.Version != 6 {
 		t.Fatalf("current recipe = %#v", got)
 	}
 	if !guide.Playbook.Available || len(guide.Playbook.BlockedBy) != 0 {
@@ -527,7 +527,7 @@ func playbookV3Workspace(t *testing.T, m manifest.Manifest) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v3 := strings.Replace(string(data), "  version: 5\n", "  version: 3\n", 1)
+	v3 := strings.Replace(string(data), "  version: 6\n", "  version: 3\n", 1)
 	if v3 == string(data) {
 		t.Fatal("temporary lock did not contain current recipe version")
 	}

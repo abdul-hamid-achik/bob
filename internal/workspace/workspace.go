@@ -53,12 +53,22 @@ func Resolve(path string, mustExist bool) (string, error) {
 			return "", err
 		}
 	}
-	if fsutil.IsSymlinkOrNotDir(info) {
+	// A symlink ancestor is resolved, not rejected: macOS /tmp and other
+	// convenience links are ordinary parents. The selected workspace itself
+	// remains the only path that may not be a symlink.
+	if info.Mode()&os.ModeSymlink == 0 && !info.IsDir() {
 		return "", fmt.Errorf("workspace ancestor %s is not a regular directory", ancestor)
 	}
 	resolved, err := filepath.EvalSymlinks(ancestor)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve workspace ancestor: %w", err)
+	}
+	resolvedInfo, err := os.Lstat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("inspect resolved workspace ancestor: %w", err)
+	}
+	if !resolvedInfo.IsDir() {
+		return "", fmt.Errorf("workspace ancestor %s is not a regular directory", ancestor)
 	}
 	remainder, err := filepath.Rel(ancestor, abs)
 	if err != nil || remainder == ".." || strings.HasPrefix(remainder, ".."+string(os.PathSeparator)) {

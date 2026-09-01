@@ -274,6 +274,9 @@ func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
 	if plainGo.Primary != "go" || plainGo.KindHint != "" {
 		t.Fatalf("plain Go repo: expected go without kind hint, got %#v", plainGo)
 	}
+	if plainGo.Module != "example.com/mylib" {
+		t.Fatalf("plain Go repo module = %q, want example.com/mylib", plainGo.Module)
+	}
 
 	// Go repo with bob.yaml containing go-agent-tool should have agent-tool hint
 	withBobYaml := Detect(fixture(t, map[string]string{

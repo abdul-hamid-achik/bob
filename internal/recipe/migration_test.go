@@ -132,7 +132,7 @@ func TestGoAgentToolV3LockUpgradesSafelyToV5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.HasConflicts() || !plan.LockChanged || plan.Recipe.Version != 5 {
+	if plan.HasConflicts() || !plan.LockChanged || plan.Recipe.Version != 6 {
 		t.Fatalf("v3 to v4 plan = %#v", plan)
 	}
 	actions := make(map[string]engine.Action, len(plan.Actions))
@@ -149,7 +149,7 @@ func TestGoAgentToolV3LockUpgradesSafelyToV5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 5 {
+	if lock.Recipe.Version != 6 {
 		t.Fatalf("upgraded lock version = %d, want 5", lock.Recipe.Version)
 	}
 	preserved, err := os.ReadFile(humanPath)
@@ -253,7 +253,7 @@ func installGoAgentV3Workspace(t *testing.T, m manifest.Manifest) (string, []rec
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.Replace(string(lock), "  version: 5\n", "  version: 3\n", 1)
+	updated := strings.Replace(string(lock), "  version: 6\n", "  version: 3\n", 1)
 	if updated == string(lock) {
 		t.Fatal("temporary v3 workspace lock did not contain current recipe version")
 	}

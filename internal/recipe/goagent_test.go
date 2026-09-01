@@ -60,6 +60,13 @@ func TestRenderGoAgentToolIsDeterministicAndSafe(t *testing.T) {
 		t.Fatalf("artifacts are not path-sorted: %v", paths)
 	}
 
+	for _, artifact := range first {
+		_, living := goAgentLivingFiles[artifact.Path]
+		if artifact.Seed != living {
+			t.Errorf("%s seed = %t, want %t", artifact.Path, artifact.Seed, living)
+		}
+	}
+
 	for _, path := range []string{
 		".github/ISSUE_TEMPLATE/bug.yml",
 		".github/ISSUE_TEMPLATE/config.yml",
@@ -107,6 +114,7 @@ func TestPublishedGoAgentToolVersionsRemainByteIdentical(t *testing.T) {
 	}{
 		{version: 3, digest: "9509914e038b6975bd4c22f51772238a0c9163b472e7e09eb835cd1dca88af2a", files: 28},
 		{version: 4, digest: "77cd4634da2315ba63c7c8ea0474e448b72495f87b89f5115162954147ed1f4e", files: 30},
+		{version: 5, digest: "0319e40bda779bcf5f9ae8bf35f2a939a6d34c7b4628c2fc07c81b4472dfef70", files: 30},
 	}
 	for _, test := range tests {
 		artifacts, err := RenderVersion(fullGoAgentManifest(), test.version)
@@ -128,10 +136,64 @@ func TestPublishedGoAgentToolVersionsRemainByteIdentical(t *testing.T) {
 	}
 }
 
+func TestGoAgentToolV6SeedsLivingFilesWithoutChangingBytes(t *testing.T) {
+	t.Parallel()
+	m := fullGoAgentManifest()
+	v5, err := RenderVersion(m, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v6, err := RenderVersion(m, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v5) != len(v6) {
+		t.Fatalf("artifact count v5=%d v6=%d", len(v5), len(v6))
+	}
+	for i := range v5 {
+		if v5[i].Path != v6[i].Path || v5[i].Mode != v6[i].Mode || !bytes.Equal(v5[i].Content, v6[i].Content) {
+			t.Fatalf("v6 changed published bytes for %s", v6[i].Path)
+		}
+		_, living := goAgentLivingFiles[v6[i].Path]
+		if v6[i].Seed != living {
+			t.Fatalf("%s seed = %t, want %t", v6[i].Path, v6[i].Seed, living)
+		}
+		if v5[i].Seed {
+			t.Fatalf("v5 unexpectedly seeded %s", v5[i].Path)
+		}
+	}
+}
+
+func TestRenderAppliesOwnershipRelease(t *testing.T) {
+	t.Parallel()
+	m := fullGoAgentManifest()
+	m.Ownership.Release = []string{"internal/cli/root.go", "Taskfile.yml"}
+	artifacts, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := map[string]bool{}
+	for _, artifact := range artifacts {
+		if artifact.Path == "internal/cli/root.go" || artifact.Path == "Taskfile.yml" {
+			if !artifact.Seed {
+				t.Errorf("%s should be seed-once after ownership.release", artifact.Path)
+			}
+			released[artifact.Path] = true
+		}
+	}
+	if len(released) != 2 {
+		t.Fatalf("released artifacts = %v", released)
+	}
+	m.Ownership.Release = []string{"not-a-recipe-path.md"}
+	if _, err := Render(m); err == nil || !strings.Contains(err.Error(), "not a recipe artifact") {
+		t.Fatalf("unknown release path error = %v", err)
+	}
+}
+
 func TestRenderVersionRejectsUnsupportedContracts(t *testing.T) {
 	t.Parallel()
 	m := fullGoAgentManifest()
-	for _, version := range []int{0, 2, 6} {
+	for _, version := range []int{0, 2, 7} {
 		if _, err := RenderVersion(m, version); err == nil || !strings.Contains(err.Error(), "unsupported go-agent-tool recipe version") {
 			t.Fatalf("version %d error = %v", version, err)
 		}
@@ -311,16 +373,22 @@ func TestRenderedGoAgentToolBuildsWithLockedModules(t *testing.T) {
 		}
 	}
 	if linter, err := exec.LookPath("golangci-lint"); err == nil {
-		cmd := exec.Command(linter, "run", "./...")
-		cmd.Dir = root
-		cmd.Env = append(os.Environ(),
-			"GOWORK=off",
-			"GOFLAGS=-mod=readonly",
-			"GOCACHE="+cache,
-			"GOLANGCI_LINT_CACHE="+t.TempDir(),
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("golangci-lint generated project: %v\n%s", err, output)
+		probe := exec.Command(linter, "version")
+		probe.Dir = root
+		if output, err := probe.CombinedOutput(); err != nil {
+			t.Logf("skipping golangci-lint: host binary is not usable: %v\n%s", err, output)
+		} else {
+			cmd := exec.Command(linter, "run", "./...")
+			cmd.Dir = root
+			cmd.Env = append(os.Environ(),
+				"GOWORK=off",
+				"GOFLAGS=-mod=readonly",
+				"GOCACHE="+cache,
+				"GOLANGCI_LINT_CACHE="+t.TempDir(),
+			)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("golangci-lint generated project: %v\n%s", err, output)
+			}
 		}
 	}
 }

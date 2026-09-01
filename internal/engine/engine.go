@@ -28,7 +28,7 @@ const (
 	// managed whole file.
 	//
 	// Deprecated: use recipe.Version("go-agent-tool") instead.
-	RecipeVersion = 5
+	RecipeVersion = 6
 )
 
 // ActionKind is the planner's decision for one desired artifact.

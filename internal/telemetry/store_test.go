@@ -99,6 +99,24 @@ func TestRecordUsesPrivateFilesAndCannotContainRawSensitiveFields(t *testing.T) 
 	}
 }
 
+func TestRecordAcceptsCatalogRecipeIDsAndRejectsUnsafeShape(t *testing.T) {
+	store := openTestStore(t, Config{})
+	for _, id := range []Recipe{"go-agent-tool", "go-hygiene", "files", "ts-app"} {
+		event := validEvent()
+		event.Recipe = id
+		event.RecipeVersion = 2
+		if err := store.Record(context.Background(), event); err != nil {
+			t.Fatalf("catalog recipe %q rejected: %v", id, err)
+		}
+	}
+	invalid := validEvent()
+	invalid.Recipe = Recipe("Go Agent Tool")
+	invalid.RecipeVersion = 1
+	if err := store.Record(context.Background(), invalid); err == nil {
+		t.Fatal("unsafe recipe id was accepted")
+	}
+}
+
 func TestWorkspacePseudonymsAreStablePerStoreKeyAndCanonicalPath(t *testing.T) {
 	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
 	state := filepath.Join(t.TempDir(), "state")

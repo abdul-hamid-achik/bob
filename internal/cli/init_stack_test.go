@@ -335,3 +335,22 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 		})
 	}
 }
+
+func TestInitReadsGoModuleFromGoMod(t *testing.T) {
+	t.Parallel()
+	root := writeStackFixture(t, map[string]string{
+		"go.mod":               "module github.com/acme/acme-tool\n\ngo 1.26.6\n",
+		"cmd/acme/main.go":     "package main\n",
+		"internal/cli/root.go": "package cli\n",
+	})
+	stdout, stderr, err := executeForTest("init", root)
+	if err != nil {
+		t.Fatalf("init preview without --module: %v\n%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "recipe: go-agent-tool") {
+		t.Fatalf("expected go-agent-tool from Cobra layout:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "module: github.com/acme/acme-tool") {
+		t.Fatalf("expected module from go.mod:\n%s", stdout)
+	}
+}

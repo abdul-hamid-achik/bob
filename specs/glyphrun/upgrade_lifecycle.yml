@@ -13,7 +13,7 @@ target:
           trap 'rm -rf "$root"' EXIT
           ./bin/bob init "$root" --name acme --module github.com/acme/acme --write >/dev/null
           ./bin/bob apply "$root" >/dev/null
-          sed 's/^    version: 5$/    version: 4/' "$root/bob.lock" >"$root/bob.lock.previous"
+          sed 's/^    version: 6$/    version: 4/' "$root/bob.lock" >"$root/bob.lock.previous"
           mv "$root/bob.lock.previous" "$root/bob.lock"
           preview="$(./bin/bob upgrade "$root" --dry-run --json)"
           printf 'preview_from=%s\n' "$(printf '%s' "$preview" | jq -r '.data.from_version')"
@@ -50,8 +50,8 @@ outcomes:
         screen:
             contains: applied=true
     - id: writes_current_lock
-      description: the ownership lock advances to recipe version 5
+      description: the ownership lock advances to recipe version 6
       verify:
         screen:
-            contains: version_after_upgrade=5
-contractHash: sha256:2f13ea4324695038fc2de97938a8e27e6d68b8002dbdccbd0f00fd05ea051096
+            contains: version_after_upgrade=6
+contractHash: sha256:ac12f7e98040bda1ffb43161567f6cb7f19e2c08eec8e29e93a91d9ae28aab2c

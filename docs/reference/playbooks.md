@@ -36,7 +36,7 @@ meaning from declared paths or content.
 `available` means its deterministic preconditions are currently met.
 `blocked_by` is a list of stable reason codes.
 
-`add-cli-command` belongs to `go-agent-tool@5` and becomes available only after
+`add-cli-command` belongs to `go-agent-tool@6` and becomes available only after
 the Bob-owned version-4 root and registry contract is materialized and
 converged. An older lock or pending composition-file reconciliation reports the
 stable `extension_contract_not_materialized` blocker. Once available, the
@@ -72,6 +72,9 @@ resolution when the supplied action code does not equal the current planner
 action for that path. Its inspection step places flags before an argv `--`
 delimiter and the resolved path after it, so a repository filename such as
 `--help` remains data rather than becoming a command-line flag.
+After `choose_intent`, keeping human content is an executable sequence:
+add the path to `ownership.release`, review the plan, and apply so
+`bob.lock` drops that path.
 
 ## Step contract
 

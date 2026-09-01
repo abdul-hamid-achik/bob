@@ -69,7 +69,7 @@ func TestApplyConflictJSONIncludesConflictsWithoutSecondPlanRoundTrip(t *testing
 	if len(got.Data.Conflicts) == 0 {
 		t.Fatalf("expected data.conflicts to be populated: %#v", got)
 	}
-	if got.Data.Conflicts[0].Path != "README.md" || got.Data.Conflicts[0].Code == "" {
+	if got.Data.Conflicts[0].Path != "internal/cli/root.go" || got.Data.Conflicts[0].Code == "" {
 		t.Fatalf("unexpected conflict entry: %#v", got.Data.Conflicts[0])
 	}
 	if len(got.NextActions) == 0 {
@@ -91,7 +91,7 @@ func TestApplyConflictHumanModePrintsBoundedConflictList(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected apply to refuse a conflicted plan")
 	}
-	if !strings.Contains(stdout.String(), "conflict") || !strings.Contains(stdout.String(), "README.md") {
+	if !strings.Contains(stdout.String(), "conflict") || !strings.Contains(stdout.String(), "internal/cli/root.go") {
 		t.Fatalf("expected the conflicting path in stdout: %s", stdout.String())
 	}
 	if !strings.HasPrefix(strings.TrimLeft(stderr.String(), ""), "bob: ") {

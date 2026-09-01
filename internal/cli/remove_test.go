@@ -32,8 +32,11 @@ func TestRemoveLifecycleClearsManagedFilesAndLock(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(target, "bob.lock")); !os.IsNotExist(err) {
 		t.Fatalf("bob.lock should be removed, got err=%v", err)
 	}
-	if _, err := os.Stat(filepath.Join(target, "README.md")); !os.IsNotExist(err) {
-		t.Fatalf("managed README.md should be removed, got err=%v", err)
+	if _, err := os.Stat(filepath.Join(target, "README.md")); err != nil {
+		t.Fatalf("seed-once README.md must survive remove: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "internal", "cli", "root.go")); !os.IsNotExist(err) {
+		t.Fatalf("managed internal/cli/root.go should be removed, got err=%v", err)
 	}
 	if _, err := os.Stat(filepath.Join(target, "bob.yaml")); err != nil {
 		t.Fatalf("bob.yaml must survive remove: %v", err)
@@ -60,8 +63,8 @@ func TestRemoveDryRunPreservesEverything(t *testing.T) {
 func TestRemoveModifiedFileExitsConflictsAndPreservesIt(t *testing.T) {
 	t.Parallel()
 	target := scaffoldRemoveWorkspace(t)
-	readme := filepath.Join(target, "README.md")
-	if err := os.WriteFile(readme, []byte("human edit\n"), 0o644); err != nil {
+	owned := filepath.Join(target, "internal", "cli", "root.go")
+	if err := os.WriteFile(owned, []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("remove", target)
@@ -71,8 +74,8 @@ func TestRemoveModifiedFileExitsConflictsAndPreservesIt(t *testing.T) {
 	if !strings.Contains(stdout, "skipped") {
 		t.Fatalf("expected skipped output, got: %s", stdout)
 	}
-	data, readErr := os.ReadFile(readme)
-	if readErr != nil || string(data) != "human edit\n" {
+	data, readErr := os.ReadFile(owned)
+	if readErr != nil || string(data) != "package cli\n" {
 		t.Fatalf("drifted file = %q, %v; want human edit preserved", data, readErr)
 	}
 	if _, err := os.Stat(filepath.Join(target, "bob.lock")); err != nil {
@@ -83,14 +86,14 @@ func TestRemoveModifiedFileExitsConflictsAndPreservesIt(t *testing.T) {
 func TestRemoveForceClearsModifiedFile(t *testing.T) {
 	t.Parallel()
 	target := scaffoldRemoveWorkspace(t)
-	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("remove", "--force", target)
 	if err != nil {
 		t.Fatalf("remove --force: %v\n%s", err, stdout)
 	}
-	if _, err := os.Stat(filepath.Join(target, "README.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(target, "internal", "cli", "root.go")); !os.IsNotExist(err) {
 		t.Fatalf("force remove must delete the drifted file, got err=%v", err)
 	}
 	if _, err := os.Stat(filepath.Join(target, "bob.lock")); !os.IsNotExist(err) {
@@ -140,7 +143,7 @@ func TestRemoveJSONEnvelopeReportsResult(t *testing.T) {
 func TestRemoveJSONIncompleteExitsConflicts(t *testing.T) {
 	t.Parallel()
 	target := scaffoldRemoveWorkspace(t)
-	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, err := executeForTest("--json", "remove", target)

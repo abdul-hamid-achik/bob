@@ -49,6 +49,9 @@ jobs:
       - name: Build
         run: CGO_ENABLED=0 go build ./cmd/bob
 
+      - name: Check Bob workspace contract
+        run: go run ./cmd/bob check
+
       - name: Run govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 

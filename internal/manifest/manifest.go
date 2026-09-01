@@ -121,6 +121,14 @@ type Manifest struct {
 	Distribution  Distribution      `json:"distribution" yaml:"distribution"`
 	Vars          map[string]string `json:"vars,omitempty" yaml:"vars,omitempty"`
 	Files         []FileDecl        `json:"files,omitempty" yaml:"files,omitempty"`
+	Ownership     Ownership         `json:"ownership,omitempty" yaml:"ownership,omitempty"`
+}
+
+// Ownership is the optional human override of recipe file ownership.
+// Release lists recipe artifact paths that Bob should seed-once instead of
+// lock-own, so a kept human edit does not become a permanent apply block.
+type Ownership struct {
+	Release []string `json:"release,omitempty" yaml:"release,omitempty"`
 }
 
 // FileDecl is one file the files recipe materializes verbatim, subject only
@@ -317,6 +325,7 @@ func (m Manifest) validateGoAgentToolRecipe() []string {
 	if len(m.Files) > 0 {
 		problems = append(problems, "files is only supported by recipe files")
 	}
+	problems = append(problems, ownershipReleaseProblems(m.Ownership.Release)...)
 	return problems
 }
 
@@ -406,6 +415,9 @@ func (m Manifest) validateStackRecipe() []string {
 	if len(m.Files) > 0 {
 		problems = append(problems, "files is only supported by recipe files")
 	}
+	if len(m.Ownership.Release) > 0 {
+		problems = append(problems, fmt.Sprintf("ownership.release is not used by recipe %s", m.Recipe))
+	}
 	return problems
 }
 
@@ -472,6 +484,7 @@ func (m Manifest) validateFilesRecipe() []string {
 	if m.Distribution != (Distribution{}) {
 		problems = append(problems, "distribution is not used by recipe files")
 	}
+	problems = append(problems, ownershipReleaseProblems(m.Ownership.Release)...)
 
 	varKeys := make([]string, 0, len(m.Vars))
 	for key := range m.Vars {
@@ -510,6 +523,32 @@ func (m Manifest) validateFilesRecipe() []string {
 // default 0o644. A non-empty string must be a 3-4 digit octal permission
 // string with no bits outside 0o777 (setuid, setgid, and sticky are
 // rejected).
+func ownershipReleaseProblems(paths []string) []string {
+	var problems []string
+	seen := make(map[string]struct{}, len(paths))
+	for i, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			problems = append(problems, fmt.Sprintf("ownership.release[%d] must not be empty", i))
+			continue
+		}
+		if filepath.IsAbs(path) || strings.Contains(path, "\x00") || strings.Contains(path, "..") {
+			problems = append(problems, fmt.Sprintf("ownership.release[%d] %s is not a safe repository-relative path", i, describeValue(path)))
+			continue
+		}
+		canonical := filepath.ToSlash(filepath.Clean(path))
+		if canonical == "." || canonical == "bob.yaml" || canonical == "bob.lock" || canonical == ".git" || strings.HasPrefix(canonical, ".git/") {
+			problems = append(problems, fmt.Sprintf("ownership.release[%d] %s is reserved", i, describeValue(path)))
+			continue
+		}
+		if _, exists := seen[canonical]; exists {
+			problems = append(problems, fmt.Sprintf("ownership.release declares duplicate path %q", canonical))
+			continue
+		}
+		seen[canonical] = struct{}{}
+	}
+	return problems
+}
+
 func ParseFileMode(mode string) (os.FileMode, error) {
 	if mode == "" {
 		return 0o644, nil

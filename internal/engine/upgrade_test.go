@@ -39,8 +39,8 @@ func TestUpgradeV4ToV5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if from != 4 || to != 5 || !needsUpgrade {
-		t.Fatalf("status = (%d, %d, %t), want (4, 5, true)", from, to, needsUpgrade)
+	if from != 4 || to != 6 || !needsUpgrade {
+		t.Fatalf("status = (%d, %d, %t), want (4, 6, true)", from, to, needsUpgrade)
 	}
 
 	result, err := Upgrade(root, UpgradeOptions{})
@@ -50,7 +50,7 @@ func TestUpgradeV4ToV5(t *testing.T) {
 	if !result.Applied {
 		t.Fatal("expected upgrade to apply")
 	}
-	if result.FromVersion != 4 || result.ToVersion != 5 || result.Recipe != "go-agent-tool" {
+	if result.FromVersion != 4 || result.ToVersion != 6 || result.Recipe != "go-agent-tool" {
 		t.Fatalf("result = %#v", result)
 	}
 
@@ -58,8 +58,8 @@ func TestUpgradeV4ToV5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lock.Recipe.Version != 5 {
-		t.Fatalf("lock recipe version = %d, want 5", lock.Recipe.Version)
+	if lock.Recipe.Version != 6 {
+		t.Fatalf("lock recipe version = %d, want 6", lock.Recipe.Version)
 	}
 	registryTest, err := os.ReadFile(filepath.Join(root, "internal/cli/registry_test.go"))
 	if err != nil || !strings.Contains(string(registryTest), "TestRegisterCommandCollectsHumanOwnedFactory") {
@@ -132,8 +132,8 @@ func TestUpgradeAlreadyCurrentIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if from != 5 || to != 5 || needsUpgrade {
-		t.Fatalf("status = (%d, %d, %t), want (5, 5, false)", from, to, needsUpgrade)
+	if from != 6 || to != 6 || needsUpgrade {
+		t.Fatalf("status = (%d, %d, %t), want (6, 6, false)", from, to, needsUpgrade)
 	}
 
 	result, err := Upgrade(root, UpgradeOptions{})
@@ -190,7 +190,7 @@ func TestUpgradeRefusesConflictedWorkspace(t *testing.T) {
 	t.Parallel()
 	root := setupVersionWorkspace(t, 4)
 	// Drift a managed file so the migration plan conflicts.
-	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("human edit\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "internal", "cli", "root.go"), []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

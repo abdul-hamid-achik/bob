@@ -22,6 +22,7 @@ var (
 	ErrNewerSchema   = errors.New("telemetry data uses a newer schema")
 	workspacePattern = regexp.MustCompile(`^w_[0-9a-f]{32}$`)
 	eventIDPattern   = regexp.MustCompile(`^evt_[0-9a-f]{32}$`)
+	recipePattern    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 )
 
 // Surface identifies the closed v1 set of Bob entry points. Studio is
@@ -173,7 +174,7 @@ func validateEvent(event Event, stored bool) error {
 	if event.WorkspaceID != "" && !workspacePattern.MatchString(event.WorkspaceID) {
 		return errors.New("invalid telemetry workspace_id")
 	}
-	if event.Recipe != "" && event.Recipe != RecipeGoAgentTool {
+	if event.Recipe != "" && !recipePattern.MatchString(string(event.Recipe)) {
 		return fmt.Errorf("invalid telemetry recipe %q", event.Recipe)
 	}
 	if event.Recipe == "" && event.RecipeVersion != 0 {

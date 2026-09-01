@@ -47,7 +47,7 @@ bob learn --json
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
 | `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@5`, and the eleven stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`, `swift-package`, `elixir-app`, and `static-web`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@6`, and the twelve stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`, `swift-package`, `elixir-app`, `static-web`, and `go-hygiene`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |
@@ -72,7 +72,7 @@ bob check --json          # to confirm convergence, exits non-zero on drift
 
 Context is bounded, read-only, and offline. Branch on its stable capability
 facets and action codes; never treat `verification: not_assessed` as success.
-For a converged `go-agent-tool@5` workspace, add commands through the advertised
+For a converged `go-agent-tool@6` workspace, add commands through the advertised
 `cli.command_files` extension point. If `add-cli-command` reports
 `extension_contract_not_materialized`, reconcile the version-4 root and
 registry contract before creating an extension. Those composition files remain

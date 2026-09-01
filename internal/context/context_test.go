@@ -66,6 +66,9 @@ func TestContextCleanDriftedAndConflicted(t *testing.T) {
 	if conflicted.Repository.ConflictClass != "contract_drift" || !conflicted.Repository.LockExists {
 		t.Fatalf("conflicted classification = %#v", conflicted.Repository)
 	}
+	if len(conflicted.Repository.TopConflicts) == 0 || conflicted.Repository.TopConflicts[0].Path != "internal/cli/root.go" {
+		t.Fatalf("top conflicts = %#v", conflicted.Repository.TopConflicts)
+	}
 }
 
 // TestContextClassifiesUnmanagedDivergence reproduces the repository-evolved-
@@ -76,7 +79,7 @@ func TestContextClassifiesUnmanagedDivergence(t *testing.T) {
 	t.Parallel()
 	lookPath := func(name string) (string, error) { return "/bin/" + name, nil }
 	root := contextWorkspace(t, maximalManifest(), false)
-	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("human words\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "Taskfile.yml"), []byte("human words\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	result, err := Load(root, Options{Profile: ProfileCompact, LookPath: lookPath})

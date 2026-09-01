@@ -24,7 +24,7 @@ schema version 1:
   "workspace": "/canonical/workspace",
   "contract_digest": "sha256:...",
   "context_digest": "sha256:...",
-  "recipe": {"id": "go-agent-tool", "version": 5},
+  "recipe": {"id": "go-agent-tool", "version": 6},
   "product": {"name": "acme", "module": "github.com/acme/acme", "runtime": "go", "kind": "cli"},
   "repository": {
     "state": "clean",
@@ -37,7 +37,8 @@ schema version 1:
     "action_counts": {"create": 0, "update": 0, "adopt": 0, "unchanged": 30, "conflict": 0},
     "managed_files": 30,
     "plan_digest_version": 1,
-    "plan_digest": "sha256:..."
+    "plan_digest": "sha256:...",
+    "top_conflicts": []
   },
   "capabilities": [],
   "entry_points": [],
@@ -88,6 +89,11 @@ distinguishes "lock drifted" from "recipe never applied" —
 directly: the recipe was never applied, the files at those paths are
 human-owned, and apply will not overwrite them.
 
+`repository.top_conflicts` is a deterministic prefix of up to three conflicting
+paths (`path`, `code`, `family`) in plan order. Compact context uses it so an
+agent can name the blockers without a second `bob plan` call. The human
+verdict line repeats those paths after `top:`.
+
 `repository.plan_digest` is the `sha256:`-labelled version of the exact plan
 identity shared by CLI and MCP plan/check. It is not an approval or a
 verification receipt.
@@ -108,7 +114,7 @@ by versioned recipe metadata. Availability is an offline executable lookup; Bob
 does not run the executable. A selected or materialized integration is never
 reported as verified.
 
-The `go-agent-tool@5` catalog exposes these stable capability IDs:
+The `go-agent-tool@6` catalog exposes these stable capability IDs:
 
 ```text
 surface.cli
@@ -137,7 +143,7 @@ recipe neither generates nor verifies the declared surface.
 `repository.whole_file_ownership`; it does not borrow application-specific
 capabilities from `go-agent-tool`.
 
-`go-agent-tool@5` advertises `cli.command_files` as a human-owned extension
+`go-agent-tool@6` advertises `cli.command_files` as a human-owned extension
 point. New command implementation and test files match its declared patterns;
 `internal/cli/root.go`, `internal/cli/root_test.go`, `internal/cli/registry.go`,
 and `internal/cli/registry_test.go` remain Bob-owned forbidden paths. The

@@ -113,7 +113,7 @@ func TestPlanContentFlagShowsDesiredAndCurrentPreviews(t *testing.T) {
 	if !strings.Contains(stdout, "--- desired preview ---") || !strings.Contains(stdout, "--- current preview ---") {
 		t.Fatalf("plan --content missing preview sections:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "conflicting edit") {
+	if !strings.Contains(stdout, "package cli") {
 		t.Fatalf("plan --content missing current file content:\n%s", stdout)
 	}
 }
@@ -127,8 +127,8 @@ func conflictedWorkspace(t *testing.T) string {
 	if _, _, err := executeForTest("new", "acme", "--module", "github.com/acme/acme", "--dir", target, "--write"); err != nil {
 		t.Fatal(err)
 	}
-	readme := filepath.Join(target, "README.md")
-	if err := os.WriteFile(readme, []byte("conflicting edit\n"), 0o644); err != nil {
+	path := filepath.Join(target, "internal", "cli", "root.go")
+	if err := os.WriteFile(path, []byte("package cli\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return target

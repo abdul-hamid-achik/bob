@@ -39,3 +39,25 @@ func TestResolveMissingDescendant(t *testing.T) {
 		t.Fatalf("Resolve(mustExist) error = %v", err)
 	}
 }
+
+func TestResolveMissingDescendantThroughSymlinkAncestor(t *testing.T) {
+	t.Parallel()
+	target := t.TempDir()
+	canonicalTarget, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(target, parent); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(parent, "new", "repo")
+	got, err := Resolve(want, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalWant := filepath.Join(canonicalTarget, "new", "repo")
+	if got != canonicalWant {
+		t.Fatalf("Resolve() = %q, want %q", got, canonicalWant)
+	}
+}

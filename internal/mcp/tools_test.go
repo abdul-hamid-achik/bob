@@ -277,6 +277,9 @@ func TestRecipeDescribeIsTypedAndClosedWorld(t *testing.T) {
 	if !stackOutput.OK || stackOutput.Recipe == nil || stackOutput.Recipe.ID != "ts-app" || stackOutput.Recipe.Version != 2 {
 		t.Fatalf("unexpected stack recipe description: %#v", stackOutput)
 	}
+	if len(stackOutput.Recipe.Surfaces) != 0 {
+		t.Fatalf("stack recipes reject surfaces; got %v", stackOutput.Recipe.Surfaces)
+	}
 	if !strings.Contains(stackOutput.Recipe.Description, "seed") {
 		t.Fatalf("stack recipe description must state seed-once semantics: %q", stackOutput.Recipe.Description)
 	}

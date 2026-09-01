@@ -185,9 +185,9 @@ func (s *Server) handleInspect(ctx context.Context, _ *sdkmcp.CallToolRequest, i
 	root := ""
 	outcome, reason := telemetry.OutcomeError, telemetry.ReasonInternal
 	var recordedCounts inspectpkg.ActionCounts
-	recipeSelected := false
+	recipeID := ""
 	defer func() {
-		s.recordOperation(ctx, telemetry.OperationInspect, root, outcome, reason, recordedCounts, recipeSelected, started)
+		s.recordOperation(ctx, telemetry.OperationInspect, root, outcome, reason, recordedCounts, recipeID, 0, started)
 	}()
 	var authErr *authorityError
 	root, authErr = s.authority.resolve(in.Workspace)
@@ -209,7 +209,7 @@ func (s *Server) handleInspect(ctx context.Context, _ *sdkmcp.CallToolRequest, i
 	}
 	outcome, reason = telemetry.OutcomeOK, ""
 	recordedCounts = report.Repository.Actions
-	recipeSelected = report.Repository.Recipe == currentRecipeID
+	recipeID = report.Repository.Recipe
 	out := &InspectOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Workspace: root,
 		Authority: s.authority.info(root), Report: &report,
@@ -222,9 +222,10 @@ func (s *Server) handlePlan(ctx context.Context, _ *sdkmcp.CallToolRequest, in P
 	root := ""
 	outcome, reason := telemetry.OutcomeError, telemetry.ReasonInternal
 	var recordedCounts inspectpkg.ActionCounts
-	recipeSelected := false
+	recipeID := ""
+	recipeVersion := 0
 	defer func() {
-		s.recordOperation(ctx, telemetry.OperationPlan, root, outcome, reason, recordedCounts, recipeSelected, started)
+		s.recordOperation(ctx, telemetry.OperationPlan, root, outcome, reason, recordedCounts, recipeID, recipeVersion, started)
 	}()
 	maxActions, err := normalizeMaxActions(in.MaxActions)
 	if err != nil {
@@ -242,7 +243,8 @@ func (s *Server) handlePlan(ctx context.Context, _ *sdkmcp.CallToolRequest, in P
 		reason = reasonFromToolCode(code)
 		return s.planFailure(root, code, err, in.IncludeUnchanged, maxActions)
 	}
-	recipeSelected = plan.Recipe.ID == currentRecipeID
+	recipeID = plan.Recipe.ID
+	recipeVersion = plan.Recipe.Version
 	out := s.projectPlan(root, plan, in.IncludeUnchanged, maxActions)
 	recordedCounts = out.Counts
 	outcome, reason = telemetry.OutcomeOK, ""
@@ -257,9 +259,10 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 	root := ""
 	outcome, reason := telemetry.OutcomeError, telemetry.ReasonInternal
 	var recordedCounts inspectpkg.ActionCounts
-	recipeSelected := false
+	recipeID := ""
+	recipeVersion := 0
 	defer func() {
-		s.recordOperation(ctx, telemetry.OperationCheck, root, outcome, reason, recordedCounts, recipeSelected, started)
+		s.recordOperation(ctx, telemetry.OperationCheck, root, outcome, reason, recordedCounts, recipeID, recipeVersion, started)
 	}()
 	var authErr *authorityError
 	root, authErr = s.authority.resolve(in.Workspace)
@@ -272,7 +275,8 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 		reason = reasonFromToolCode(code)
 		return s.checkFailure(root, code, err)
 	}
-	recipeSelected = plan.Recipe.ID == currentRecipeID
+	recipeID = plan.Recipe.ID
+	recipeVersion = plan.Recipe.Version
 	counts, clean, warnings, nextActions := summarizePlan(root, plan)
 	recordedCounts = counts
 	outcome, reason = telemetry.OutcomeOK, ""
@@ -294,9 +298,10 @@ func (s *Server) handleValidateManifest(ctx context.Context, _ *sdkmcp.CallToolR
 	started := time.Now()
 	recordedRoot := ""
 	outcome, reason := telemetry.OutcomeError, telemetry.ReasonInternal
-	recipeSelected := false
+	recipeID := ""
+	recipeVersion := 0
 	defer func() {
-		s.recordOperation(ctx, telemetry.OperationValidateManifest, recordedRoot, outcome, reason, inspectpkg.ActionCounts{}, recipeSelected, started)
+		s.recordOperation(ctx, telemetry.OperationValidateManifest, recordedRoot, outcome, reason, inspectpkg.ActionCounts{}, recipeID, recipeVersion, started)
 	}()
 	hasWorkspace := strings.TrimSpace(in.Workspace) != ""
 	hasInline := in.ManifestYAML != ""
@@ -333,12 +338,13 @@ func (s *Server) handleValidateManifest(ctx context.Context, _ *sdkmcp.CallToolR
 		reason = telemetry.ReasonInvalidManifest
 		return s.manifestFailure(source, root, "manifest_invalid", err)
 	}
-	recipeSelected = m.Recipe == currentRecipeID
-	recipeVersion, err := recipe.Version(m.Recipe)
+	recipeID = m.Recipe
+	lookedUp, err := recipe.Version(m.Recipe)
 	if err != nil {
 		reason = telemetry.ReasonInvalidManifest
 		return s.manifestFailure(source, root, "recipe_invalid", err)
 	}
+	recipeVersion = lookedUp
 	out := &ValidateManifestOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Source: source, Workspace: root,
 		Authority: s.authority.info(root), ManifestSchemaVersion: manifest.SchemaVersion,
@@ -352,9 +358,10 @@ func (s *Server) handleValidateManifest(ctx context.Context, _ *sdkmcp.CallToolR
 func (s *Server) handleRecipeDescribe(ctx context.Context, _ *sdkmcp.CallToolRequest, in RecipeDescribeInput) (*sdkmcp.CallToolResult, *RecipeDescribeOutput, error) {
 	started := time.Now()
 	outcome, reason := telemetry.OutcomeError, telemetry.ReasonInvalidInput
-	recipeSelected := false
+	recipeID := ""
+	recipeVersion := 0
 	defer func() {
-		s.recordOperation(ctx, telemetry.OperationRecipeDescribe, "", outcome, reason, inspectpkg.ActionCounts{}, recipeSelected, started)
+		s.recordOperation(ctx, telemetry.OperationRecipeDescribe, "", outcome, reason, inspectpkg.ActionCounts{}, recipeID, recipeVersion, started)
 	}()
 	id := in.Recipe
 	if id == "" {
@@ -368,7 +375,8 @@ func (s *Server) handleRecipeDescribe(ctx context.Context, _ *sdkmcp.CallToolReq
 		}
 		return &sdkmcp.CallToolResult{IsError: true}, out, nil
 	}
-	recipeSelected = id == currentRecipeID
+	recipeID = id
+	recipeVersion = version
 	out := &RecipeDescribeOutput{
 		SchemaVersion: toolSchemaVersion, OK: true,
 		Recipe: recipeDescription(id, version),
@@ -382,7 +390,7 @@ func recipeDescription(id string, version int) *RecipeDescription {
 		return &RecipeDescription{
 			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
 			Description: info.Description + ". Every artifact is a seed: created once when missing, never recorded in bob.lock, and never updated or overwritten afterwards. Stack: " + info.LanguageLabel + ".",
-			Surfaces:    []string{"cli", "json"},
+			Surfaces:    []string{},
 		}
 	}
 	if id == "files" {

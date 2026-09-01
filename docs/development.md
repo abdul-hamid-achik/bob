@@ -4,7 +4,7 @@ description: How to build, test, lint, and ship Bob and its VitePress docs site 
 
 # Development
 
-Bob is a Go 1.26.5 module with a small VitePress documentation site and optional
+Bob is a Go 1.26.6 module with a small VitePress documentation site and optional
 Glyphrun terminal contract. Building the site requires Node.js 22 or newer.
 Nothing here mutates a real repository; that discipline applies to Bob's own
 build too.
