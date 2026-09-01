@@ -88,6 +88,14 @@ only `cmd/bob` may exit the process. Tests must use temporary directories and
 must never touch a real user's repositories or tool configuration. Opt-in live
 integration tests must isolate telemetry and state explicitly.
 
+## Docs site (Vercel)
+
+`docs/vercel.json` auto-builds **`main` only**. Feature branches do not create
+Preview deployments. `ignoreCommand` skips the build unless `docs/`, lockfiles,
+or `docs/vercel.json` changed. The CLI release is tag → GoReleaser / Homebrew;
+do not `vercel promote` the site and do not add GitHub Pages. `main` *is* the
+docs release. Run `task docs-build` before pushing docs to `main`.
+
 ## Documentation discipline
 
 `docs/` is the published website. Every Markdown file in it (plus
