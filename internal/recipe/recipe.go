@@ -3,10 +3,9 @@ package recipe
 import (
 	"fmt"
 	"io/fs"
-	"path/filepath"
 	"sort"
-	"strings"
 
+	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/strsim"
 )
@@ -166,13 +165,14 @@ func applyOwnershipRelease(artifacts []Artifact, released []string) ([]Artifact,
 	return artifacts, nil
 }
 
+// safePath canonicalizes a recipe artifact path through the shared fsutil
+// rule set: relative, inside the workspace, never .git, bob.yaml, bob.lock,
+// or .bob.apply.lock (or their children). Engine re-validates with the same
+// function, so recipe and engine cannot drift.
 func safePath(path string) (string, error) {
-	path = filepath.ToSlash(filepath.Clean(path))
-	if path == "." || filepath.IsAbs(path) || path == ".." || strings.HasPrefix(path, "../") {
-		return "", fmt.Errorf("recipe produced unsafe path %q", path)
+	clean, err := fsutil.ValidateArtifactPath(path)
+	if err != nil {
+		return "", fmt.Errorf("recipe produced %w", err)
 	}
-	if path == ".git" || strings.HasPrefix(path, ".git/") || path == manifest.Filename || path == "bob.lock" {
-		return "", fmt.Errorf("recipe cannot own reserved path %q", path)
-	}
-	return path, nil
+	return clean, nil
 }

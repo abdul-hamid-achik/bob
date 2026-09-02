@@ -35,12 +35,13 @@ func FuzzSafePath(f *testing.F) {
 		".git",
 		"bob.yaml",
 		"bob.lock",
-		// reserved paths — children (.git only)
+		// reserved paths — children
 		".git/config",
 		".git/HEAD",
-		// safePath does NOT block children of bob.yaml/bob.lock
 		"bob.yaml/child",
 		"bob.lock/child",
+		".bob.apply.lock",
+		".bob.apply.lock/child",
 		// paths that merely contain reserved names
 		"not-git",
 		"my.bob.yaml",

@@ -132,7 +132,7 @@ func TestValidateMetadataRejectsBrokenContracts(t *testing.T) {
 		want   string
 	}{
 		{"duplicate id", func(md *Metadata) { md.Capabilities[1].ID = md.Capabilities[0].ID }, "duplicate"},
-		{"unsafe path", func(md *Metadata) { md.Artifacts[0].Path = "../escape" }, "unsafe path"},
+		{"unsafe path", func(md *Metadata) { md.Artifacts[0].Path = "../escape" }, "unsafe artifact path"},
 		{"unrendered path", func(md *Metadata) { md.Artifacts[0].Path = "not-rendered.txt" }, "unrendered"},
 		{"unknown artifact", func(md *Metadata) { md.Capabilities[0].ArtifactIDs = append(md.Capabilities[0].ArtifactIDs, "missing") }, "unknown artifact"},
 		{"unknown capability", func(md *Metadata) { md.Artifacts[0].CapabilityIDs = append(md.Artifacts[0].CapabilityIDs, "missing") }, "unknown capability"},

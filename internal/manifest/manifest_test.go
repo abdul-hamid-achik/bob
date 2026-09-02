@@ -332,3 +332,22 @@ func TestWriteRefusesExistingManifest(t *testing.T) {
 		t.Fatal("expected existing-file error")
 	}
 }
+
+func TestValidateFilesRecipeRejectsUnsafeAndReservedPaths(t *testing.T) {
+	t.Parallel()
+	for _, unsafe := range []string{"../escape.txt", "/etc/passwd", ".git/hooks/pre-commit", "bob.yaml", "bob.lock/child", ".bob.apply.lock", "a\x00b"} {
+		unsafe := unsafe
+		t.Run(unsafe, func(t *testing.T) {
+			t.Parallel()
+			m := filesManifest()
+			m.Files = append(m.Files, FileDecl{Path: unsafe, Content: "x"})
+			err := m.Validate()
+			if err == nil {
+				t.Fatalf("files path %q must be rejected by Validate", unsafe)
+			}
+			if !strings.Contains(err.Error(), "files[") {
+				t.Fatalf("error should name the files entry: %v", err)
+			}
+		})
+	}
+}

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	Filename      = "bob.yaml"
+	Filename      = fsutil.ManifestFilename
 	SchemaVersion = 1
 	maxBytes      = 1 << 20
 
@@ -509,7 +509,11 @@ func (m Manifest) validateFilesRecipe() []string {
 		if _, err := ParseFileMode(decl.Mode); err != nil {
 			problems = append(problems, fmt.Sprintf("files[%d] (%s): %s (got %s)", i, decl.Path, err, describeValue(decl.Mode)))
 		}
-		canonical := filepath.ToSlash(filepath.Clean(decl.Path))
+		canonical, err := fsutil.ValidateArtifactPath(decl.Path)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("files[%d] (%s): %v", i, decl.Path, err))
+			continue
+		}
 		if _, exists := seenPaths[canonical]; exists {
 			problems = append(problems, fmt.Sprintf("files declares duplicate path %q", canonical))
 			continue
