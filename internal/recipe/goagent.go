@@ -188,7 +188,8 @@ func executeRecipeTemplate(name, source string, data any) ([]byte, error) {
 		Delims("[[", "]]").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{
-			"quote": strconv.Quote,
+			"quote":     strconv.Quote,
+			"tomlQuote": tomlQuote,
 		}).
 		Parse(source)
 	if err != nil {

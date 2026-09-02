@@ -922,9 +922,9 @@ const stackPrettierVueRC = `{
 `
 
 const stackPyproject = `[project]
-name = [[quote .Product.Name]]
+name = [[tomlQuote .Product.Name]]
 version = "0.1.0"
-description = [[quote .Product.Description]]
+description = [[tomlQuote .Product.Description]]
 requires-python = ">=3.11"
 
 [tool.ruff]
@@ -943,9 +943,9 @@ const stackPythonVersion = `3.12
 `
 
 const stackPyprojectV2 = `[project]
-name = [[quote .Product.Name]]
+name = [[tomlQuote .Product.Name]]
 version = "0.1.0"
-description = [[quote .Product.Description]]
+description = [[tomlQuote .Product.Description]]
 requires-python = ">=3.13"
 
 [tool.ruff]
