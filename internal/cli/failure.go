@@ -43,8 +43,6 @@ func classifyErrorCode(err error) string {
 		return "conflicts"
 	case ExitInvalidInput:
 		switch {
-		case errors.Is(err, os.ErrNotExist) && strings.Contains(msg, manifest.Filename):
-			return "missing_manifest"
 		case strings.Contains(msg, "validate manifest"), strings.Contains(msg, "decode manifest"), strings.Contains(msg, "read manifest"):
 			return "manifest_invalid"
 		case strings.Contains(msg, "resolve workspace"), strings.Contains(msg, "workspace root"), strings.Contains(msg, "workspace path"):

@@ -232,7 +232,7 @@ func newNewCommand(opts *options) *cobra.Command {
 			if err := manifest.WriteFile(filepath.Join(target, manifest.Filename), m, false); err != nil {
 				return fmt.Errorf("new: %w", err)
 			}
-			result, err := engine.Apply(target, m, artifacts)
+			result, err := engine.ApplyWorkspaceWithOptions(target, engine.ApplyOptions{})
 			if err != nil {
 				return fmt.Errorf("new: apply: %w", err)
 			}
@@ -733,6 +733,11 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
+			if expectedPlanDigest != "" {
+				if err := engine.ValidateExpectedPlanDigest(expectedPlanDigest); err != nil {
+					return classifyInvalidInput(err)
+				}
+			}
 			m, err := manifest.Load(root)
 			if err != nil {
 				return classifyInvalidInput(err)
@@ -743,6 +748,24 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			}
 			captureWorkspaceMetrics(opts, root, m.Recipe)
 			if !needsUpgrade {
+				if expectedPlanDigest != "" {
+					artifacts, renderErr := recipe.Render(m)
+					if renderErr != nil {
+						return classifyInvalidInput(renderErr)
+					}
+					plan, planErr := engine.Plan(root, m, artifacts)
+					if planErr != nil {
+						return fmt.Errorf("upgrade: %w", planErr)
+					}
+					digest := engine.DigestPlan(plan)
+					if digest.Qualified() != expectedPlanDigest {
+						mismatch := &engine.PlanDigestMismatchError{
+							ExpectedPlanDigest: expectedPlanDigest,
+							ActualPlanDigest:   digest.Qualified(),
+						}
+						return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
+					}
+				}
 				if opts.json {
 					return emitJSON(cmd.OutOrStdout(), "upgrade", engine.UpgradeResult{FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{}}, nil, []string{"repository is already at the current recipe version"})
 				}
@@ -756,23 +779,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			if err != nil {
 				var mismatch *engine.PlanDigestMismatchError
 				if errors.As(err, &mismatch) {
-					failure := newExitError(ExitPlanMismatch, fmt.Errorf("upgrade: %w", mismatch))
-					if opts.json {
-						data := map[string]any{
-							"expected_plan_digest": mismatch.ExpectedPlanDigest,
-							"actual_plan_digest":   mismatch.ActualPlanDigest,
-							"error": map[string]string{
-								"code":    "plan_digest_mismatch",
-								"message": mismatch.Error(),
-							},
-						}
-						next := nextActionsForCommandFailure(failure, root, "upgrade")
-						if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, nil, next); emitErr != nil {
-							return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
-						}
-						return reportedError{err: failure}
-					}
-					return failure
+					return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
 				}
 				if errors.Is(err, engine.ErrInvalidPlanDigest) {
 					return classifyInvalidInput(err)
@@ -817,6 +824,31 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would change without applying")
 	return cmd
+}
+
+// upgradePlanDigestMismatchFailure reports a reviewed-plan digest that no
+// longer matches the current workspace, whether the mismatch was discovered
+// against a needed migration or against a workspace already at the current
+// recipe version. It mirrors apply's digest-mismatch exit code and JSON error
+// shape exactly.
+func upgradePlanDigestMismatchFailure(cmd *cobra.Command, opts *options, root string, mismatch *engine.PlanDigestMismatchError) error {
+	failure := newExitError(ExitPlanMismatch, fmt.Errorf("upgrade: %w", mismatch))
+	if opts.json {
+		data := map[string]any{
+			"expected_plan_digest": mismatch.ExpectedPlanDigest,
+			"actual_plan_digest":   mismatch.ActualPlanDigest,
+			"error": map[string]string{
+				"code":    "plan_digest_mismatch",
+				"message": mismatch.Error(),
+			},
+		}
+		next := nextActionsForCommandFailure(failure, root, "upgrade")
+		if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "upgrade", data, nil, next); emitErr != nil {
+			return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+		}
+		return reportedError{err: failure}
+	}
+	return failure
 }
 
 func newCheckCommand(opts *options) *cobra.Command {
