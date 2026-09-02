@@ -13,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/abdul-hamid-achik/bob/internal/fsutil"
-	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
 
 // observation is a read-only snapshot of one destination path. conflictCode
@@ -68,26 +67,11 @@ func validateRoot(root string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
+// validateRelativePath canonicalizes an artifact path through the shared
+// fsutil rule set so manifest, recipe, and engine enforce one path-safety
+// invariant.
 func validateRelativePath(path string) (string, error) {
-	original := path
-	if path == "" || strings.ContainsRune(path, '\x00') {
-		return "", fmt.Errorf("unsafe artifact path %q", original)
-	}
-	if filepath.IsAbs(path) || filepath.VolumeName(path) != "" {
-		return "", fmt.Errorf("unsafe artifact path %q", original)
-	}
-	clean := filepath.Clean(path)
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
-		return "", fmt.Errorf("unsafe artifact path %q", original)
-	}
-	clean = filepath.ToSlash(clean)
-	if clean == ".git" || strings.HasPrefix(clean, ".git/") ||
-		clean == manifest.Filename || strings.HasPrefix(clean, manifest.Filename+"/") ||
-		clean == LockFilename || strings.HasPrefix(clean, LockFilename+"/") ||
-		clean == ApplyLockFilename || strings.HasPrefix(clean, ApplyLockFilename+"/") {
-		return "", fmt.Errorf("artifact path %q is reserved", original)
-	}
-	return clean, nil
+	return fsutil.ValidateArtifactPath(path)
 }
 
 func destinationWithinRoot(root, relative string) error {
@@ -220,33 +204,48 @@ func readCurrentPreview(destination string) string {
 	return string(data[:end]) + fmt.Sprintf("\n… preview truncated; %d total bytes", info.Size())
 }
 
-func ensureParentDirectories(root, relative string) error {
+// ensureParentDirectories creates the missing ancestors of relative under
+// root and returns the directories it created, shallowest first, so a caller
+// that aborts before publishing can remove them again in reverse order.
+func ensureParentDirectories(root, relative string) ([]string, error) {
 	parent := filepath.Dir(filepath.Join(root, filepath.FromSlash(relative)))
 	relativeParent, err := filepath.Rel(root, parent)
 	if err != nil {
-		return fmt.Errorf("ensure parent directories: resolve relative path: %w", err)
+		return nil, fmt.Errorf("ensure parent directories: resolve relative path: %w", err)
 	}
 	if relativeParent == "." {
-		return nil
+		return nil, nil
 	}
+	var created []string
 	current := root
 	for _, component := range strings.Split(relativeParent, string(os.PathSeparator)) {
 		current = filepath.Join(current, component)
 		info, err := os.Lstat(current)
 		if errors.Is(err, os.ErrNotExist) {
 			if err := os.Mkdir(current, 0o755); err != nil {
-				return fmt.Errorf("ensure parent directories: mkdir %q: %w", current, err)
+				return created, fmt.Errorf("ensure parent directories: mkdir %q: %w", current, err)
 			}
+			created = append(created, current)
 			info, err = os.Lstat(current)
 		}
 		if err != nil {
-			return fmt.Errorf("ensure parent directories: lstat %q: %w", current, err)
+			return created, fmt.Errorf("ensure parent directories: lstat %q: %w", current, err)
 		}
 		if fsutil.IsSymlinkOrNotDir(info) {
-			return fmt.Errorf("path component %s is not a regular directory", current)
+			return created, fmt.Errorf("path component %s is not a regular directory", current)
 		}
 	}
-	return nil
+	return created, nil
+}
+
+// removeCreatedDirectories removes, deepest first, directories that
+// ensureParentDirectories created during an apply that did not publish. A
+// directory that gained content in the meantime is left in place because
+// os.Remove refuses non-empty directories; cleanup is best-effort.
+func removeCreatedDirectories(created []string) {
+	for i := len(created) - 1; i >= 0; i-- {
+		_ = os.Remove(created[i])
+	}
 }
 
 func stageFile(root string, artifact desiredArtifact) (string, error) {
@@ -280,13 +279,12 @@ func stageFile(root string, artifact desiredArtifact) (string, error) {
 func publishStaged(root string, action Action, staged string) error {
 	destination := filepath.Join(root, filepath.FromSlash(action.Path))
 	if action.Kind == ActionCreate {
-		// Link is an atomic no-replace publication: a destination that appears
-		// after the final precondition check cannot be overwritten.
-		if err := os.Link(staged, destination); err != nil {
-			return fmt.Errorf("publish staged: link %q: %w", destination, err)
-		}
-		if err := os.Remove(staged); err != nil {
-			return fmt.Errorf("publish staged: remove staged %q: %w", staged, err)
+		// No-replace publication: a destination that appears after the final
+		// precondition check cannot be overwritten. fsutil prefers an atomic
+		// hard link and falls back to an exclusive create on filesystems
+		// without hard-link support.
+		if err := fsutil.PublishNoReplace(staged, destination, action.DesiredMode); err != nil {
+			return fmt.Errorf("publish staged: %q: %w", destination, err)
 		}
 		return nil
 	}

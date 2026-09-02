@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 
@@ -16,26 +18,55 @@ import (
 )
 
 const (
-	LockFilename      = "bob.lock"
-	ApplyLockFilename = ".bob.apply.lock"
+	LockFilename      = fsutil.LockFilename
+	ApplyLockFilename = fsutil.ApplyLockFilename
 	LockSchemaVersion = 1
 	maxLockBytes      = 1 << 20
+	maxApplyLockBytes = 4 << 10
 )
 
+// acquireApplyLock takes the per-workspace mutation lock with an exclusive
+// create. The lock records the owning pid and hostname so a lock left behind
+// by a crashed Bob on this machine can be reclaimed: when the recorded host is
+// this host and the recorded pid is provably not running, the stale file is
+// removed and acquisition is retried exactly once. A lock from another host
+// (shared filesystems) or from a live process is never touched.
 func acquireApplyLock(root string) (func(), error) {
 	path := filepath.Join(root, ApplyLockFilename)
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	release, err := createApplyLock(path)
+	if err == nil {
+		return release, nil
+	}
+	if !errors.Is(err, os.ErrExist) {
+		return nil, err
+	}
+	if !applyLockIsStale(path) {
+		return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running", ApplyLockFilename)
+	}
+	if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("reclaim stale %s: %w", ApplyLockFilename, removeErr)
+	}
+	release, err = createApplyLock(path)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("another apply is active or %s is stale", ApplyLockFilename)
+			return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running", ApplyLockFilename)
 		}
+		return nil, err
+	}
+	return release, nil
+}
+
+func createApplyLock(path string) (func(), error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
 		return nil, err
 	}
 	cleanup := func() {
 		_ = file.Close()
 		_ = os.Remove(path)
 	}
-	if _, err := fmt.Fprintf(file, "pid: %d\n", os.Getpid()); err != nil {
+	host, _ := os.Hostname()
+	if _, err := fmt.Fprintf(file, "pid: %d\nhost: %s\n", os.Getpid(), host); err != nil {
 		cleanup()
 		return nil, err
 	}
@@ -48,6 +79,47 @@ func acquireApplyLock(root string) (func(), error) {
 		return nil, err
 	}
 	return func() { _ = os.Remove(path) }, nil
+}
+
+// applyLockIsStale reports whether an existing apply lock was written by a
+// process on this host that no longer exists. Any doubt (unreadable file,
+// missing or foreign host, unparsable pid, live or unknown process) keeps the
+// lock.
+func applyLockIsStale(path string) bool {
+	data, exists, err := readRegularFile(path, maxApplyLockBytes)
+	if err != nil || !exists {
+		return false
+	}
+	pid, host := parseApplyLock(data)
+	if pid <= 0 || host == "" {
+		return false
+	}
+	current, err := os.Hostname()
+	if err != nil || current == "" || current != host {
+		return false
+	}
+	return !processAlive(pid)
+}
+
+func parseApplyLock(data []byte) (int, string) {
+	pid, host := 0, ""
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		switch strings.TrimSpace(key) {
+		case "pid":
+			parsed, err := strconv.Atoi(value)
+			if err == nil {
+				pid = parsed
+			}
+		case "host":
+			host = value
+		}
+	}
+	return pid, host
 }
 
 var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)

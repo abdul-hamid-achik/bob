@@ -12,13 +12,16 @@ import (
 
 // diffByteLimit caps the content size PlanDiff will attempt to diff. Files
 // whose old or new content exceeds this limit are skipped with a note so a
-// large generated artifact never forces an unbounded LCS table allocation.
+// large generated artifact never forces unbounded work.
 const diffByteLimit = 1 << 20 // 1 MiB
 
-// diffLineLimit caps the line count PlanDiff will attempt to diff. The
-// O(m*n) LCS table makes very line-dense files expensive even when they are
-// under diffByteLimit.
-const diffLineLimit = 8192
+// diffCellLimit bounds the longest-common-subsequence table computeEdits may
+// allocate, measured in cells over the changed region after the common prefix
+// and suffix are trimmed. Each cell is an int32, so the table never exceeds
+// 16 MiB regardless of how many lines the files contain; a file with a
+// localized change diffs in full at any length, and only a change region that
+// is itself huge on both sides is skipped with a note.
+const diffCellLimit = 1 << 22
 
 // FileDiff is the presentation-layer diff for one create or update action.
 // It is computed after planning and never influences the plan digest.
@@ -51,9 +54,16 @@ func PlanDiff(root string, plan *PlanResult, artifacts []recipe.Artifact) ([]Fil
 		}
 		var oldContent []byte
 		if action.Kind == ActionUpdate {
-			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(action.Path)))
+			data, exists, err := readRegularFile(filepath.Join(root, filepath.FromSlash(action.Path)), diffByteLimit)
 			if err != nil {
+				if strings.Contains(err.Error(), "exceeds") {
+					diffs = append(diffs, FileDiff{Path: action.Path, Kind: string(action.Kind), Note: "diff skipped: content exceeds 1 MiB limit"})
+					continue
+				}
 				return nil, fmt.Errorf("plan diff: read current %q: %w", action.Path, err)
+			}
+			if !exists {
+				return nil, fmt.Errorf("plan diff: read current %q: %w", action.Path, os.ErrNotExist)
 			}
 			oldContent = data
 		}
@@ -75,8 +85,8 @@ func PlanDiff(root string, plan *PlanResult, artifacts []recipe.Artifact) ([]Fil
 		newStr := string(newContent)
 		oldLines := splitDiffLines(oldStr)
 		newLines := splitDiffLines(newStr)
-		if len(oldLines) > diffLineLimit || len(newLines) > diffLineLimit {
-			diff.Note = fmt.Sprintf("diff skipped: content exceeds %d line limit", diffLineLimit)
+		if !diffWithinBudget(oldLines, newLines) {
+			diff.Note = fmt.Sprintf("diff skipped: changed region exceeds the %d-cell diff budget", diffCellLimit)
 			diffs = append(diffs, diff)
 			continue
 		}
@@ -119,28 +129,80 @@ type edit struct {
 	text string
 }
 
-// computeEdits produces the line-level edit script transforming oldLines
-// into newLines using a longest-common-subsequence dynamic program.
-func computeEdits(oldLines, newLines []string) []edit {
-	m, n := len(oldLines), len(newLines)
-	// Build the LCS length table bottom-up.
-	dp := make([][]int, m+1)
-	for i := range dp {
-		dp[i] = make([]int, n+1)
+// trimCommon returns the number of identical leading and trailing lines shared
+// by both inputs. The two counts never overlap, so the remaining middle
+// regions oldLines[prefix:len-suffix] and newLines[prefix:len-suffix] are
+// well-formed even when one input is a prefix of the other.
+func trimCommon(oldLines, newLines []string) (prefix, suffix int) {
+	limit := min(len(oldLines), len(newLines))
+	for prefix < limit && oldLines[prefix] == newLines[prefix] {
+		prefix++
 	}
+	limit -= prefix
+	for suffix < limit && oldLines[len(oldLines)-1-suffix] == newLines[len(newLines)-1-suffix] {
+		suffix++
+	}
+	return prefix, suffix
+}
+
+// diffWithinBudget reports whether the changed region, after trimming the
+// common prefix and suffix, fits the LCS table budget.
+func diffWithinBudget(oldLines, newLines []string) bool {
+	prefix, suffix := trimCommon(oldLines, newLines)
+	m := len(oldLines) - prefix - suffix
+	n := len(newLines) - prefix - suffix
+	return (m+1)*(n+1) <= diffCellLimit
+}
+
+// computeEdits produces the line-level edit script transforming oldLines
+// into newLines. Identical leading and trailing lines are emitted as context
+// without entering the dynamic program; the remaining region is solved with a
+// longest-common-subsequence table stored as a flat []int32. When even the
+// trimmed region exceeds diffCellLimit the function degrades to a full
+// replacement script rather than allocating an unbounded table; PlanDiff
+// checks the budget first and skips such files with a note.
+func computeEdits(oldLines, newLines []string) []edit {
+	prefix, suffix := trimCommon(oldLines, newLines)
+	oldMid := oldLines[prefix : len(oldLines)-suffix]
+	newMid := newLines[prefix : len(newLines)-suffix]
+	edits := make([]edit, 0, len(oldLines)+len(newLines)-prefix-suffix)
+	for _, line := range oldLines[:prefix] {
+		edits = append(edits, edit{editContext, line})
+	}
+	edits = append(edits, computeMiddleEdits(oldMid, newMid)...)
+	for _, line := range oldLines[len(oldLines)-suffix:] {
+		edits = append(edits, edit{editContext, line})
+	}
+	return edits
+}
+
+func computeMiddleEdits(oldLines, newLines []string) []edit {
+	m, n := len(oldLines), len(newLines)
+	edits := make([]edit, 0, m+n)
+	if m == 0 || n == 0 || (m+1)*(n+1) > diffCellLimit {
+		for _, line := range oldLines {
+			edits = append(edits, edit{editDelete, line})
+		}
+		for _, line := range newLines {
+			edits = append(edits, edit{editInsert, line})
+		}
+		return edits
+	}
+	// Flat (m+1)x(n+1) LCS length table, bottom-up; cell(i,j) = dp[i*(n+1)+j].
+	width := n + 1
+	dp := make([]int32, (m+1)*width)
 	for i := m - 1; i >= 0; i-- {
 		for j := n - 1; j >= 0; j-- {
-			if oldLines[i] == newLines[j] {
-				dp[i][j] = dp[i+1][j+1] + 1
-			} else if dp[i+1][j] >= dp[i][j+1] {
-				dp[i][j] = dp[i+1][j]
-			} else {
-				dp[i][j] = dp[i][j+1]
+			switch {
+			case oldLines[i] == newLines[j]:
+				dp[i*width+j] = dp[(i+1)*width+j+1] + 1
+			case dp[(i+1)*width+j] >= dp[i*width+j+1]:
+				dp[i*width+j] = dp[(i+1)*width+j]
+			default:
+				dp[i*width+j] = dp[i*width+j+1]
 			}
 		}
 	}
-	// Walk the table to produce the edit script.
-	edits := make([]edit, 0, m+n)
 	i, j := 0, 0
 	for i < m && j < n {
 		switch {
@@ -148,7 +210,7 @@ func computeEdits(oldLines, newLines []string) []edit {
 			edits = append(edits, edit{editContext, oldLines[i]})
 			i++
 			j++
-		case dp[i+1][j] >= dp[i][j+1]:
+		case dp[(i+1)*width+j] >= dp[i*width+j+1]:
 			edits = append(edits, edit{editDelete, oldLines[i]})
 			i++
 		default:

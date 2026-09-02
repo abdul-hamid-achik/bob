@@ -418,11 +418,18 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 	}
 
 	// Directory creation and staging occur only after the complete plan is known
-	// to be conflict-free. Staged files are removed on every failure path.
+	// to be conflict-free. Staged files, and parent directories created for
+	// them, are removed on every failure path so an aborted apply leaves the
+	// workspace exactly as it found it.
 	staged := make(map[string]string)
+	var createdDirs []string
+	published := false
 	defer func() {
 		for _, path := range staged {
 			_ = os.Remove(path)
+		}
+		if !published {
+			removeCreatedDirectories(createdDirs)
 		}
 	}()
 	for _, action := range plan.Actions {
@@ -430,7 +437,9 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 			continue
 		}
 		artifact := byPath[action.Path]
-		if err := ensureParentDirectories(canonicalRoot, action.Path); err != nil {
+		created, err := ensureParentDirectories(canonicalRoot, action.Path)
+		createdDirs = append(createdDirs, created...)
+		if err != nil {
 			return result, fmt.Errorf("apply: prepare %q: %w", action.Path, err)
 		}
 		tmp, err := stageFile(canonicalRoot, artifact)
@@ -450,6 +459,7 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 		return result, fmt.Errorf("apply: stale manifest before publication: %w", err)
 	}
 
+	published = true
 	for _, action := range plan.Actions {
 		switch action.Kind {
 		case ActionCreate, ActionUpdate:
