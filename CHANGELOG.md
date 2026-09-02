@@ -38,6 +38,38 @@ and the project uses semantic versioning after the first tagged release.
 
 ### Fixed
 
+- `bob upgrade --expect-plan-digest` is validated even when the workspace is
+  already at the current recipe version: a malformed digest exits `4` and a
+  non-matching digest exits `5` with `plan_digest_mismatch` instead of
+  reporting success.
+- `bob plan --diff` and `bob watch` no longer allocate an unbounded
+  line-by-line LCS table (about 576 MiB at the previous 8192-line limit). The
+  diff trims the common prefix and suffix first and bounds the changed region
+  to a 16 MiB table; a change region larger than that is skipped with a note.
+- Manifest validation now enforces the artifact path-safety invariant for
+  `files@1` entries (relative, inside the workspace, never `.git`, `bob.yaml`,
+  `bob.lock`, `.bob.apply.lock`, or their children), so `bob_validate_manifest`
+  and `bob plan` report such manifests as invalid instead of deferring to the
+  engine. Manifest, recipe, and engine share one implementation in `fsutil`;
+  recipe paths beneath `bob.yaml`/`bob.lock` are now rejected too.
+- The `python-app` `pyproject.toml` quotes `name` and `description` as TOML
+  basic strings; control characters that Go escapes as `\a`, `\v`, or `\xHH`
+  are emitted as TOML `\uXXXX`. Output for printable ASCII is unchanged.
+- File creation falls back to an exclusive `O_EXCL` copy when the filesystem
+  refuses hard links, so `bob apply` and `bob new` work on exFAT, some SMB/NFS
+  mounts, and container volumes without weakening the no-overwrite guarantee.
+- A refused or aborted apply removes the parent directories it created.
+- `.bob.apply.lock` records pid and hostname; a lock left by a crashed Bob on
+  the same host is reclaimed once that process is gone. Foreign or live locks
+  are still refused.
+- `bob new --write` applies through the same lock-held manifest reload as
+  `apply` and `upgrade`.
+- `bob context` reports the byte budget it actually enforced in
+  `truncation.byte_limit`; the raised budget used to generate the published
+  contract fixtures is a test-only seam and no longer reachable from MCP
+  server options.
+- Telemetry retention and daily-cap bounds have one definition shared by
+  settings validation and the event store.
 - `workspace.Resolve` follows a symlink ancestor when the target does not
   exist yet, so `bob new` works under `/tmp`.
 - Recipe smoke tests skip an unusable host `golangci-lint` shim instead of

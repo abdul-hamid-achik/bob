@@ -210,7 +210,11 @@ bob: plan: render files: unresolved variable reference(s): extra.txt: ${vars.mis
 Identical to the engine's existing rules, because it's the same engine:
 
 - paths cannot be absolute or escape the workspace;
-- paths cannot target `.git`, `bob.yaml`, or `bob.lock`;
+- paths cannot target `.git`, `bob.yaml`, `bob.lock`, or `.bob.apply.lock`,
+  nor anything beneath them;
+- these rules are enforced by manifest validation itself (`bob plan`, `bob
+  check`, and the MCP `bob_validate_manifest` tool report them as
+  `manifest_invalid`), and again by the engine before any write;
 - a pre-existing symlink or special file at a destination is a per-path
   `conflict` in the plan, not an aborted command.
 

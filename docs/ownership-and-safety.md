@@ -60,6 +60,19 @@ operations. Bob rechecks file and lock preconditions immediately before
 publication and writes `bob.lock` last, because the lock is the receipt and you
 don't hand out a receipt before the goods ship.
 
+New files are published with an atomic no-replace hard link. On filesystems that
+refuse hard links (exFAT, some SMB/NFS mounts, some container volumes) Bob falls
+back to an exclusive create that copies the staged bytes: a destination that
+appeared after the final precondition check is still never overwritten. If an
+apply is refused after directories were prepared, the directories Bob created
+are removed again so a refused apply leaves the tree exactly as it found it.
+
+Mutating commands serialize on `.bob.apply.lock`, which records the owning
+process id and hostname. A lock left behind by a Bob process that crashed on the
+same machine is reclaimed automatically once that process is provably gone; a
+lock from another host or from a live process is never touched, and Bob asks
+you to remove it manually only if no `bob` process is running.
+
 The multi-file operation is not globally transactional. A process crash can
 publish some matching files before the new lock lands. The next `bob plan`
 reports the actual state and may classify those exact files as safe `adopt`

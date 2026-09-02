@@ -415,7 +415,10 @@ These checks close the normal editor-save race; like apply, remove is not a
 globally transactional multi-file operation.
 
 Remove acquires the same `.bob.apply.lock` used by apply to prevent
-concurrent mutations. Exit codes: `0` clean success, `2` when files were
+concurrent mutations. The lock records the owning pid and hostname; a lock
+left by a crashed Bob on the same host is reclaimed automatically when that
+process no longer exists, while a lock from another host or a live process is
+refused. Exit codes: `0` clean success, `2` when files were
 skipped or conflicted, `4` when no lock exists or the manifest is invalid.
 
 ## Exit codes
