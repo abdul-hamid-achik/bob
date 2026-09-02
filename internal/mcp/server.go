@@ -42,10 +42,11 @@ type ServerOptions struct {
 	AllowAnyWorkspace bool
 	Recorder          telemetry.Recorder
 	Telemetry         *telemetry.Store
-	// ContextByteLimit, when positive, overrides the context profile's
-	// projection budget for every bob_context call. Tests use it to make
-	// truncation deterministic; production leaves it at zero.
-	ContextByteLimit int
+	// contextByteLimit, when positive, overrides the context profile's
+	// projection budget for every bob_context call; the emitted
+	// truncation.byte_limit always reflects the override. Tests use it to
+	// make truncation deterministic; production leaves it at zero.
+	contextByteLimit int
 	lookPath         func(string) (string, error)
 }
 
@@ -85,7 +86,7 @@ func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, opt
 		authority: authority, runner: runner,
 		recorder: telemetry.BestEffort(options.Recorder), telemetry: options.Telemetry,
 		lookPath:         options.lookPath,
-		contextByteLimit: options.ContextByteLimit,
+		contextByteLimit: options.contextByteLimit,
 	}
 	s.srv = sdkmcp.NewServer(
 		&sdkmcp.Implementation{Name: "bob", Version: version.Version},

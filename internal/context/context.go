@@ -36,9 +36,13 @@ const (
 type Options struct {
 	Profile  Profile
 	LookPath func(string) (string, error)
-	// ByteLimit, when positive, overrides the profile's projection budget.
-	// Tests use it to make truncation deterministic; production callers
-	// leave it at zero for the documented profile limits.
+	// ByteLimit, when positive, is a caller override for the profile's
+	// projection budget: it replaces the profile's documented limit as the
+	// bound actually enforced by truncation, and the emitted
+	// Truncation.ByteLimit always reflects it. Zero leaves the documented
+	// profile limit in force. Tests use a large override to make truncation
+	// decisions independent of absolute workspace-path length; production
+	// callers may set it to enforce a transport-specific budget.
 	ByteLimit int
 }
 
@@ -186,16 +190,19 @@ func Load(root string, options Options) (Result, error) {
 	full := compose(canonical, m, plan, metadata, lookPath)
 	full.ContractDigest = digestContract(m, metadata)
 	full.ContextDigest = digestContext(full)
-	// An override larger than the profile limit disables truncation (tests
-	// pinning fixtures need decisions independent of absolute path length);
-	// the profile limit still guards the final size check.
-	projected := project(full, profile, limit, options.ByteLimit)
-	bound := limit
-	if options.ByteLimit > bound {
-		bound = options.ByteLimit
+	// A positive override replaces the profile's documented limit as the
+	// bound actually enforced: it is what truncate() decides against and
+	// what Truncation.ByteLimit reports, so the contract never advertises a
+	// smaller budget than the one in force. A large override effectively
+	// disables truncation (tests pinning fixtures need decisions independent
+	// of absolute path length) while still guarding the final size check.
+	enforced := limit
+	if options.ByteLimit > 0 {
+		enforced = options.ByteLimit
 	}
-	if size := jsonSize(projected); size > bound {
-		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("context %s result exceeds %d-byte bound", profile, bound))
+	projected := project(full, profile, enforced)
+	if size := jsonSize(projected); size > enforced {
+		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("context %s result exceeds %d-byte bound", profile, enforced))
 	}
 	return projected, nil
 }
@@ -490,7 +497,7 @@ func profileLimit(profile Profile) (int, error) {
 	}
 }
 
-func project(full Result, profile Profile, limit int, decisionLimit int) Result {
+func project(full Result, profile Profile, limit int) Result {
 	result := clone(full)
 	result.Profile = profile
 	result.Truncation = Truncation{Profile: profile, ByteLimit: limit, Omitted: map[string]int{}}
@@ -519,13 +526,7 @@ func project(full Result, profile Profile, limit int, decisionLimit int) Result 
 	case ProfileStandard:
 		result.Artifacts = nil
 	}
-	// decisionLimit can exceed the profile limit (test overrides): the
-	// published metadata keeps the profile's documented bound while the
-	// override only controls whether truncation runs at all.
-	if decisionLimit < limit {
-		decisionLimit = limit
-	}
-	truncate(&result, decisionLimit)
+	truncate(&result, limit)
 	return result
 }
 

@@ -280,7 +280,11 @@ func validateContext(t *testing.T, envelope consumerEnvelope, state string, clea
 			t.Fatalf("context truncation clipped %q: %#v", field, context.Truncation)
 		}
 	}
-	if context.Truncation.Profile != "compact" || context.Truncation.ByteLimit != 6144 || context.Truncation.Omitted == nil {
+	// Fixtures are generated with the test-only raised byte budget so their
+	// content is byte-portable across machines; truncation.byte_limit honestly
+	// reports the budget that was enforced, which is therefore at least the
+	// documented compact limit rather than exactly equal to it.
+	if context.Truncation.Profile != "compact" || context.Truncation.ByteLimit < 6144 || context.Truncation.Omitted == nil {
 		t.Fatalf("context truncation = %#v", context.Truncation)
 	}
 }

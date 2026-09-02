@@ -27,8 +27,12 @@ const (
 	versionDir       = "v1"
 	maxEventBytes    = 16 << 10
 	maxMetadataBytes = 4 << 10
-	maxRetentionDays = 365
-	maxEventsPerDay  = 10_000
+	// MaxRetentionDays and MaxEventsPerDay are the shared upper bounds for
+	// telemetry retention and daily event volume. internal/settings imports
+	// them so its configuration validation and this store's Open bound agree
+	// at the boundary; they must not drift from each other.
+	MaxRetentionDays = 365
+	MaxEventsPerDay  = 10_000
 )
 
 // Config controls the local telemetry store. StateDir is Bob's resolved XDG
@@ -91,11 +95,11 @@ func Open(config Config) (*Store, error) {
 	if !filepath.IsAbs(config.StateDir) {
 		return nil, errors.New("telemetry state directory must be absolute")
 	}
-	if config.RetentionDays < 1 || config.RetentionDays > maxRetentionDays {
-		return nil, fmt.Errorf("telemetry retention days must be between 1 and %d", maxRetentionDays)
+	if config.RetentionDays < 1 || config.RetentionDays > MaxRetentionDays {
+		return nil, fmt.Errorf("telemetry retention days must be between 1 and %d", MaxRetentionDays)
 	}
-	if config.MaxEventsPerDay < 1 || config.MaxEventsPerDay > maxEventsPerDay {
-		return nil, fmt.Errorf("telemetry daily cap must be between 1 and %d", maxEventsPerDay)
+	if config.MaxEventsPerDay < 1 || config.MaxEventsPerDay > MaxEventsPerDay {
+		return nil, fmt.Errorf("telemetry daily cap must be between 1 and %d", MaxEventsPerDay)
 	}
 	store.root = filepath.Join(filepath.Clean(config.StateDir), "telemetry")
 	if err := secureMkdirAll(store.root); err != nil {

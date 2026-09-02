@@ -1,10 +1,13 @@
 package settings
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 )
 
 func TestLoadFileMissingUsesPrivacyPreservingDefaults(t *testing.T) {
@@ -106,6 +109,64 @@ func TestLoadFileRejectsSymlinksAndOversizedFiles(t *testing.T) {
 	}
 	if _, err := LoadFile(oversized); err == nil {
 		t.Fatal("oversized file was accepted")
+	}
+}
+
+// TestTelemetryBoundsAgreeWithSettingsAtBoundary guards against
+// internal/settings and internal/telemetry drifting apart on their shared
+// retention/daily-cap bounds: settings validation must accept exactly what
+// telemetry.Open accepts, and reject exactly what it rejects, at the max
+// boundary and one past it.
+func TestTelemetryBoundsAgreeWithSettingsAtBoundary(t *testing.T) {
+	t.Setenv("BOB_TELEMETRY", "")
+	if maxRetentionDays != telemetry.MaxRetentionDays || maxEventsPerDay != telemetry.MaxEventsPerDay {
+		t.Fatalf("settings bounds drifted from telemetry: retention %d != %d, events %d != %d",
+			maxRetentionDays, telemetry.MaxRetentionDays, maxEventsPerDay, telemetry.MaxEventsPerDay)
+	}
+
+	atMax := fmt.Sprintf("schema_version: 1\ntelemetry:\n  enabled: true\n  retention_days: %d\n  max_events_per_day: %d\n",
+		telemetry.MaxRetentionDays, telemetry.MaxEventsPerDay)
+	settingsAtMax, err := LoadFile(writeSettings(t, atMax))
+	if err != nil {
+		t.Fatalf("settings rejected the maximum bound: %v", err)
+	}
+	store, err := telemetry.Open(telemetry.Config{
+		StateDir:        t.TempDir(),
+		Enabled:         settingsAtMax.Telemetry.Enabled,
+		RetentionDays:   settingsAtMax.Telemetry.RetentionDays,
+		MaxEventsPerDay: settingsAtMax.Telemetry.MaxEventsPerDay,
+	})
+	if err != nil {
+		t.Fatalf("telemetry.Open rejected the maximum bound settings allowed: %v", err)
+	}
+	if !store.Enabled() {
+		t.Fatal("expected an enabled store at the maximum bound")
+	}
+
+	overRetention := fmt.Sprintf("schema_version: 1\ntelemetry:\n  enabled: true\n  retention_days: %d\n", telemetry.MaxRetentionDays+1)
+	if _, err := LoadFile(writeSettings(t, overRetention)); err == nil {
+		t.Fatal("settings accepted retention_days above the maximum")
+	}
+	if _, err := telemetry.Open(telemetry.Config{
+		StateDir:        t.TempDir(),
+		Enabled:         true,
+		RetentionDays:   telemetry.MaxRetentionDays + 1,
+		MaxEventsPerDay: telemetry.MaxEventsPerDay,
+	}); err == nil {
+		t.Fatal("telemetry.Open accepted retention_days above the maximum")
+	}
+
+	overEvents := fmt.Sprintf("schema_version: 1\ntelemetry:\n  enabled: true\n  max_events_per_day: %d\n", telemetry.MaxEventsPerDay+1)
+	if _, err := LoadFile(writeSettings(t, overEvents)); err == nil {
+		t.Fatal("settings accepted max_events_per_day above the maximum")
+	}
+	if _, err := telemetry.Open(telemetry.Config{
+		StateDir:        t.TempDir(),
+		Enabled:         true,
+		RetentionDays:   telemetry.MaxRetentionDays,
+		MaxEventsPerDay: telemetry.MaxEventsPerDay + 1,
+	}); err == nil {
+		t.Fatal("telemetry.Open accepted max_events_per_day above the maximum")
 	}
 }
 

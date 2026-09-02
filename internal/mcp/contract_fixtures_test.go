@@ -33,7 +33,7 @@ func TestConsumerContractFixturesMatchRealOutputs(t *testing.T) {
 	// 6 KiB compact boundary truncated differently depending on the machine's
 	// temp-path length (fixtureCall already normalizes the root to
 	// /workspace, so an untruncated output is byte-portable).
-	fixtureOptions := ServerOptions{lookPath: lookPath, ContextByteLimit: 1 << 20}
+	fixtureOptions := ServerOptions{lookPath: lookPath, contextByteLimit: 1 << 20}
 	cleanSession := connectWithOptions(t, cleanRoot, &offlineRunner{}, fixtureOptions)
 	driftSession := connectWithOptions(t, driftRoot, &offlineRunner{}, fixtureOptions)
 	conflictSession := connectWithOptions(t, conflictRoot, &offlineRunner{}, fixtureOptions)

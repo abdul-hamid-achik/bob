@@ -401,6 +401,126 @@ func TestContractDigestNormalizesFilesDeclarationOrderPathsAndDefaultMode(t *tes
 	}
 }
 
+func TestStripCapabilityDetailPriorityOrder(t *testing.T) {
+	t.Parallel()
+	result := Result{
+		Truncation: Truncation{Omitted: map[string]int{}},
+		Capabilities: []Capability{
+			{
+				ID: "cap.one", Selection: "enabled", Materialization: "in_sync", Availability: "available", Verification: "not_assessed",
+				Summary:     "human-readable capability summary",
+				Evidence:    &CapabilityEvidence{ArtifactIDs: []string{"a1", "a2"}, Paths: []string{"p1", "p2", "p3"}, Binary: "tool"},
+				Limitations: []string{"limitation one", "limitation two", "limitation three"},
+			},
+		},
+	}
+
+	if !stripCapabilityDetail(&result) {
+		t.Fatal("expected limitations to be stripped first")
+	}
+	if result.Capabilities[0].Limitations != nil || result.Truncation.Omitted["capability_limitations"] != 3 {
+		t.Fatalf("limitations not omitted honestly: %#v", result.Truncation.Omitted)
+	}
+
+	if !stripCapabilityDetail(&result) {
+		t.Fatal("expected evidence paths to be stripped next")
+	}
+	if result.Capabilities[0].Evidence.Paths != nil || result.Truncation.Omitted["capability_evidence_paths"] != 3 {
+		t.Fatalf("evidence paths not omitted honestly: %#v", result.Truncation.Omitted)
+	}
+
+	if !stripCapabilityDetail(&result) {
+		t.Fatal("expected evidence artifact ids to be stripped next")
+	}
+	if result.Capabilities[0].Evidence.ArtifactIDs != nil || result.Truncation.Omitted["capability_evidence_artifact_ids"] != 2 {
+		t.Fatalf("evidence artifact ids not omitted honestly: %#v", result.Truncation.Omitted)
+	}
+	if result.Capabilities[0].Evidence.Binary != "tool" {
+		t.Fatalf("binary must survive capability detail truncation: %#v", result.Capabilities[0].Evidence)
+	}
+
+	if !stripCapabilityDetail(&result) {
+		t.Fatal("expected summary to be stripped last")
+	}
+	if result.Capabilities[0].Summary != "" || result.Truncation.Omitted["capability_summaries"] != 1 {
+		t.Fatalf("summary not omitted honestly: %#v", result.Truncation.Omitted)
+	}
+
+	if stripCapabilityDetail(&result) {
+		t.Fatal("nothing should remain to strip from capability detail")
+	}
+	if !result.Truncation.Truncated {
+		t.Fatal("stripping capability detail must mark the result truncated")
+	}
+}
+
+func TestStripNoticeMessagesClearsMessageOnly(t *testing.T) {
+	t.Parallel()
+	result := Result{
+		Truncation: Truncation{Omitted: map[string]int{}},
+		Notices: []Notice{
+			{ID: "n1", Severity: "warning", Code: "binary_unavailable", Message: "first message", CapabilityID: "cap.one", Paths: []string{"p1"}},
+			{ID: "n2", Severity: "info", Code: "surface_evidence_mismatch", Message: "second message", Paths: []string{"p2"}},
+		},
+	}
+
+	if !stripNoticeMessages(&result) {
+		t.Fatal("expected the first notice message to be stripped")
+	}
+	if result.Notices[0].Message != "" || result.Notices[0].ID != "n1" || result.Notices[0].Code != "binary_unavailable" ||
+		result.Notices[0].CapabilityID != "cap.one" || len(result.Notices[0].Paths) != 1 {
+		t.Fatalf("notice identity must survive message stripping: %#v", result.Notices[0])
+	}
+	if result.Truncation.Omitted["notice_messages"] != 1 {
+		t.Fatalf("omitted notice_messages = %d, want 1", result.Truncation.Omitted["notice_messages"])
+	}
+
+	if !stripNoticeMessages(&result) {
+		t.Fatal("expected the second notice message to be stripped")
+	}
+	if result.Notices[1].Message != "" || result.Truncation.Omitted["notice_messages"] != 2 {
+		t.Fatalf("second notice message not omitted honestly: %#v", result.Truncation.Omitted)
+	}
+
+	if stripNoticeMessages(&result) {
+		t.Fatal("no notice messages should remain to strip")
+	}
+}
+
+func TestTruncateFullyDropsExtensionEntryAndNoticeItems(t *testing.T) {
+	t.Parallel()
+	result := Result{
+		Truncation:   Truncation{Omitted: map[string]int{}},
+		Invariants:   []Invariant{{ID: "only", Statement: "kept"}},
+		Capabilities: []Capability{{ID: "cap.one", Selection: "enabled", Materialization: "in_sync", Availability: "available", Verification: "not_assessed"}},
+	}
+	for i := 0; i < 5; i++ {
+		result.ExtensionPoints = append(result.ExtensionPoints, ExtensionPoint{ID: fmtName(i), Ownership: "human", CreatePatterns: []string{"internal/<package>/<file>.go"}})
+		result.EntryPoints = append(result.EntryPoints, EntryPoint{ID: fmtName(i), Path: fmtName(i) + ".go", Ownership: "bob_whole_file"})
+		result.Notices = append(result.Notices, Notice{ID: fmtName(i), Severity: "warning", Code: "binary_unavailable"})
+	}
+
+	// Nothing left above these three categories in truncate()'s priority
+	// order (no artifacts, no capability detail, one invariant, no notice
+	// messages), so a limit far below the starting size squeezes every drop
+	// truncate() is willing to make: extension points and entry points down
+	// to one each, notices down to none.
+	truncate(&result, 1)
+
+	if len(result.ExtensionPoints) != 1 || result.Truncation.Omitted["extension_points"] != 4 {
+		t.Fatalf("extension points = %#v, omitted = %#v", result.ExtensionPoints, result.Truncation.Omitted)
+	}
+	if len(result.EntryPoints) != 1 || result.Truncation.Omitted["entry_points"] != 4 {
+		t.Fatalf("entry points = %#v, omitted = %#v", result.EntryPoints, result.Truncation.Omitted)
+	}
+	if len(result.Notices) != 0 || result.Truncation.Omitted["notices"] != 5 {
+		t.Fatalf("notices = %#v, omitted = %#v", result.Notices, result.Truncation.Omitted)
+	}
+	if !result.Truncation.Truncated {
+		t.Fatal("dropping extension points, entry points, and notices must mark the result truncated")
+	}
+}
+
 func TestContextTruncationIsDeterministic(t *testing.T) {
 	t.Parallel()
 	m := manifest.Manifest{SchemaVersion: 1, Recipe: manifest.RecipeFiles, Product: manifest.Product{Name: "many-files", Description: "Many files"}}
@@ -423,6 +543,53 @@ func TestContextTruncationIsDeterministic(t *testing.T) {
 	}
 	if !a.Truncation.Truncated || len(left) > 64<<10 || a.Truncation.Omitted["artifacts"] == 0 {
 		t.Fatalf("truncation = %#v bytes=%d", a.Truncation, len(left))
+	}
+}
+
+func TestContextByteLimitOverrideIsHonest(t *testing.T) {
+	t.Parallel()
+	m := manifest.Manifest{SchemaVersion: 1, Recipe: manifest.RecipeFiles, Product: manifest.Product{Name: "many-files", Description: "Many files"}}
+	for i := 0; i < 600; i++ {
+		m.Files = append(m.Files, manifest.FileDecl{Path: filepath.ToSlash(filepath.Join("generated", strings.Repeat("segment", 3), fmtName(i)+".txt")), Content: "value\n"})
+	}
+	root := contextWorkspace(t, m, false)
+	lookPath := func(string) (string, error) { return "", errors.New("unexpected") }
+
+	// A small explicit override must be the limit actually enforced: the
+	// emitted Truncation.ByteLimit must equal it, and the encoded payload
+	// must fit inside it (production wires this from
+	// the mcp server byte-limit seam, so a caller-supplied budget must never
+	// be silently replaced by the profile's larger documented limit).
+	const smallOverride = 8192
+	result, err := Load(root, Options{Profile: ProfileFull, LookPath: lookPath, ByteLimit: smallOverride})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Truncation.ByteLimit != smallOverride {
+		t.Fatalf("truncation.byte_limit = %d, want override %d", result.Truncation.ByteLimit, smallOverride)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > smallOverride {
+		t.Fatalf("encoded result is %d bytes, exceeds advertised byte_limit %d", len(encoded), smallOverride)
+	}
+	if !result.Truncation.Truncated {
+		t.Fatal("expected truncation to have run under the small override")
+	}
+
+	// A large override (bigger than the profile limit) is the same contract
+	// from the other direction: it is still the limit actually enforced, so
+	// it must be reported verbatim even though it exceeds the profile's
+	// documented budget.
+	const largeOverride = 1 << 20
+	full, err := Load(root, Options{Profile: ProfileCompact, LookPath: lookPath, ByteLimit: largeOverride})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if full.Truncation.ByteLimit != largeOverride {
+		t.Fatalf("truncation.byte_limit = %d, want override %d", full.Truncation.ByteLimit, largeOverride)
 	}
 }
 

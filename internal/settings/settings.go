@@ -11,6 +11,7 @@ import (
 
 	"github.com/abdul-hamid-achik/bob/internal/fsutil"
 	"github.com/abdul-hamid-achik/bob/internal/paths"
+	"github.com/abdul-hamid-achik/bob/internal/telemetry"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -18,9 +19,12 @@ const (
 	SchemaVersion          = 1
 	DefaultRetentionDays   = 30
 	DefaultMaxEventsPerDay = 1000
-	maxRetentionDays       = 365
-	maxEventsPerDay        = 10_000
-	maxConfigBytes         = 1 << 20
+	// maxRetentionDays and maxEventsPerDay mirror telemetry's exported
+	// bounds so settings validation and telemetry.Open agree at the
+	// boundary; telemetry is the single source of truth for these values.
+	maxRetentionDays = telemetry.MaxRetentionDays
+	maxEventsPerDay  = telemetry.MaxEventsPerDay
+	maxConfigBytes   = 1 << 20
 )
 
 // Settings contains Bob's machine-local user preferences. Repository intent
