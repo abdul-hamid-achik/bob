@@ -195,3 +195,27 @@ func pathSnapshot(t *testing.T, root string) map[string]pathSnapshotEntry {
 	}
 	return result
 }
+
+func TestLoadBatchMatchesIndividualPaths(t *testing.T) {
+	root := pathWorkspace(t)
+	paths := []string{"internal/cli/root.go", "internal/domain/service.go", "bob.yaml"}
+	batch, err := LoadBatch(root, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, path := range paths {
+		single, err := Load(root, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(single, batch.Results[i]) {
+			t.Fatalf("batch changed classification of %s", path)
+		}
+	}
+	if _, err := LoadBatch(root, []string{"../escape"}); err == nil {
+		t.Fatal("accepted escaping path")
+	}
+	if _, err := LoadBatch(root, make([]string, MaxBatchPaths+1)); err == nil {
+		t.Fatal("accepted oversized batch")
+	}
+}

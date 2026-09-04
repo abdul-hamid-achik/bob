@@ -70,3 +70,17 @@ Consumers branch on these codes and on `plan_action.code`, never on prose.
 Results are capped at 8 KiB. Deterministic omission removes only supplemental
 artifact detail, notices, and non-blocking continuation actions; the
 `truncation` object reports every omission.
+
+## Classify several paths
+
+```sh
+bob --json path --batch --workspace . -- internal/cli/root.go internal/domain/service.go
+```
+
+`--batch` accepts one to seven repository-relative paths. Bob validates every
+input, renders the recipe and plans once, then returns ordered classifications.
+The normal CLI envelope retains `command: "path"`; `data` contains
+`schema_version: 1`, `workspace`, and `results` (the existing path objects).
+Each result retains its 8 KiB bound. Workspace selection uses `--workspace` in
+batch mode; all positional arguments are paths. Single-path CLI and MCP shapes
+are unchanged. No repository files are written.

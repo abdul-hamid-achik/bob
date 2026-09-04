@@ -48,30 +48,65 @@ type Artifact struct {
 	CapabilityIDs []string `json:"capability_ids"`
 }
 
+// MaxBatchPaths leaves envelope headroom around seven 8 KiB path reports.
+const MaxBatchPaths = 7
+
+type BatchResult struct {
+	SchemaVersion int      `json:"schema_version"`
+	Workspace     string   `json:"workspace"`
+	Results       []Result `json:"results"`
+}
+
 func Load(root, requested string) (Result, error) {
-	if _, err := engine.NormalizeRepositoryPath(requested); err != nil {
-		return Result{}, guidance.WithErrorCode(guidance.ErrorInputInvalid, err)
+	batch, err := LoadBatch(root, []string{requested})
+	if err != nil {
+		return Result{}, err
+	}
+	return batch.Results[0], nil
+}
+
+// LoadBatch renders and plans once, preserving the requested path order.
+func LoadBatch(root string, requested []string) (BatchResult, error) {
+	if len(requested) == 0 || len(requested) > MaxBatchPaths {
+		return BatchResult{}, guidance.WithErrorCode(guidance.ErrorInputInvalid, fmt.Errorf("path batch requires 1..%d paths", MaxBatchPaths))
+	}
+	for _, path := range requested {
+		if _, err := engine.NormalizeRepositoryPath(path); err != nil {
+			return BatchResult{}, guidance.WithErrorCode(guidance.ErrorInputInvalid, err)
+		}
 	}
 	canonical, err := workspace.Resolve(root, true)
 	if err != nil {
-		return Result{}, guidance.WithErrorCode(guidance.ErrorWorkspaceInvalid, fmt.Errorf("resolve workspace: %w", err))
+		return BatchResult{}, guidance.WithErrorCode(guidance.ErrorWorkspaceInvalid, fmt.Errorf("resolve workspace: %w", err))
 	}
 	m, err := manifest.Load(canonical)
 	if err != nil {
-		return Result{}, guidance.WithErrorCode(guidance.ErrorManifestInvalid, err)
+		return BatchResult{}, guidance.WithErrorCode(guidance.ErrorManifestInvalid, err)
 	}
 	artifacts, err := recipe.Render(m)
 	if err != nil {
-		return Result{}, guidance.WithErrorCode("path_failed", fmt.Errorf("render recipe: %w", err))
+		return BatchResult{}, guidance.WithErrorCode("path_failed", fmt.Errorf("render recipe: %w", err))
 	}
 	plan, err := engine.Plan(canonical, m, artifacts)
 	if err != nil {
-		return Result{}, guidance.WithErrorCode("path_failed", fmt.Errorf("plan workspace: %w", err))
+		return BatchResult{}, guidance.WithErrorCode("path_failed", fmt.Errorf("plan workspace: %w", err))
 	}
 	metadata, err := recipe.ResolveMetadata(m)
 	if err != nil {
-		return Result{}, guidance.WithErrorCode("path_failed", err)
+		return BatchResult{}, guidance.WithErrorCode("path_failed", err)
 	}
+	batch := BatchResult{SchemaVersion: SchemaVersion, Workspace: canonical, Results: make([]Result, 0, len(requested))}
+	for _, path := range requested {
+		result, err := classify(canonical, plan, metadata, path)
+		if err != nil {
+			return BatchResult{}, err
+		}
+		batch.Results = append(batch.Results, result)
+	}
+	return batch, nil
+}
+
+func classify(canonical string, plan engine.PlanResult, metadata recipe.Metadata, requested string) (Result, error) {
 	classification, err := engine.ClassifyPath(canonical, plan, requested)
 	if err != nil {
 		return Result{}, guidance.WithErrorCode("path_failed", err)

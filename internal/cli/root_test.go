@@ -296,6 +296,20 @@ func TestPathCLIJSONAndPlainOutput(t *testing.T) {
 	if !got.OK || got.Command != "path" || got.Data.Classification != "managed" || got.Data.State != "managed_in_sync" || got.Data.HumanEditEffect != "will_conflict" {
 		t.Fatalf("path = %#v", got)
 	}
+	batchOut, _, err := executeForTest("--json", "path", "--batch", "--workspace", target, "--", "internal/cli/root.go", "bob.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch struct {
+		Data struct {
+			Results []struct {
+				Path string `json:"path"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(batchOut), &batch); err != nil || len(batch.Data.Results) != 2 || batch.Data.Results[1].Path != "bob.yaml" {
+		t.Fatalf("batch=%s err=%v", batchOut, err)
+	}
 	human, _, err := executeForTest("path", "internal/domain/service.go", "--workspace", target)
 	if err != nil {
 		t.Fatal(err)

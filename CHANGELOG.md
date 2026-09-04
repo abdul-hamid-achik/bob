@@ -7,6 +7,12 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-04
+
+### Integration
+- Add `path --batch` to classify up to seven paths using one recipe render and workspace plan.
+
+
 ### Added
 
 - `go-agent-tool@6` seeds living files once (`README.md`, `CHANGELOG.md`,
