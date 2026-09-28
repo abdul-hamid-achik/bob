@@ -14,3 +14,7 @@
 *.tmp
 /docs/.vercel/
 /docs/.env.local
+/desktop/node_modules/
+/desktop/out/
+/desktop/dist-web/
+/desktop/release/
