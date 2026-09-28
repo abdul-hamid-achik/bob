@@ -264,6 +264,7 @@ probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local
 - [Path classification reference](docs/reference/path.md)
 - [Deterministic playbooks reference](docs/reference/playbooks.md)
 - [CLI reference](docs/reference/cli.md)
+- [Bob Console desktop app](desktop/README.md)
 - [Product direction](docs/product-direction.md)
 - [Architecture](docs/architecture.md)
 - [Contributing](CONTRIBUTING.md)

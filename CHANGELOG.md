@@ -7,6 +7,27 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-28
+
+### Added
+
+- `desktop/` ships **Bob Console**, an Electron companion that drives every Bob
+  surface from one window: the CLI commands and subcommands, the nine
+  read-only MCP tools, and console capabilities built on Bob's contracts
+  (ownership ledger, bounded diff viewer, activity audit, documentation
+  browser, Taskfile gates, and a coverage matrix that probes each read-only
+  surface and records the real exit code).
+- Bob Console spawns the resolved binary with `--json` and renders the
+  versioned envelope; it never reimplements Bob. Mutating invocations require
+  an explicit confirmation decided from the argv (`--write` turns a preview
+  into a write, `--dry-run` turns a mutation into a preview), apply and upgrade
+  can bind to the reviewed plan digest, and `--probe-integrations` stays
+  behind a separate opt-in that is off by default.
+- `desktop/FEATURES.md` lists every integrated surface; a test fails when the
+  list and the feature registry drift. `desktop/scripts/smoke.mjs` boots the
+  real app hidden and proves each surface end to end, and demo mode replays
+  captured envelopes — with private paths scrubbed — where Bob is absent.
+
 ## [0.11.0] - 2026-09-04
 
 ### Integration
