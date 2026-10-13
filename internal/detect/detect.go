@@ -6,6 +6,8 @@ package detect
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -142,17 +144,13 @@ func Detect(root string) Result {
 			result.Monorepo = true
 		}
 		result.Module = readGoModule(filepath.Join(root, "go.mod"))
-		// Detect go-agent-tool marker: existing bob.yaml with go-agent-tool
-		// recipe, OR typical Cobra CLI layout (cmd/ + internal/cli/).
+		// A declared bob.yaml recipe wins over the Cobra layout heuristic.
+		// Without a declared recipe, the cmd/ + internal/cli/root.go layout
+		// suggests the agent-tool shape.
 		isGoAgentTool := false
-		if names["bob.yaml"] {
-			bobPath := filepath.Join(root, "bob.yaml")
-			if containsBounded(bobPath, "recipe: go-agent-tool") {
-				isGoAgentTool = true
-			}
-		}
-		if !isGoAgentTool && dirs["cmd"] && dirs["internal"] {
-			// Check for Cobra CLI structure: internal/cli/root.go
+		if declared := declaredRecipe(filepath.Join(root, "bob.yaml")); declared != "" {
+			isGoAgentTool = declared == "go-agent-tool"
+		} else if dirs["cmd"] && dirs["internal"] {
 			if regularFileExists(filepath.Join(root, "internal", "cli", "root.go")) {
 				isGoAgentTool = true
 			}
@@ -470,8 +468,6 @@ func hasSassFiles(root string, entries []os.DirEntry) bool {
 	return false
 }
 
-// containsBounded reports whether the first bounded chunk of the file at
-// path contains needle. Read failures report false.
 // readGoModule returns the first `module` path from a bounded go.mod, or
 // empty when the file is missing, unreadable, or the directive is not a
 // well-formed path. Detection stays advisory: a malformed go.mod never
@@ -499,15 +495,70 @@ func readGoModule(path string) string {
 	return ""
 }
 
+// maxBobYAMLBytes bounds the bob.yaml prefix scanned for the declared recipe.
+const maxBobYAMLBytes = 64 * 1024
+
+// declaredRecipe returns the value of the top-level `recipe:` key in the
+// bounded prefix of the bob.yaml at path. Only unindented lines match, so
+// comments and nested keys never count. Read failures and absent or empty
+// keys return "".
+func declaredRecipe(path string) string {
+	data, ok := readBounded(path, maxBobYAMLBytes)
+	if !ok {
+		return ""
+	}
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		rest, found := strings.CutPrefix(line, "recipe:")
+		if !found {
+			continue
+		}
+		return parseScalar(rest)
+	}
+	return ""
+}
+
+// parseScalar extracts a YAML scalar value: an optionally quoted string, or a
+// plain value with any trailing comment removed.
+func parseScalar(raw string) string {
+	value := strings.TrimSpace(raw)
+	if len(value) > 0 && (value[0] == '"' || value[0] == '\'') {
+		quote := value[0]
+		if end := strings.IndexByte(value[1:], quote); end >= 0 {
+			return value[1 : end+1]
+		}
+		return ""
+	}
+	if i := strings.Index(value, " #"); i >= 0 {
+		value = strings.TrimSpace(value[:i])
+	}
+	if strings.HasPrefix(value, "#") {
+		return ""
+	}
+	return value
+}
+
+// containsBounded reports whether the bounded prefix of the file at path
+// contains needle. Read failures report false.
 func containsBounded(path, needle string) bool {
+	data, ok := readBounded(path, 64*1024)
+	return ok && strings.Contains(data, needle)
+}
+
+// readBounded reads up to limit bytes of the regular file at path. A short
+// file yields its full content; read failures report false.
+func readBounded(path string, limit int64) (string, bool) {
 	file, err := os.Open(path)
 	if err != nil {
-		return false
+		return "", false
 	}
 	defer func() { _ = file.Close() }()
-	buffer := make([]byte, 64*1024)
-	n, _ := file.Read(buffer)
-	return strings.Contains(string(buffer[:n]), needle)
+	buffer := make([]byte, limit)
+	n, err := io.ReadFull(file, buffer)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return "", false
+	}
+	return string(buffer[:n]), true
 }
 
 func sortStacks(stacks []Stack) {
