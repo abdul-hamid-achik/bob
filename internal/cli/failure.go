@@ -14,7 +14,8 @@ import (
 
 // classifyErrorCode maps an error to Bob's closed JSON error-code vocabulary
 // for a failure envelope's data.error.code field: missing_manifest,
-// manifest_invalid, input_invalid, conflicts, workspace_invalid, or the
+// manifest_invalid, input_invalid, conflicts, workspace_invalid,
+// plan_digest_mismatch, workspace_busy, or the
 // command_failed fallback. It reuses ExitCode's classification (exitcode.go)
 // as the primary signal and refines within the invalid-input bucket by
 // message content, since exitError only carries a numeric exit code.
@@ -25,6 +26,9 @@ func classifyErrorCode(err error) string {
 	msg := err.Error()
 	if errors.Is(err, engine.ErrPlanDigestMismatch) {
 		return "plan_digest_mismatch"
+	}
+	if errors.Is(err, engine.ErrWorkspaceBusy) {
+		return "workspace_busy"
 	}
 	// Preserve precise transport-neutral guidance codes. Missing bob.yaml is
 	// the one intentional refinement of manifest_invalid because it has a
@@ -107,6 +111,11 @@ func nextActionsForCode(code, workspace string) []string {
 		return []string{
 			"run: " + withWorkspaceArg("bob plan", workspace) + " --json",
 			"review the new plan before applying it",
+		}
+	case "workspace_busy":
+		return []string{
+			"wait for the other bob operation on this workspace to finish, then retry the same command",
+			"do not delete " + engine.ApplyLockFilename + " while a bob process is running",
 		}
 	default:
 		return []string{"run: bob learn --json"}

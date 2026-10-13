@@ -262,7 +262,8 @@ recovery path a script would parse.
 | `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely (for example, a symlink at the workspace boundary). |
-| `plan_digest_mismatch` | A guarded apply or upgrade fresh-planned a different repository state than the caller reviewed. |
+| `plan_digest_mismatch` | A guarded apply or upgrade fresh-planned a different repository state than the caller reviewed. Its `data.converged` is `true` when the fresh plan is already clean. |
+| `workspace_busy` | Another mutating Bob operation holds the workspace apply lock; nothing was written. Retry once it finishes. |
 | `command_failed` | An unclassified failure — read the message for detail. |
 
 An `apply` refused by conflicts skips the round-trip back through `plan`: its
@@ -472,7 +473,7 @@ matching run.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
+| `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), another mutating operation holding the workspace apply lock (`workspace_busy`; retry once it finishes), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a `bob.yaml` that already exists or a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |
