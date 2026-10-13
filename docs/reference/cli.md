@@ -19,7 +19,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, and `--watch` refreshes human output when `bob.yaml` changes. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
 | `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing and reports a removal digest, `--expect-removal-digest` binds removal to that reviewed decision. |
-| `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews, `--expect-plan-digest` gates authority. |
+| `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews (with `--json` it reports the `plan_digest` to review), `--expect-plan-digest` gates authority. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |
@@ -262,7 +262,8 @@ recovery path a script would parse.
 | `conflicts` | The plan contains one or more ownership conflicts; apply refused every write. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely (for example, a symlink at the workspace boundary). |
-| `plan_digest_mismatch` | A guarded apply or upgrade fresh-planned a different repository state than the caller reviewed. |
+| `plan_digest_mismatch` | A guarded apply or upgrade fresh-planned a different repository state than the caller reviewed. Its `data.converged` is `true` when the fresh plan is already clean. |
+| `workspace_busy` | Another mutating Bob operation holds the workspace apply lock; nothing was written. Retry once it finishes. |
 | `command_failed` | An unclassified failure — read the message for detail. |
 
 An `apply` refused by conflicts skips the round-trip back through `plan`: its
@@ -375,7 +376,10 @@ whether migration is required without writing. A current lock is a successful
 no-op. `--expect-plan-digest` accepts the same qualified digest as apply and
 refuses stale authority with `plan_digest_mismatch` and zero writes. Successful
 JSON output reports `from_version`, `to_version`, `applied`, and the bounded
-apply receipt when a migration ran.
+apply receipt when a migration ran. `--dry-run --json` also reports
+`plan_digest` and `plan_digest_version` for the fresh plan, the same values
+`bob plan --json` reports, so the reviewed preview can be passed straight to
+`--expect-plan-digest` without a separate `bob plan` call.
 
 Upgrade holds the workspace apply lock for the full fresh-plan and mutation
 sequence. Conflicts exit `2`; a missing, invalid, cross-recipe, or future lock
@@ -469,7 +473,7 @@ matching run.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
+| `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), another mutating operation holding the workspace apply lock (`workspace_busy`; retry once it finishes), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a `bob.yaml` that already exists or a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |

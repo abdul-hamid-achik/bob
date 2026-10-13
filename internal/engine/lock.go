@@ -25,6 +25,11 @@ const (
 	maxApplyLockBytes = 4 << 10
 )
 
+// ErrWorkspaceBusy reports that another mutating operation holds the
+// workspace apply lock and the lock is not provably stale. Callers may retry
+// once that operation finishes.
+var ErrWorkspaceBusy = errors.New("workspace is busy: another mutating operation is in progress")
+
 // acquireApplyLock takes the per-workspace mutation lock with an exclusive
 // create. The lock records the owning pid and hostname so a lock left behind
 // by a crashed Bob on this machine can be reclaimed: when the recorded host is
@@ -41,7 +46,7 @@ func acquireApplyLock(root string) (func(), error) {
 		return nil, err
 	}
 	if !applyLockIsStale(path) {
-		return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running", ApplyLockFilename)
+		return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running: %w", ApplyLockFilename, ErrWorkspaceBusy)
 	}
 	if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 		return nil, fmt.Errorf("reclaim stale %s: %w", ApplyLockFilename, removeErr)
@@ -49,7 +54,7 @@ func acquireApplyLock(root string) (func(), error) {
 	release, err = createApplyLock(path)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running", ApplyLockFilename)
+			return nil, fmt.Errorf("another apply is active or %s is stale; remove it manually only if no bob process is running: %w", ApplyLockFilename, ErrWorkspaceBusy)
 		}
 		return nil, err
 	}

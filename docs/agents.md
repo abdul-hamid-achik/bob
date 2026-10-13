@@ -109,7 +109,9 @@ bob apply . --expect-plan-digest sha256:<64-lowercase-hex> --json
 ```
 
 Bob fresh-plans while holding its apply lock. A stale digest exits `5` with
-`plan_digest_mismatch` and writes nothing. A successful apply receipt proves
+`plan_digest_mismatch` and writes nothing; its `data.converged` is `true` when
+the fresh plan is already clean, for example because an earlier guarded run
+succeeded but its response was lost. A successful apply receipt proves
 which reconciliation Bob performed; it does not verify generated behavior.
 Preview recipe migration with `bob upgrade --dry-run --json` and bind a real
 upgrade to the reviewed plan digest when policy requires it. Preview teardown
@@ -160,7 +162,7 @@ envelope above.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), or `doctor` reporting required tools missing or unusable. |
+| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), another mutating operation holding the workspace lock (`workspace_busy`), or `doctor` reporting required tools missing or unusable. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |
@@ -197,6 +199,7 @@ on drift, and `doctor` reporting a required tool missing or unusable (see
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely. |
 | `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest, or the fresh remove decision differs from the reviewed removal digest; review again before authorizing mutation. |
+| `workspace_busy` | Another mutating Bob operation holds the workspace apply lock; no repository write occurred. Retry once it finishes. |
 | `command_failed` | An unclassified failure; read the message for detail. |
 
 Validation errors echo the offending value and, when one exists, the nearest
@@ -286,6 +289,7 @@ Map the error code straight to a corrective command — this is exactly what
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |
 | `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. For remove, rerun `bob remove --dry-run --json` with the same flags and review the new `removal_digest`. |
+| `workspace_busy` | Wait for the other Bob operation on the workspace to finish, then retry the same command. Do not delete `.bob.apply.lock` while a Bob process is running. |
 | `command_failed` | Read the message; it is the whole diagnosis. If it looks like a bug, `bob learn --json` won't help further — that's a report, not a retry loop. |
 
 Every failure envelope's `next_actions` array already contains this same
