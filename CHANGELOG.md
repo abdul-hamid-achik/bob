@@ -7,6 +7,29 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Fixed
+
+- `bob init` and stack detection: when `bob.yaml` already declares a recipe,
+  that declared recipe now wins over the Cobra-layout heuristic, so a
+  `go-hygiene` repository is no longer misreported as `go-agent-tool`. The
+  `bob.yaml` scan is bounded to 64 KiB and rejects a non-regular file.
+- Drift recovery guidance now suggests reviewing the plan and applying it bound
+  to the reviewed digest (`bob apply <workspace> --expect-plan-digest
+  <data.plan_digest>`) instead of an unguarded `bob apply`.
+
+### Changed
+
+- Docs: `bob check --json` on drift and a not-ready `bob doctor --json` keep
+  their normal `data`, carry no `data.error`, and signal with the exit code; the
+  failure-envelope and error-code references now state this. `seed_exists` is
+  documented as a non-conflict action code.
+
+### Added
+
+- Examples for the `go-hygiene`, `python-app`, and `rust-cli` recipes.
+- The `AGENTS.md` and `docs/architecture.md` package maps list every
+  `internal/` package (`detect`, `fsutil`, `strsim`).
+
 ## [0.12.0] - 2026-09-28
 
 ### Added

@@ -165,16 +165,20 @@ not an error. Note that `2` and `3` are both "non-zero, drift found" — `2` mea
 a conflict is in the mix and apply would refuse; `3` means every change is safe
 and apply would proceed.
 
-`bob doctor` follows the same pattern. When a required tool is missing, it
-emits `ok: false` with its normal probe data and no `data.error`, and exits `1`.
+`bob doctor` follows the same pattern. When a required tool is missing or
+unusable, it emits `ok: false` with its normal probe data and no `data.error`,
+and exits `1`.
 
 An agent scripting Bob should branch on the exit code first and only inspect
 `data` for detail — do not infer success from the presence of JSON alone.
 
 ## Error codes
 
-Every failure envelope, except `check` and `doctor`, carries `data.error.code`,
-one of:
+Every failure envelope carries `data.error.code`, one of the following — with
+two exceptions that keep their normal `data` and carry no `data.error`: `check`
+on drift, and `doctor` reporting a required tool missing or unusable (see
+[Exit codes](#exit-codes)). A `check` or `doctor` invocation that cannot load
+`bob.yaml` still returns an ordinary `data.error` envelope.
 
 | Code | Meaning |
 |---|---|

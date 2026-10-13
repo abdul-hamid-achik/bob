@@ -212,12 +212,13 @@ JSON envelope around transport errors.
 ### Failure envelopes
 
 A failed command still writes one JSON document, with `ok: false` and the
-command's normal `data` replaced by an error. `check` and `doctor` are the
-exceptions: they keep their normal `data` with `ok: false` and carry no
-`data.error`. `check` reports drift in `data.clean`, `data.plan`, and the plan
-digest fields, and `doctor` reports its probe results. For both, the non-zero
-exit code is the signal. The envelope shape below applies to all other
-failures:
+command's normal `data` replaced by an error. Two outcomes are the exception:
+`check` on drift keeps `data.clean: false` with `data.plan` and the plan digest
+fields, and `doctor` reporting a required tool missing or unusable keeps its
+probe results — both with `ok: false`, no `data.error`, and the non-zero exit
+code as the signal. A `check` or `doctor` that cannot load `bob.yaml` returns an
+ordinary `data.error` envelope like any other command. The envelope shape below
+applies to those ordinary failures:
 
 ```json
 {
@@ -438,8 +439,10 @@ skipped or conflicted, `4` when no lock exists or the manifest is invalid.
 | `5` | `apply` or `upgrade` with `--expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read
-`data.error.code` for detail — do not infer success from the mere presence of
-JSON on stdout. See [Bob for coding agents](../agents.md#recovering-from-failure)
+`data.error.code` for detail — except `check` on drift and a not-ready
+`doctor`, which carry no `data.error` and are read from `data.clean` or the
+probe results instead. Do not infer success from the mere presence of JSON on
+stdout. See [Bob for coding agents](../agents.md#recovering-from-failure)
 for a code-by-code recovery playbook.
 
 ## Workspace paths

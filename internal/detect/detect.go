@@ -548,6 +548,10 @@ func containsBounded(path, needle string) bool {
 // readBounded reads up to limit bytes of the regular file at path. A short
 // file yields its full content; read failures report false.
 func readBounded(path string, limit int64) (string, bool) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return "", false
