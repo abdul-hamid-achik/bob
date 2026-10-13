@@ -36,10 +36,16 @@ and the project uses semantic versioning after the first tagged release.
 - The `bob learn` brief now matches the corrected envelope contract, naming
   `check` on drift and a not-ready `doctor` as the exceptions that keep their
   normal `data` with no `data.error`.
+- `bob plan` next-actions for a pending change or a lock update now include
+  `bob apply <workspace> --expect-plan-digest <sha256:...>`.
+- Bob Console's detection hint and captured `learn` demo now match the CLI's
+  detection rule and corrected envelope contract.
 
 ### Added
 
 - Examples for the `go-hygiene`, `python-app`, and `rust-cli` recipes.
+- Examples for the remaining stack recipes (`js-app`, `vue-app`, `nuxt-app`,
+  `ruby-app`, `lua-lib`, `static-web`), so every built-in recipe ships one.
 - The `AGENTS.md` and `docs/architecture.md` package maps list every
   `internal/` package (`detect`, `fsutil`, `strsim`).
 - A Glyphrun spec covers the `bob check` exit-code contract: `0` when converged,
