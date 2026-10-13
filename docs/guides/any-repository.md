@@ -236,7 +236,7 @@ Identical to every other recipe, because it's the same engine underneath:
    trims the response to the paths that would actually block an apply,
    instead of hauling the full unchanged-action list back every iteration.
 5. Branch on the stable `code` field (`missing`, `content_update`,
-   `mode_drift`, `in_sync`, `identical_content`, or a conflict code like
+   `mode_drift`, `in_sync`, `identical_content`, `seed_exists`, or a conflict code like
    `unmanaged_differs`), never on the prose `reason` — the reason string is
    for a human's screen, the code is the contract.
 6. When authority is tied to a reviewed plan, call
