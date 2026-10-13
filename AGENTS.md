@@ -35,6 +35,7 @@ internal/studio    read-only Bubble Tea repository and usage projection
 internal/mcp       typed repository-read-only stdio projection
 internal/version   build metadata injected by ldflags
 internal/workspace shared canonical workspace resolution
+internal/fsutil    shared filesystem utilities used across internal packages
 internal/detect    cheap read-only stack detection for init and new
 internal/guidance  transport-neutral continuation and truncation contracts
 internal/strsim    dependency-free Levenshtein distance for did-you-mean hints
