@@ -3,7 +3,7 @@
 /.qwen/
 /coverage.out
 /coverage.html
-/docs/node_modules/
+/docs/node_modules
 /docs/.vitepress/cache/
 /docs/.vitepress/dist/
 /.glyphrun/
@@ -14,7 +14,7 @@
 *.tmp
 /docs/.vercel/
 /docs/.env.local
-/desktop/node_modules/
+/desktop/node_modules
 /desktop/out/
 /desktop/dist-web/
 /desktop/release/
