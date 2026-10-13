@@ -306,6 +306,36 @@ func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
 	if justCmd.Primary != "go" || justCmd.KindHint != "" {
 		t.Fatalf("cmd/ without internal/cli: expected go without hint, got %#v", justCmd)
 	}
+
+	// A declared non-agent-tool recipe wins over the Cobra layout.
+	cobraHygiene := Detect(fixture(t, map[string]string{
+		"go.mod":               "module example.com/cli\n",
+		"bob.yaml":             "schema_version: 1\nrecipe: go-hygiene\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
+	}))
+	if cobraHygiene.Primary != "go" || cobraHygiene.KindHint != "" {
+		t.Fatalf("declared go-hygiene with Cobra layout: expected no agent-tool hint, got %#v", cobraHygiene)
+	}
+
+	// A quoted go-agent-tool recipe still yields the hint.
+	quoted := Detect(fixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\n",
+		"bob.yaml": "schema_version: 1\nrecipe: \"go-agent-tool\"\n",
+	}))
+	if quoted.KindHint != "agent-tool" {
+		t.Fatalf("quoted go-agent-tool: expected agent-tool hint, got %#v", quoted)
+	}
+
+	// A commented-out recipe line must not count as a declaration.
+	commented := Detect(fixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\n",
+		"bob.yaml": "schema_version: 1\n# recipe: go-agent-tool\n",
+	}))
+	if commented.KindHint != "" {
+		t.Fatalf("commented recipe must not set agent-tool hint, got %#v", commented)
+	}
 }
 
 func containsString(values []string, value string) bool {
