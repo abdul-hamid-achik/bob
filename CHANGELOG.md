@@ -16,6 +16,10 @@ and the project uses semantic versioning after the first tagged release.
 - Drift recovery guidance now suggests reviewing the plan and applying it bound
   to the reviewed digest (`bob apply <workspace> --expect-plan-digest
   <data.plan_digest>`) instead of an unguarded `bob apply`.
+- `bob init --write` now refuses when a regular-file `bob.yaml` already exists,
+  exiting `4` (`input_invalid`) with a message that names `bob plan` and leaving
+  the file untouched; the preview warns and points at `bob plan` instead of
+  suggesting `--write`.
 
 ### Changed
 
@@ -23,12 +27,17 @@ and the project uses semantic versioning after the first tagged release.
   their normal `data`, carry no `data.error`, and signal with the exit code; the
   failure-envelope and error-code references now state this. `seed_exists` is
   documented as a non-conflict action code.
+- MCP `bob_plan` and `bob_check` drift continuations now carry `bob apply
+  <workspace> --expect-plan-digest <sha256:...>` instead of an unguarded
+  `bob apply`.
 
 ### Added
 
 - Examples for the `go-hygiene`, `python-app`, and `rust-cli` recipes.
 - The `AGENTS.md` and `docs/architecture.md` package maps list every
   `internal/` package (`detect`, `fsutil`, `strsim`).
+- A Glyphrun spec covers the `bob check` exit-code contract: `0` when converged,
+  `3` for safe drift, and `2` for a conflict.
 
 ## [0.12.0] - 2026-09-28
 

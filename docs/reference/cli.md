@@ -443,7 +443,7 @@ skipped or conflicted, `4` when no lock exists or the manifest is invalid.
 | `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
-| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |
+| `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a `bob.yaml` that already exists or a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |
 | `5` | `apply` or `upgrade` with `--expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read
