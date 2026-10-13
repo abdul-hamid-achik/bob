@@ -256,23 +256,7 @@ func newNewCommand(opts *options) *cobra.Command {
 // in a target directory that already has content, otherwise the historical
 // go-agent-tool default for greenfield (missing or empty) targets.
 func chooseNewRecipe(explicit string, detection detect.Result) (string, error) {
-	if explicit != "" {
-		if _, err := recipe.Version(explicit); err != nil {
-			return "", err
-		}
-		return explicit, nil
-	}
-	if detection.Detected() {
-		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
-		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
-			return manifest.RecipeGoAgentTool, nil
-		}
-		if id, ok := recipe.ForStack(detection.Primary); ok {
-			return id, nil
-		}
-		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
-	}
-	return manifest.RecipeGoAgentTool, nil
+	return selectRecipe(explicit, detection)
 }
 
 // buildNewManifest constructs the manifest bob new scaffolds for the chosen
@@ -291,16 +275,7 @@ func buildNewManifest(recipeID, name, module, description string, detection dete
 	if recipeID == manifest.RecipeFiles {
 		return defaultFilesManifest(name, description), nil
 	}
-	kind := ""
-	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
-		for _, candidate := range runtime.Kinds {
-			if candidate == detection.KindHint {
-				kind = detection.KindHint
-				break
-			}
-		}
-	}
-	m, err := manifest.DefaultStack(recipeID, name, "", description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, "", description, detectedRuntimeKind(recipeID, detection))
 	if err != nil {
 		return manifest.Manifest{}, err
 	}
@@ -423,26 +398,10 @@ func newInitCommand(opts *options) *cobra.Command {
 // otherwise the historical go-agent-tool default for empty or unrecognized
 // repositories.
 func chooseInitRecipe(explicit string, detection detect.Result) (string, error) {
-	if explicit != "" {
-		if explicit == manifest.RecipeFiles {
-			return "", errors.New("recipe files declares its file tree inline; write bob.yaml by hand instead of using bob init")
-		}
-		if _, err := recipe.Version(explicit); err != nil {
-			return "", err
-		}
-		return explicit, nil
+	if explicit == manifest.RecipeFiles {
+		return "", errors.New("recipe files declares its file tree inline; write bob.yaml by hand instead of using bob init")
 	}
-	if detection.Detected() {
-		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
-		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
-			return manifest.RecipeGoAgentTool, nil
-		}
-		if id, ok := recipe.ForStack(detection.Primary); ok {
-			return id, nil
-		}
-		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
-	}
-	return manifest.RecipeGoAgentTool, nil
+	return selectRecipe(explicit, detection)
 }
 
 // initStackMismatch reports a non-empty human-readable mismatch description
@@ -482,16 +441,7 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 		}
 		return manifest.Default(name, module, description), nil
 	}
-	kind := ""
-	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
-		for _, candidate := range runtime.Kinds {
-			if candidate == detection.KindHint {
-				kind = detection.KindHint
-				break
-			}
-		}
-	}
-	m, err := manifest.DefaultStack(recipeID, name, module, description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, module, description, detectedRuntimeKind(recipeID, detection))
 	if err != nil {
 		return manifest.Manifest{}, err
 	}
