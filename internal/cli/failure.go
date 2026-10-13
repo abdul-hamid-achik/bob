@@ -120,7 +120,10 @@ func nextActionsForCode(code, workspace string) []string {
 // vocabulary, but still deserves its own precise suggestion.
 func nextActionsForFailure(err error, workspace string) []string {
 	if ExitCode(err) == ExitDrift {
-		return []string{"run: " + withWorkspaceArg("bob apply", workspace)}
+		return []string{
+			"run: " + withWorkspaceArg("bob plan", workspace) + " --json",
+			"run: " + withWorkspaceArg("bob apply", workspace) + " --expect-plan-digest <data.plan_digest>",
+		}
 	}
 	return nextActionsForCode(classifyErrorCode(err), workspace)
 }
