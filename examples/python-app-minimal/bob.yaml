@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: python-app
+product:
+  name: python-app-demo
+  description: A small Python application
+runtime:
+  language: python
+  kind: app
+distribution:
+  github_actions: true
