@@ -566,7 +566,7 @@ func summarizePlan(root string, plan engine.PlanResult, digest engine.PlanDigest
 			counts.Conflict++
 		}
 	}
-	clean := !plan.LockChanged && counts.Unchanged == len(plan.Actions)
+	clean := plan.Clean()
 	warnings := []string{}
 	nextActions := []inspectpkg.CommandAction{}
 	switch {

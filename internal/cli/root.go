@@ -882,13 +882,7 @@ func newCheckCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("check: %w", err)
 			}
 			capturePlanMetrics(opts, root, plan)
-			clean := !plan.LockChanged
-			for _, action := range plan.Actions {
-				if action.Kind != engine.ActionUnchanged {
-					clean = false
-					break
-				}
-			}
+			clean := plan.Clean()
 			var failure error
 			if !clean {
 				code := ExitDrift
