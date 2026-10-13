@@ -18,7 +18,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, and `--watch` refreshes human output when `bob.yaml` changes. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
-| `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing. |
+| `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing and reports a removal digest, `--expect-removal-digest` binds removal to that reviewed decision. |
 | `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews, `--expect-plan-digest` gates authority. |
 | `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
@@ -414,7 +414,10 @@ touched.
 - `--force` removes managed files even when their content has drifted from
   the lock (hash mismatch). Without `--force`, drifted files are skipped and
   reported.
-- `--dry-run` previews what a real run would remove without writing anything.
+- `--dry-run` previews what a real run would remove without writing anything
+  and reports `removal_digest` and `removal_digest_version`.
+- `--expect-removal-digest sha256:<64-lowercase-hex>` binds the removal to one
+  reviewed decision. See [Digest-gated remove](#digest-gated-remove).
 - Symlinks and special files at managed paths are reported as conflicts and
   never removed, even with `--force`.
 - Empty directories left behind by removed files are cleaned up bottom-up;
@@ -434,7 +437,32 @@ concurrent mutations. The lock records the owning pid and hostname; a lock
 left by a crashed Bob on the same host is reclaimed automatically when that
 process no longer exists, while a lock from another host or a live process is
 refused. Exit codes: `0` clean success, `2` when files were
-skipped or conflicted, `4` when no lock exists or the manifest is invalid.
+skipped or conflicted, `4` when no lock exists, the manifest is invalid, or the
+expected removal digest is malformed, `5` when a guarded remove's digest no
+longer matches.
+
+## Digest-gated remove
+
+`bob remove [workspace] --dry-run --json` reports `removal_digest`, a
+`sha256:<64-lowercase-hex>` identity of the complete removal decision, and
+`removal_digest_version` (currently `1`). Real runs report the same fields.
+The digest covers a `remove` kind marker, the digest schema version, the hash
+of the exact `bob.lock` bytes, the `--force` flag, and, for every managed path
+in lock order, its path, locked hash, current hash, current mode, and removal
+decision. It is a separate namespace from the plan digest: a plan digest never
+authorizes a removal, and a removal digest never authorizes an apply or
+upgrade.
+
+`bob remove [workspace] --expect-removal-digest sha256:<64-lowercase-hex>`
+binds the destructive run to that reviewed decision. Pass the same `--force`
+setting used for the dry-run; a digest reviewed without `--force` does not
+authorize a `--force` removal. Bob validates the digest form before touching
+the workspace (a malformed value exits `4` with `input_invalid`), then
+recomputes the decision while holding the workspace apply lock and compares it
+before the first unlink. A mismatch exits `5`, emits `plan_digest_mismatch`
+with `expected_removal_digest` and `actual_removal_digest`, and deletes
+nothing. The per-file recheck immediately before each unlink still applies to a
+matching run.
 
 ## Exit codes
 
@@ -445,7 +473,7 @@ skipped or conflicted, `4` when no lock exists or the manifest is invalid.
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id in `bob.yaml`), a bad flag or argument, `bob init --write` refusing a `bob.yaml` that already exists or a recipe that does not match the detected stack without `--force`, `bob remove` when no lock exists, or `bob upgrade` when its lock is missing, incompatible, or newer than this binary supports. |
-| `5` | `apply` or `upgrade` with `--expect-plan-digest` refused because the fresh plan differs from the reviewed plan; zero repository writes occurred. |
+| `5` | `apply` or `upgrade` with `--expect-plan-digest` refused because the fresh plan differs from the reviewed plan, or `remove` with `--expect-removal-digest` refused because the fresh removal decision differs from the reviewed one; zero repository writes occurred. |
 
 An agent scripting Bob should branch on the exit code first, then read
 `data.error.code` for detail — except `check` on drift and a not-ready

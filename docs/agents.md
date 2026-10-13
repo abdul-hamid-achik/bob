@@ -114,7 +114,16 @@ which reconciliation Bob performed; it does not verify generated behavior.
 Preview recipe migration with `bob upgrade --dry-run --json` and bind a real
 upgrade to the reviewed plan digest when policy requires it. Preview teardown
 with `bob remove --dry-run --json`; remove affects only proven lock-owned files,
-not seed-once or unmanaged files, and preserves `bob.yaml`.
+not seed-once or unmanaged files, and preserves `bob.yaml`. The dry-run reports
+`removal_digest` and `removal_digest_version`; bind the real teardown to that
+reviewed decision by repeating the same flags with
+`--expect-removal-digest sha256:<64-lowercase-hex>`.
+The removal digest is a separate namespace from the plan digest: a plan digest
+never authorizes a removal and a removal digest never authorizes an apply. It
+covers the exact `bob.lock` bytes, the `--force` flag, and every managed path's
+hashes, mode, and removal decision, so a digest reviewed without `--force`
+cannot authorize a `--force` run. A stale digest exits `5` with
+`plan_digest_mismatch` and deletes nothing; a malformed digest exits `4`.
 
 ## The `--json` envelope contract
 
@@ -155,7 +164,7 @@ envelope above.
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |
-| `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
+| `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest, or guarded remove refused because the fresh removal decision no longer matches the reviewed removal digest. No repository write occurred. |
 
 `bob check` is the deliberate special case: it exits non-zero when the
 repository or lock *would* change. On drift, `bob check --json` emits `ok: false`
@@ -187,7 +196,7 @@ on drift, and `doctor` reporting a required tool missing or unusable (see
 | `conflicts` | The plan contains one or more ownership conflicts; apply or upgrade refused every write. Remove also uses this code when a managed file is skipped or a managed path is unsafe. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely. |
-| `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest; review a new plan before authorizing mutation. |
+| `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest, or the fresh remove decision differs from the reviewed removal digest; review again before authorizing mutation. |
 | `command_failed` | An unclassified failure; read the message for detail. |
 
 Validation errors echo the offending value and, when one exists, the nearest
@@ -276,7 +285,7 @@ Map the error code straight to a corrective command — this is exactly what
 | `conflicts` | Inspect `data.conflicts` or actions with `kind: conflict`, resolve each path deliberately, then rerun the originating `bob apply` or `bob upgrade`; for remove, follow its listed `--force` or manual-path guidance. |
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |
-| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. |
+| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. For remove, rerun `bob remove --dry-run --json` with the same flags and review the new `removal_digest`. |
 | `command_failed` | Read the message; it is the whole diagnosis. If it looks like a bug, `bob learn --json` won't help further — that's a report, not a retry loop. |
 
 Every failure envelope's `next_actions` array already contains this same
