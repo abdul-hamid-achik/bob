@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: vue-app
+product:
+  name: acme-vue
+  description: A Vue single-page application with Bob-seeded hygiene files
+runtime:
+  language: typescript
+  kind: web-app
+distribution:
+  github_actions: true

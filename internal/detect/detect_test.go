@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestReadBoundedFollowsSymlinkButRejectsNonRegular(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := readBounded(link, 64); !ok || got != "hello" {
+		t.Fatalf("readBounded(symlink to regular file) = %q, %v; want %q, true", got, ok, "hello")
+	}
+	dirLink := filepath.Join(dir, "dirlink")
+	if err := os.Symlink(dir, dirLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readBounded(dirLink, 64); ok {
+		t.Fatal("readBounded(symlink to directory) reported ok; want false")
+	}
+}
+
 // fixture builds a temporary repository whose files map paths to contents.
 // Directories are created implicitly; a trailing slash declares an empty
 // directory.
@@ -287,15 +309,50 @@ func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
 		t.Fatalf("go-agent-tool via bob.yaml: expected go with agent-tool hint, got %#v", withBobYaml)
 	}
 
-	// Go repo with Cobra CLI layout (cmd/ + internal/cli/root.go) should have agent-tool hint
+	// Go repo with Cobra CLI layout (cmd/ + internal/cli/root.go) and a
+	// Cobra requirement should have agent-tool hint.
 	withCobraLayout := Detect(fixture(t, map[string]string{
-		"go.mod":               "module example.com/cli\n",
+		"go.mod":               "module example.com/cli\n\nrequire (\n\tgithub.com/spf13/cobra v1.9.1\n)\n",
 		"cmd/":                 "",
 		"internal/":            "",
 		"internal/cli/root.go": "package cli\n",
 	}))
 	if withCobraLayout.Primary != "go" || withCobraLayout.KindHint != "agent-tool" {
 		t.Fatalf("Cobra CLI layout: expected go with agent-tool hint, got %#v", withCobraLayout)
+	}
+
+	// A single-line require directive also counts.
+	singleRequire := Detect(fixture(t, map[string]string{
+		"go.mod":               "module example.com/cli\n\nrequire github.com/spf13/cobra v1.9.1 // indirect\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
+	}))
+	if singleRequire.KindHint != "agent-tool" {
+		t.Fatalf("single-line cobra require: expected agent-tool hint, got %#v", singleRequire)
+	}
+
+	// The Cobra layout without a Cobra requirement is not an agent tool.
+	layoutNoCobra := Detect(fixture(t, map[string]string{
+		"go.mod":               "module example.com/cli\n\nrequire (\n\tgithub.com/urfave/cli/v2 v2.27.0\n)\n// github.com/spf13/cobra\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
+	}))
+	if layoutNoCobra.Primary != "go" || layoutNoCobra.KindHint != "" {
+		t.Fatalf("Cobra layout without cobra require: expected no agent-tool hint, got %#v", layoutNoCobra)
+	}
+
+	// A declared go-agent-tool recipe wins even without a Cobra requirement.
+	declaredNoCobra := Detect(fixture(t, map[string]string{
+		"go.mod":               "module example.com/cli\n",
+		"bob.yaml":             "schema_version: 1\nrecipe: go-agent-tool\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
+	}))
+	if declaredNoCobra.KindHint != "agent-tool" {
+		t.Fatalf("declared go-agent-tool without cobra require: expected agent-tool hint, got %#v", declaredNoCobra)
 	}
 
 	// Go repo with cmd/ but no internal/cli should NOT have agent-tool hint
@@ -305,6 +362,36 @@ func TestDetectGoAgentToolVsGoHygiene(t *testing.T) {
 	}))
 	if justCmd.Primary != "go" || justCmd.KindHint != "" {
 		t.Fatalf("cmd/ without internal/cli: expected go without hint, got %#v", justCmd)
+	}
+
+	// A declared non-agent-tool recipe wins over the Cobra layout.
+	cobraHygiene := Detect(fixture(t, map[string]string{
+		"go.mod":               "module example.com/cli\n\nrequire github.com/spf13/cobra v1.9.1\n",
+		"bob.yaml":             "schema_version: 1\nrecipe: go-hygiene\n",
+		"cmd/":                 "",
+		"internal/":            "",
+		"internal/cli/root.go": "package cli\n",
+	}))
+	if cobraHygiene.Primary != "go" || cobraHygiene.KindHint != "" {
+		t.Fatalf("declared go-hygiene with Cobra layout: expected no agent-tool hint, got %#v", cobraHygiene)
+	}
+
+	// A quoted go-agent-tool recipe still yields the hint.
+	quoted := Detect(fixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\n",
+		"bob.yaml": "schema_version: 1\nrecipe: \"go-agent-tool\"\n",
+	}))
+	if quoted.KindHint != "agent-tool" {
+		t.Fatalf("quoted go-agent-tool: expected agent-tool hint, got %#v", quoted)
+	}
+
+	// A commented-out recipe line must not count as a declaration.
+	commented := Detect(fixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\n",
+		"bob.yaml": "schema_version: 1\n# recipe: go-agent-tool\n",
+	}))
+	if commented.KindHint != "" {
+		t.Fatalf("commented recipe must not set agent-tool hint, got %#v", commented)
 	}
 }
 

@@ -490,7 +490,7 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 		result.LockWritten = true
 	}
 	convergedPlan, convergeErr := Plan(canonicalRoot, m, artifacts)
-	result.finalizeReceipt(convergeErr == nil && planIsConverged(convergedPlan))
+	result.finalizeReceipt(convergeErr == nil && convergedPlan.Clean())
 	return result, nil
 }
 

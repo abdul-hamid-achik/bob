@@ -217,18 +217,6 @@ func recheckManifestSource(root string, source []byte) error {
 	return nil
 }
 
-func planIsConverged(plan PlanResult) bool {
-	if plan.HasConflicts() || plan.LockChanged {
-		return false
-	}
-	for _, action := range plan.Actions {
-		if action.Kind != ActionUnchanged {
-			return false
-		}
-	}
-	return true
-}
-
 func validateApplyOptions(options ApplyOptions) error {
 	if options.ExpectedPlanDigest == "" {
 		return nil

@@ -256,23 +256,7 @@ func newNewCommand(opts *options) *cobra.Command {
 // in a target directory that already has content, otherwise the historical
 // go-agent-tool default for greenfield (missing or empty) targets.
 func chooseNewRecipe(explicit string, detection detect.Result) (string, error) {
-	if explicit != "" {
-		if _, err := recipe.Version(explicit); err != nil {
-			return "", err
-		}
-		return explicit, nil
-	}
-	if detection.Detected() {
-		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
-		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
-			return manifest.RecipeGoAgentTool, nil
-		}
-		if id, ok := recipe.ForStack(detection.Primary); ok {
-			return id, nil
-		}
-		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
-	}
-	return manifest.RecipeGoAgentTool, nil
+	return selectRecipe(explicit, detection)
 }
 
 // buildNewManifest constructs the manifest bob new scaffolds for the chosen
@@ -291,16 +275,7 @@ func buildNewManifest(recipeID, name, module, description string, detection dete
 	if recipeID == manifest.RecipeFiles {
 		return defaultFilesManifest(name, description), nil
 	}
-	kind := ""
-	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
-		for _, candidate := range runtime.Kinds {
-			if candidate == detection.KindHint {
-				kind = detection.KindHint
-				break
-			}
-		}
-	}
-	m, err := manifest.DefaultStack(recipeID, name, "", description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, "", description, detectedRuntimeKind(recipeID, detection))
 	if err != nil {
 		return manifest.Manifest{}, err
 	}
@@ -347,6 +322,15 @@ func newInitCommand(opts *options) *cobra.Command {
 				}
 				name = filepath.Base(absolute)
 			}
+			path := filepath.Join(root, manifest.Filename)
+			reviewExisting := "run: bob plan " + root + " --json"
+			existing := false
+			if info, statErr := os.Lstat(path); statErr == nil && info.Mode().IsRegular() {
+				existing = true
+				if write {
+					return classifyInvalidInput(fmt.Errorf("init: %s already exists; refusing to overwrite it (review it with bob plan %s --json, or edit it by hand)", path, root))
+				}
+			}
 
 			detection := detect.Detect(root)
 			chosen, err := chooseInitRecipe(recipeID, detection)
@@ -365,6 +349,15 @@ func newInitCommand(opts *options) *cobra.Command {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", mismatch)
 				}
 			}
+			nextActions := []string{"rerun with --write", "review with bob plan"}
+			if existing {
+				warning := fmt.Sprintf("%s already exists; init --write will refuse to overwrite it, review the existing manifest with bob plan instead", path)
+				warnings = append(warnings, warning)
+				nextActions = []string{reviewExisting}
+				if !opts.json {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\nnext: %s\n", warning, reviewExisting)
+				}
+			}
 
 			m, err := buildInitManifest(chosen, name, module, description, detection)
 			if err != nil {
@@ -375,13 +368,12 @@ func newInitCommand(opts *options) *cobra.Command {
 			}
 			if !write {
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": filepath.Join(root, manifest.Filename), "manifest": m, "detection": detection, "written": false}, warnings, []string{"rerun with --write", "review with bob plan"})
+					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": path, "manifest": m, "detection": detection, "written": false}, warnings, nextActions)
 				}
 				data, _ := manifest.Encode(m)
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), string(data))
 				return err
 			}
-			path := filepath.Join(root, manifest.Filename)
 			if err := manifest.WriteFile(path, m, false); err != nil {
 				return fmt.Errorf("init: %w", err)
 			}
@@ -406,26 +398,10 @@ func newInitCommand(opts *options) *cobra.Command {
 // otherwise the historical go-agent-tool default for empty or unrecognized
 // repositories.
 func chooseInitRecipe(explicit string, detection detect.Result) (string, error) {
-	if explicit != "" {
-		if explicit == manifest.RecipeFiles {
-			return "", errors.New("recipe files declares its file tree inline; write bob.yaml by hand instead of using bob init")
-		}
-		if _, err := recipe.Version(explicit); err != nil {
-			return "", err
-		}
-		return explicit, nil
+	if explicit == manifest.RecipeFiles {
+		return "", errors.New("recipe files declares its file tree inline; write bob.yaml by hand instead of using bob init")
 	}
-	if detection.Detected() {
-		// Honor agent-tool hint: existing bob.yaml recipe:go-agent-tool or Cobra layout.
-		if detection.Primary == "go" && detection.KindHint == "agent-tool" {
-			return manifest.RecipeGoAgentTool, nil
-		}
-		if id, ok := recipe.ForStack(detection.Primary); ok {
-			return id, nil
-		}
-		return "", fmt.Errorf("no built-in recipe matches the detected stack %s; available recipes: %s (rerun with --recipe <id>)", detection.Describe(), strings.Join(recipe.IDs(), ", "))
-	}
-	return manifest.RecipeGoAgentTool, nil
+	return selectRecipe(explicit, detection)
 }
 
 // initStackMismatch reports a non-empty human-readable mismatch description
@@ -465,16 +441,7 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 		}
 		return manifest.Default(name, module, description), nil
 	}
-	kind := ""
-	if runtime, ok := manifest.StackRecipeRuntime(recipeID); ok {
-		for _, candidate := range runtime.Kinds {
-			if candidate == detection.KindHint {
-				kind = detection.KindHint
-				break
-			}
-		}
-	}
-	m, err := manifest.DefaultStack(recipeID, name, module, description, kind)
+	m, err := manifest.DefaultStack(recipeID, name, module, description, detectedRuntimeKind(recipeID, detection))
 	if err != nil {
 		return manifest.Manifest{}, err
 	}
@@ -567,6 +534,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 						data := map[string]any{
 							"expected_plan_digest": mismatch.ExpectedPlanDigest,
 							"actual_plan_digest":   mismatch.ActualPlanDigest,
+							"converged":            result.Plan.Clean(),
 							"error": map[string]string{
 								"code":    "plan_digest_mismatch",
 								"message": mismatch.Error(),
@@ -620,6 +588,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 
 func newRemoveCommand(opts *options) *cobra.Command {
 	var force, dryRun bool
+	var expectedRemovalDigest string
 	cmd := &cobra.Command{
 		Use:   "remove [path]",
 		Short: "Remove Bob-managed files and bob.lock from a workspace",
@@ -627,8 +596,15 @@ func newRemoveCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
-			result, err := engine.Remove(root, engine.RemoveOptions{Force: force, DryRun: dryRun})
+			result, err := engine.Remove(root, engine.RemoveOptions{Force: force, DryRun: dryRun, ExpectedRemovalDigest: expectedRemovalDigest})
 			if err != nil {
+				var mismatch *engine.RemovalDigestMismatchError
+				if errors.As(err, &mismatch) {
+					return removalDigestMismatchFailure(cmd, opts, root, mismatch)
+				}
+				if errors.Is(err, engine.ErrInvalidRemovalDigest) {
+					return classifyInvalidInput(err)
+				}
 				if errors.Is(err, engine.ErrNoLock) {
 					return classifyInvalidInput(err)
 				}
@@ -670,7 +646,37 @@ func newRemoveCommand(opts *options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "remove managed files even when their content drifted from bob.lock")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed without removing anything")
+	cmd.Flags().StringVar(&expectedRemovalDigest, "expect-removal-digest", "", "remove only when a fresh removal decision matches this exact sha256:<64-lowercase-hex> digest from remove --dry-run")
 	return cmd
+}
+
+// removalDigestMismatchFailure reports a reviewed removal digest that no
+// longer matches the workspace. Nothing was deleted.
+func removalDigestMismatchFailure(cmd *cobra.Command, opts *options, root string, mismatch *engine.RemovalDigestMismatchError) error {
+	failure := newExitError(ExitPlanMismatch, fmt.Errorf("remove: %w", mismatch))
+	next := []string{
+		"run: " + withWorkspaceArg("bob remove", root) + " --dry-run --json",
+		"review the new removal before rerunning with --expect-removal-digest <data.removal_digest>",
+	}
+	if !opts.json {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "bob:", failure)
+		for _, step := range next {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", step)
+		}
+		return reportedError{err: failure}
+	}
+	data := map[string]any{
+		"expected_removal_digest": mismatch.ExpectedRemovalDigest,
+		"actual_removal_digest":   mismatch.ActualRemovalDigest,
+		"error": map[string]string{
+			"code":    "plan_digest_mismatch",
+			"message": mismatch.Error(),
+		},
+	}
+	if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "remove", data, nil, next); emitErr != nil {
+		return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+	}
+	return reportedError{err: failure}
 }
 
 func printRemove(w io.Writer, result *engine.RemoveResult, dryRun bool) error {
@@ -697,7 +703,13 @@ func printRemove(w io.Writer, result *engine.RemoveResult, dryRun bool) error {
 	if dryRun {
 		prefix = "dry-run: "
 	}
-	_, err := fmt.Fprintf(w, "%sremoved %d, skipped %d, conflicts %d; lock removed: %t\n", prefix, len(result.Removed), len(result.Skipped), len(result.Conflicts), result.LockRemoved)
+	if _, err := fmt.Fprintf(w, "%sremoved %d, skipped %d, conflicts %d; lock removed: %t\n", prefix, len(result.Removed), len(result.Skipped), len(result.Conflicts), result.LockRemoved); err != nil {
+		return err
+	}
+	if !dryRun {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "removal digest: %s (v%d)\n", result.RemovalDigest, result.RemovalDigestVersion)
 	return err
 }
 
@@ -748,26 +760,28 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			}
 			captureWorkspaceMetrics(opts, root, m.Recipe)
 			if !needsUpgrade {
-				if expectedPlanDigest != "" {
-					artifacts, renderErr := recipe.Render(m)
-					if renderErr != nil {
-						return classifyInvalidInput(renderErr)
+				artifacts, renderErr := recipe.Render(m)
+				if renderErr != nil {
+					return classifyInvalidInput(renderErr)
+				}
+				plan, planErr := engine.Plan(root, m, artifacts)
+				if planErr != nil {
+					return fmt.Errorf("upgrade: %w", planErr)
+				}
+				digest := engine.DigestPlan(plan)
+				if expectedPlanDigest != "" && digest.Qualified() != expectedPlanDigest {
+					mismatch := &engine.PlanDigestMismatchError{
+						ExpectedPlanDigest: expectedPlanDigest,
+						ActualPlanDigest:   digest.Qualified(),
 					}
-					plan, planErr := engine.Plan(root, m, artifacts)
-					if planErr != nil {
-						return fmt.Errorf("upgrade: %w", planErr)
-					}
-					digest := engine.DigestPlan(plan)
-					if digest.Qualified() != expectedPlanDigest {
-						mismatch := &engine.PlanDigestMismatchError{
-							ExpectedPlanDigest: expectedPlanDigest,
-							ActualPlanDigest:   digest.Qualified(),
-						}
-						return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
-					}
+					return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch, plan.Clean())
 				}
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "upgrade", engine.UpgradeResult{FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{}}, nil, []string{"repository is already at the current recipe version"})
+					current := engine.UpgradeResult{
+						FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{},
+						PlanDigest: digest.Qualified(), PlanDigestVersion: digest.Version,
+					}
+					return emitJSON(cmd.OutOrStdout(), "upgrade", current, nil, []string{"repository is already at the current recipe version"})
 				}
 				_, err := fmt.Fprintf(cmd.OutOrStdout(), "already at recipe version %d; nothing to upgrade\n", to)
 				return err
@@ -779,7 +793,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			if err != nil {
 				var mismatch *engine.PlanDigestMismatchError
 				if errors.As(err, &mismatch) {
-					return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
+					return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch, result.Plan.Clean())
 				}
 				if errors.Is(err, engine.ErrInvalidPlanDigest) {
 					return classifyInvalidInput(err)
@@ -817,7 +831,13 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 				verb = "would upgrade"
 				prefix = "dry-run: "
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s%s recipe %s from v%d to v%d: %d files written\n", prefix, verb, result.Recipe, result.FromVersion, result.ToVersion, result.Actions)
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s%s recipe %s from v%d to v%d: %d files written\n", prefix, verb, result.Recipe, result.FromVersion, result.ToVersion, result.Actions); err != nil {
+				return err
+			}
+			if !dryRun {
+				return nil
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "plan digest: %s (v%d)\n", result.PlanDigest, result.PlanDigestVersion)
 			return err
 		},
 	}
@@ -830,13 +850,16 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 // longer matches the current workspace, whether the mismatch was discovered
 // against a needed migration or against a workspace already at the current
 // recipe version. It mirrors apply's digest-mismatch exit code and JSON error
-// shape exactly.
-func upgradePlanDigestMismatchFailure(cmd *cobra.Command, opts *options, root string, mismatch *engine.PlanDigestMismatchError) error {
+// shape exactly. converged reports whether the fresh plan is already clean,
+// for example because an earlier guarded run succeeded but its response was
+// lost.
+func upgradePlanDigestMismatchFailure(cmd *cobra.Command, opts *options, root string, mismatch *engine.PlanDigestMismatchError, converged bool) error {
 	failure := newExitError(ExitPlanMismatch, fmt.Errorf("upgrade: %w", mismatch))
 	if opts.json {
 		data := map[string]any{
 			"expected_plan_digest": mismatch.ExpectedPlanDigest,
 			"actual_plan_digest":   mismatch.ActualPlanDigest,
+			"converged":            converged,
 			"error": map[string]string{
 				"code":    "plan_digest_mismatch",
 				"message": mismatch.Error(),
@@ -865,13 +888,7 @@ func newCheckCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("check: %w", err)
 			}
 			capturePlanMetrics(opts, root, plan)
-			clean := !plan.LockChanged
-			for _, action := range plan.Actions {
-				if action.Kind != engine.ActionUnchanged {
-					clean = false
-					break
-				}
-			}
+			clean := plan.Clean()
 			var failure error
 			if !clean {
 				code := ExitDrift
@@ -1000,7 +1017,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "playbook", "purpose": "list, show, or resolve a closed recipe procedure without executing its steps", "mutates": false, "json": true},
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
-		{"name": "remove", "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews", "mutates": true, "json": true},
+		{"name": "remove", "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews, and --expect-removal-digest binds a real removal to a reviewed dry-run digest (a namespace separate from the plan digest)", "mutates": true, "json": true},
 		{"name": "upgrade", "purpose": "upgrade bob.lock to the current recipe version; --dry-run previews, --expect-plan-digest gates authority", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
 		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
@@ -1042,7 +1059,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		"json_envelope": map[string]any{
 			"flag":   "--json",
 			"fields": []string{"schema_version", "ok", "command", "data", "warnings", "next_actions"},
-			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
+			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Two exceptions keep their normal data and carry no data.error: check on drift and doctor reporting a required tool missing or unusable; both emit ok:false and the non-zero exit code is the signal. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
 		},
 		"invariants": []string{
 			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
@@ -1055,11 +1072,11 @@ func newLearnCommand(opts *options) *cobra.Command {
 		},
 		"exit_codes": map[string]string{
 			"0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
-			"1": "unclassified command failure, or doctor reporting required tools missing",
+			"1": "unclassified command failure (command_failed), an unresolvable workspace path (workspace_invalid), another mutating operation holding the workspace lock (workspace_busy), or doctor reporting required tools missing or unusable",
 			"2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
 			"3": "check found drift with no ownership conflict",
-			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, or missing/incompatible ownership state for remove or upgrade",
-			"5": "guarded apply or upgrade refused because the fresh plan differs from the reviewed plan digest",
+			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, bob init --write refusing an existing bob.yaml or a recipe that does not match the detected stack, or missing/incompatible ownership state for remove or upgrade",
+			"5": "guarded apply, upgrade, or remove refused because the fresh plan or removal decision differs from the reviewed digest",
 		},
 		"error_codes": map[string]string{
 			"missing_manifest":     "no bob.yaml was found at the resolved workspace path",
@@ -1067,7 +1084,8 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"input_invalid":        "a flag, argument, or recipe id was invalid",
 			"conflicts":            "the plan contains ownership conflicts, or remove skipped or rejected managed paths; the requested mutation did not complete",
 			"workspace_invalid":    "the workspace path could not be resolved safely",
-			"plan_digest_mismatch": "the fresh apply or upgrade plan differs from the explicitly reviewed plan digest; no repository writes occurred",
+			"plan_digest_mismatch": "the fresh apply or upgrade plan — or the reviewed removal decision — differs from the explicitly reviewed digest; no repository writes occurred",
+			"workspace_busy":       "another mutating bob operation holds the workspace lock; no repository writes occurred; retry once it finishes",
 			"command_failed":       "an unclassified failure; read the message for detail",
 		},
 		"mcp": map[string]any{
@@ -1099,7 +1117,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("Guarantees: context/path/playbook/plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
 			b.WriteString("Guidance: context describes the workspace contract; path classifies one exact repository path; playbook resolves a closed typed procedure but never executes it.\n")
 			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")
-			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
+			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, workspace_busy, command_failed) plus next_actions with runnable corrective commands, except check on drift and doctor with a missing or unusable required tool, which keep their normal data and signal through the exit code; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
 			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web, go-hygiene) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
@@ -1461,13 +1479,14 @@ func planNextActions(plan engine.PlanResult, workspace string) []string {
 		}
 		return []string{"resolve unmanaged or modified-file conflicts", withWorkspaceArg("rerun bob plan", workspace)}
 	}
+	applyCommand := withWorkspaceArg("run bob apply", workspace) + " --expect-plan-digest " + engine.DigestPlan(plan).Qualified()
 	for _, action := range plan.Actions {
 		if action.Kind != engine.ActionUnchanged {
-			return []string{"review the plan", withWorkspaceArg("run bob apply", workspace)}
+			return []string{"review the plan", applyCommand}
 		}
 	}
 	if plan.LockChanged {
-		return []string{"review the lock update", withWorkspaceArg("run bob apply", workspace)}
+		return []string{"review the lock update", applyCommand}
 	}
 	return []string{"repository is converged"}
 }

@@ -7,6 +7,69 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+### Fixed
+
+- `bob init` and stack detection: when `bob.yaml` already declares a recipe,
+  that declared recipe now wins over the Cobra-layout heuristic, so a
+  `go-hygiene` repository is no longer misreported as `go-agent-tool`. The
+  `bob.yaml` scan is bounded to 64 KiB and rejects a non-regular file.
+- Drift recovery guidance now suggests reviewing the plan and applying it bound
+  to the reviewed digest (`bob apply <workspace> --expect-plan-digest
+  <data.plan_digest>`) instead of an unguarded `bob apply`.
+- `bob init --write` now refuses when a regular-file `bob.yaml` already exists,
+  exiting `4` (`input_invalid`, previously `1` / `command_failed`) with a message
+  that names `bob plan` and leaving the file untouched; the preview warns and
+  points at `bob plan` instead of suggesting `--write`.
+
+### Changed
+
+- Docs: `bob check --json` on drift and a not-ready `bob doctor --json` keep
+  their normal `data`, carry no `data.error`, and signal with the exit code; the
+  failure-envelope and error-code references now state this. `seed_exists` is
+  documented as a non-conflict action code.
+- MCP `bob_plan` and `bob_check` drift continuations now carry `bob apply
+  <workspace> --expect-plan-digest <sha256:...>` instead of an unguarded
+  `bob apply`.
+- `bob init` and `bob new` stack detection: the Cobra-layout `go-agent-tool`
+  hint now also requires `github.com/spf13/cobra` in `go.mod`, so a Cobra-shaped
+  layout without the dependency falls back to `go-hygiene`.
+- The `bob learn` brief now matches the corrected envelope contract, naming
+  `check` on drift and a not-ready `doctor` as the exceptions that keep their
+  normal `data` with no `data.error`.
+- `bob plan` next-actions for a pending change or a lock update now include
+  `bob apply <workspace> --expect-plan-digest <sha256:...>`.
+- Bob Console's detection hint and captured `learn` demo now match the CLI's
+  detection rule and corrected envelope contract.
+- A held workspace apply lock now returns the typed `workspace_busy` error code
+  (still exit `1`; previously mislabelled `workspace_invalid`) with retry
+  guidance, and the `apply`/`upgrade` `plan_digest_mismatch` payloads now
+  include `converged`.
+- An `upgrade` on an already-current workspace now builds a plan so it can
+  report its digest; I/O errors that `plan`, `check`, or `apply` would already
+  surface are no longer a silent no-op.
+
+### Added
+
+- Examples for the `go-hygiene`, `python-app`, and `rust-cli` recipes.
+- Examples for the remaining stack recipes (`js-app`, `vue-app`, `nuxt-app`,
+  `ruby-app`, `lua-lib`, `static-web`), so every built-in recipe ships one.
+- The `AGENTS.md` and `docs/architecture.md` package maps list every
+  `internal/` package (`detect`, `fsutil`, `strsim`).
+- A Glyphrun spec covers the `bob check` exit-code contract: `0` when converged,
+  `3` for safe drift, and `2` for a conflict.
+- `bob remove --expect-removal-digest` binds a real removal to the digest of a
+  reviewed `remove --dry-run`, so the only destructive command is reviewed-bound
+  like apply and upgrade. The removal digest is a separate namespace from the
+  plan digest, and includes the `force` decision and the exact `bob.lock` bytes.
+- Test-only digest goldens pin every published recipe contract (`files@1`,
+  every `*@2` stack recipe with its kind and package-manager variants, and
+  `go-agent-tool@6`), with a coverage guard that fails when a recipe or version
+  ships unpinned.
+- `bob upgrade` now reports `data.plan_digest` and `data.plan_digest_version`
+  (on `--dry-run`, a real upgrade, and an already-current workspace), and the
+  human dry-run prints a `plan digest:` line, so the value
+  `--expect-plan-digest` needs is visible without a separate `bob plan`.
+
 ## [0.12.0] - 2026-09-28
 
 ### Added

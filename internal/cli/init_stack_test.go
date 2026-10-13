@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -299,7 +300,7 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 		{
 			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
 			files: map[string]string{
-				"go.mod":               "module example.com/cli\ngo 1.26\n",
+				"go.mod":               "module example.com/cli\ngo 1.26\n\nrequire github.com/spf13/cobra v1.9.1\n",
 				"cmd/demo/main.go":     "package main\n",
 				"internal/cli/root.go": "package cli\n",
 			},
@@ -336,10 +337,87 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 	}
 }
 
+const existingManifestFixture = "schema_version: 1\nrecipe: go-agent-tool\nproduct:\n  name: demo\n  module: example.com/cli\n"
+
+func TestInitPreviewWarnsWhenManifestExists(t *testing.T) {
+	t.Parallel()
+	root := writeStackFixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\ngo 1.26\n",
+		"bob.yaml": existingManifestFixture,
+	})
+	_, stderr, err := executeForTest("init", root)
+	if err != nil {
+		t.Fatalf("preview must still render: %v\n%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "already exists") || !strings.Contains(stderr, "bob plan") {
+		t.Fatalf("expected existing-manifest warning on stderr: %s", stderr)
+	}
+	if strings.Contains(stderr, "rerun with --write") {
+		t.Fatalf("preview must not suggest --write over an existing manifest: %s", stderr)
+	}
+
+	stdout, _, err := executeForTest("init", root, "--json")
+	if err != nil {
+		t.Fatalf("json preview: %v\n%s", err, stdout)
+	}
+	var envelope struct {
+		OK          bool     `json:"ok"`
+		Warnings    []string `json:"warnings"`
+		NextActions []string `json:"next_actions"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, stdout)
+	}
+	if !envelope.OK || len(envelope.Warnings) == 0 || !strings.Contains(strings.Join(envelope.Warnings, "\n"), "already exists") {
+		t.Fatalf("expected existing-manifest warning in envelope: %s", stdout)
+	}
+	joined := strings.Join(envelope.NextActions, "\n")
+	if strings.Contains(joined, "rerun with --write") || !strings.HasPrefix(joined, "run: bob plan ") || !strings.HasSuffix(joined, filepath.Base(root)+" --json") {
+		t.Fatalf("next_actions must point at the existing manifest: %s", stdout)
+	}
+}
+
+func TestInitWriteRefusesExistingManifest(t *testing.T) {
+	t.Parallel()
+	root := writeStackFixture(t, map[string]string{
+		"go.mod":   "module example.com/cli\ngo 1.26\n",
+		"bob.yaml": existingManifestFixture,
+	})
+	_, _, err := executeForTest("init", root, "--write")
+	if err == nil || ExitCode(err) != ExitInvalidInput {
+		t.Fatalf("expected exit %d, got %d err=%v", ExitInvalidInput, ExitCode(err), err)
+	}
+	if !strings.Contains(err.Error(), "bob plan") {
+		t.Fatalf("refusal must name bob plan: %v", err)
+	}
+
+	var failureOut, failureErr bytes.Buffer
+	err = execute([]string{"--json", "init", root, "--write"}, Dependencies{Out: &failureOut, ErrOut: &failureErr, Prober: testProber{}, IntegrationRunner: testIntegrationRunner{}})
+	stdout := failureOut.String()
+	if err == nil || ExitCode(err) != ExitInvalidInput {
+		t.Fatalf("json: expected exit %d, got %d err=%v", ExitInvalidInput, ExitCode(err), err)
+	}
+	var failed struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		} `json:"data"`
+	}
+	if decodeErr := json.Unmarshal([]byte(stdout), &failed); decodeErr != nil || failed.OK || failed.Data.Error.Code != "input_invalid" {
+		t.Fatalf("expected input_invalid envelope: %s decode=%v", stdout, decodeErr)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "bob.yaml"))
+	if err != nil || string(data) != existingManifestFixture {
+		t.Fatalf("existing bob.yaml must stay byte-identical: %q err=%v", data, err)
+	}
+}
+
 func TestInitReadsGoModuleFromGoMod(t *testing.T) {
 	t.Parallel()
 	root := writeStackFixture(t, map[string]string{
-		"go.mod":               "module github.com/acme/acme-tool\n\ngo 1.26.6\n",
+		"go.mod":               "module github.com/acme/acme-tool\n\ngo 1.26.6\n\nrequire github.com/spf13/cobra v1.9.1\n",
 		"cmd/acme/main.go":     "package main\n",
 		"internal/cli/root.go": "package cli\n",
 	})

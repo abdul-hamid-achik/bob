@@ -148,3 +148,17 @@ func (p PlanResult) DominantConflictFamily() ActionFamily {
 // this plan was calculated. LockChanged is true both for lock drift and for
 // "the recipe was never applied"; LockExists distinguishes the two.
 func (p PlanResult) LockExists() bool { return p.lockExists }
+
+// Clean reports whether applying this plan would change nothing: no
+// conflicts, no bob.lock change, and every action unchanged.
+func (p PlanResult) Clean() bool {
+	if p.HasConflicts() || p.LockChanged {
+		return false
+	}
+	for _, action := range p.Actions {
+		if action.Kind != ActionUnchanged {
+			return false
+		}
+	}
+	return true
+}

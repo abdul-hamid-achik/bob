@@ -755,3 +755,27 @@ func TestApplyRefusesExistingWorkspaceLock(t *testing.T) {
 		t.Fatalf("locked apply wrote artifact: %v", statErr)
 	}
 }
+
+func TestPlanResultClean(t *testing.T) {
+	unchanged := Action{Path: "a", Kind: ActionUnchanged}
+	tests := []struct {
+		name string
+		plan PlanResult
+		want bool
+	}{
+		{name: "lock changed", plan: PlanResult{LockChanged: true, lockExists: true, Actions: []Action{unchanged}}, want: false},
+		{name: "conflict", plan: PlanResult{ConflictCount: 1, lockExists: true, Actions: []Action{unchanged, {Path: "b", Kind: ActionConflict}}}, want: false},
+		{name: "adopt", plan: PlanResult{lockExists: true, Actions: []Action{unchanged, {Path: "b", Kind: ActionAdopt}}}, want: false},
+		{name: "update", plan: PlanResult{lockExists: true, Actions: []Action{{Path: "b", Kind: ActionUpdate}}}, want: false},
+		{name: "create", plan: PlanResult{lockExists: true, Actions: []Action{{Path: "b", Kind: ActionCreate}}}, want: false},
+		{name: "all unchanged with lock", plan: PlanResult{lockExists: true, Actions: []Action{unchanged, {Path: "b", Kind: ActionUnchanged}}}, want: true},
+		{name: "empty plan without lock change", plan: PlanResult{}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.plan.Clean(); got != tt.want {
+				t.Fatalf("Clean() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}

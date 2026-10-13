@@ -26,13 +26,17 @@ type UpgradeOptions struct {
 // plan so transports can surface conflict detail; it is deliberately excluded
 // from the wire format, which stays bounded to the migration summary.
 type UpgradeResult struct {
-	FromVersion int        `json:"from_version"`
-	ToVersion   int        `json:"to_version"`
-	Recipe      string     `json:"recipe"`
-	Applied     bool       `json:"applied"`
-	Actions     int        `json:"actions"`
-	Written     []string   `json:"written,omitempty"`
-	Plan        PlanResult `json:"-"`
+	FromVersion int      `json:"from_version"`
+	ToVersion   int      `json:"to_version"`
+	Recipe      string   `json:"recipe"`
+	Applied     bool     `json:"applied"`
+	Actions     int      `json:"actions"`
+	Written     []string `json:"written,omitempty"`
+	// PlanDigest is the qualified digest of the fresh plan this migration
+	// reviewed or applied; it is the value --expect-plan-digest accepts.
+	PlanDigest        string     `json:"plan_digest,omitempty"`
+	PlanDigestVersion int        `json:"plan_digest_version,omitempty"`
+	Plan              PlanResult `json:"-"`
 }
 
 // UpgradeStatus is the read-only recipe-version check. It returns the lock's
@@ -97,6 +101,23 @@ func Upgrade(root string, opts UpgradeOptions) (*UpgradeResult, error) {
 		Written:     []string{},
 	}
 	if !needsUpgrade {
+		artifacts, renderErr := recipe.Render(m)
+		if renderErr != nil {
+			return nil, fmt.Errorf("upgrade: %w: render recipe: %w", ErrWorkspaceContract, renderErr)
+		}
+		plan, planErr := Plan(canonicalRoot, m, artifacts)
+		if planErr != nil {
+			return nil, fmt.Errorf("upgrade: %w", planErr)
+		}
+		result.Plan = plan
+		digest := DigestPlan(plan)
+		result.setPlanDigest(digest)
+		if opts.ExpectedPlanDigest != "" && opts.ExpectedPlanDigest != digest.Qualified() {
+			return result, &PlanDigestMismatchError{
+				ExpectedPlanDigest: opts.ExpectedPlanDigest,
+				ActualPlanDigest:   digest.Qualified(),
+			}
+		}
 		return result, nil
 	}
 	if opts.DryRun {
@@ -110,6 +131,7 @@ func Upgrade(root string, opts UpgradeOptions) (*UpgradeResult, error) {
 			return result, fmt.Errorf("upgrade: %w", planErr)
 		}
 		digest := DigestPlan(plan)
+		result.setPlanDigest(digest)
 		if opts.ExpectedPlanDigest != "" && opts.ExpectedPlanDigest != digest.Qualified() {
 			return result, &PlanDigestMismatchError{
 				ExpectedPlanDigest: opts.ExpectedPlanDigest,
@@ -129,6 +151,9 @@ func Upgrade(root string, opts UpgradeOptions) (*UpgradeResult, error) {
 	}
 	applyResult, applyErr := ApplyWorkspaceWithOptions(canonicalRoot, opts.ApplyOptions)
 	result.Plan = applyResult.Plan
+	if applyResult.Plan.Recipe.ID != "" {
+		result.setPlanDigest(DigestPlan(applyResult.Plan))
+	}
 	if applyErr != nil {
 		if errors.Is(applyErr, ErrPlanConflicts) {
 			return result, fmt.Errorf("upgrade: %w", ErrPlanConflicts)
@@ -139,4 +164,9 @@ func Upgrade(root string, opts UpgradeOptions) (*UpgradeResult, error) {
 	result.Written = applyResult.Written
 	result.Actions = len(applyResult.Written)
 	return result, nil
+}
+
+func (r *UpgradeResult) setPlanDigest(digest PlanDigest) {
+	r.PlanDigest = digest.Qualified()
+	r.PlanDigestVersion = digest.Version
 }

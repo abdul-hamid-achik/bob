@@ -208,13 +208,7 @@ func Load(root string, options Options) (Result, error) {
 }
 
 func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata recipe.Metadata, lookPath func(string) (string, error)) Result {
-	clean := !plan.LockChanged
-	for _, action := range plan.Actions {
-		if action.Kind != engine.ActionUnchanged {
-			clean = false
-			break
-		}
-	}
+	clean := plan.Clean()
 	state := "drifted"
 	if plan.HasConflicts() {
 		state = "conflicted"

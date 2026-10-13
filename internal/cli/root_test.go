@@ -416,6 +416,9 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 			MCP struct {
 				Tools []string `json:"tools"`
 			} `json:"mcp"`
+			JSONEnvelope struct {
+				Notes string `json:"notes"`
+			} `json:"json_envelope"`
 			ExitCodes  map[string]string `json:"exit_codes"`
 			ErrorCodes map[string]string `json:"error_codes"`
 		} `json:"data"`
@@ -472,7 +475,15 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 			t.Fatalf("learn data.exit_codes missing %q: %#v", code, got.Data.ExitCodes)
 		}
 	}
-	for _, code := range []string{"missing_manifest", "manifest_invalid", "input_invalid", "conflicts", "workspace_invalid", "plan_digest_mismatch", "command_failed"} {
+	for _, want := range []string{"check", "doctor"} {
+		if !strings.Contains(got.Data.JSONEnvelope.Notes, want) {
+			t.Fatalf("learn json_envelope.notes must mention %q: %q", want, got.Data.JSONEnvelope.Notes)
+		}
+	}
+	if !strings.Contains(got.Data.ExitCodes["1"], "workspace_invalid") || !strings.Contains(got.Data.ExitCodes["1"], "workspace_busy") || !strings.Contains(got.Data.ExitCodes["1"], "doctor") {
+		t.Fatalf("learn exit_codes[\"1\"] must name workspace_invalid, workspace_busy, and doctor: %q", got.Data.ExitCodes["1"])
+	}
+	for _, code := range []string{"missing_manifest", "manifest_invalid", "input_invalid", "conflicts", "workspace_invalid", "plan_digest_mismatch", "workspace_busy", "command_failed"} {
 		if _, ok := got.Data.ErrorCodes[code]; !ok {
 			t.Fatalf("learn data.error_codes missing %q: %#v", code, got.Data.ErrorCodes)
 		}

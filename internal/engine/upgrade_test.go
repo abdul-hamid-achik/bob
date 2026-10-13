@@ -145,6 +145,40 @@ func TestUpgradeAlreadyCurrentIsNoOp(t *testing.T) {
 	}
 }
 
+// TestUpgradeAlreadyCurrentChecksExpectedDigest proves a guarded upgrade
+// against a workspace already at the current recipe version still compares
+// the reviewed digest, covering the race where another process finishes the
+// migration between a caller's status check and Upgrade.
+func TestUpgradeAlreadyCurrentChecksExpectedDigest(t *testing.T) {
+	t.Parallel()
+	root := setupVersionWorkspace(t, 6)
+
+	current, err := Upgrade(root, UpgradeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.PlanDigest == "" {
+		t.Fatal("current upgrade should report the fresh plan digest")
+	}
+	matched, err := Upgrade(root, UpgradeOptions{ApplyOptions: ApplyOptions{ExpectedPlanDigest: current.PlanDigest}})
+	if err != nil || matched.Applied {
+		t.Fatalf("matching digest result = %#v, %v", matched, err)
+	}
+
+	stale := "sha256:" + strings.Repeat("0", 64)
+	result, err := Upgrade(root, UpgradeOptions{ApplyOptions: ApplyOptions{ExpectedPlanDigest: stale}})
+	var mismatch *PlanDigestMismatchError
+	if !errors.As(err, &mismatch) || !errors.Is(err, ErrPlanDigestMismatch) {
+		t.Fatalf("stale digest error = %v, want PlanDigestMismatchError", err)
+	}
+	if mismatch.ExpectedPlanDigest != stale || mismatch.ActualPlanDigest != current.PlanDigest {
+		t.Fatalf("mismatch = %#v", mismatch)
+	}
+	if result == nil || result.PlanDigest != current.PlanDigest || !result.Plan.Clean() || result.Applied {
+		t.Fatalf("mismatch result = %#v", result)
+	}
+}
+
 func TestUpgradeNoLockErrors(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

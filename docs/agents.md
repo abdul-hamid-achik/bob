@@ -109,12 +109,23 @@ bob apply . --expect-plan-digest sha256:<64-lowercase-hex> --json
 ```
 
 Bob fresh-plans while holding its apply lock. A stale digest exits `5` with
-`plan_digest_mismatch` and writes nothing. A successful apply receipt proves
+`plan_digest_mismatch` and writes nothing; its `data.converged` is `true` when
+the fresh plan is already clean, for example because an earlier guarded run
+succeeded but its response was lost. A successful apply receipt proves
 which reconciliation Bob performed; it does not verify generated behavior.
 Preview recipe migration with `bob upgrade --dry-run --json` and bind a real
 upgrade to the reviewed plan digest when policy requires it. Preview teardown
 with `bob remove --dry-run --json`; remove affects only proven lock-owned files,
-not seed-once or unmanaged files, and preserves `bob.yaml`.
+not seed-once or unmanaged files, and preserves `bob.yaml`. The dry-run reports
+`removal_digest` and `removal_digest_version`; bind the real teardown to that
+reviewed decision by repeating the same flags with
+`--expect-removal-digest sha256:<64-lowercase-hex>`.
+The removal digest is a separate namespace from the plan digest: a plan digest
+never authorizes a removal and a removal digest never authorizes an apply. It
+covers the exact `bob.lock` bytes, the `--force` flag, and every managed path's
+hashes, mode, and removal decision, so a digest reviewed without `--force`
+cannot authorize a `--force` run. A stale digest exits `5` with
+`plan_digest_mismatch` and deletes nothing; a malformed digest exits `4`.
 
 ## The `--json` envelope contract
 
@@ -135,7 +146,8 @@ envelope to stdout and nothing else:
 - `schema_version` is `1`. Bob rejects wire formats it does not recognize
   rather than guessing at a shape.
 - `ok` is `true` on success. On failure it is `false`, and `data` carries an
-  error code and message instead of the command's normal result.
+  error code and message instead of the command's normal result. `check` and
+  `doctor` are the exceptions; see [Exit codes](#exit-codes).
 - `command` names the command that produced the envelope.
 - `warnings` and `next_actions` are always arrays, even when empty.
 - stdout carries only this JSON document. Diagnostics, Cobra usage text, and
@@ -150,24 +162,34 @@ envelope above.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), or an unresolvable workspace path (`workspace_invalid`). |
+| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), another mutating operation holding the workspace lock (`workspace_busy`), or `doctor` reporting required tools missing or unusable. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |
-| `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
+| `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest, or guarded remove refused because the fresh removal decision no longer matches the reviewed removal digest. No repository write occurred. |
 
 `bob check` is the deliberate special case: it exits non-zero when the
-repository or lock *would* change, even though its JSON body is a normal,
-successful plan. Non-zero here is the answer, not an error. Note that `2` and
-`3` are both "non-zero, drift found" — `2` means a conflict is in the mix and
-apply would refuse; `3` means every change is safe and apply would proceed.
+repository or lock *would* change. On drift, `bob check --json` emits `ok: false`
+with `data.clean: false`, `data.plan`, `data.plan_digest`, and
+`data.plan_digest_version`, and no `data.error`. Non-zero here is the answer,
+not an error. Note that `2` and `3` are both "non-zero, drift found" — `2` means
+a conflict is in the mix and apply would refuse; `3` means every change is safe
+and apply would proceed.
+
+`bob doctor` follows the same pattern. When a required tool is missing or
+unusable, it emits `ok: false` with its normal probe data and no `data.error`,
+and exits `1`.
 
 An agent scripting Bob should branch on the exit code first and only inspect
 `data` for detail — do not infer success from the presence of JSON alone.
 
 ## Error codes
 
-Every failure envelope carries `data.error.code`, one of:
+Every failure envelope carries `data.error.code`, one of the following — with
+two exceptions that keep their normal `data` and carry no `data.error`: `check`
+on drift, and `doctor` reporting a required tool missing or unusable (see
+[Exit codes](#exit-codes)). A `check` or `doctor` invocation that cannot load
+`bob.yaml` still returns an ordinary `data.error` envelope.
 
 | Code | Meaning |
 |---|---|
@@ -176,7 +198,8 @@ Every failure envelope carries `data.error.code`, one of:
 | `conflicts` | The plan contains one or more ownership conflicts; apply or upgrade refused every write. Remove also uses this code when a managed file is skipped or a managed path is unsafe. |
 | `input_invalid` | A flag, argument, or recipe id was invalid. |
 | `workspace_invalid` | The workspace path could not be resolved safely. |
-| `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest; review a new plan before authorizing mutation. |
+| `plan_digest_mismatch` | The fresh apply or upgrade plan differs from the explicitly reviewed plan digest, or the fresh remove decision differs from the reviewed removal digest; review again before authorizing mutation. |
+| `workspace_busy` | Another mutating Bob operation holds the workspace apply lock; no repository write occurred. Retry once it finishes. |
 | `command_failed` | An unclassified failure; read the message for detail. |
 
 Validation errors echo the offending value and, when one exists, the nearest
@@ -199,6 +222,7 @@ Non-conflict codes (safe to act on):
 | `mode_drift` | `update` | Managed file's mode would change; content already matches. |
 | `in_sync` | `unchanged` | Managed file already matches desired content and mode. |
 | `identical_content` | `adopt` | Unmanaged file already byte-matches; Bob may adopt it without writing. |
+| `seed_exists` | `unchanged` | A seed-once file already exists; Bob never updates or owns it. |
 
 Conflict codes (apply refuses the *entire* plan if any of these appear):
 
@@ -264,7 +288,8 @@ Map the error code straight to a corrective command — this is exactly what
 | `conflicts` | Inspect `data.conflicts` or actions with `kind: conflict`, resolve each path deliberately, then rerun the originating `bob apply` or `bob upgrade`; for remove, follow its listed `--force` or manual-path guidance. |
 | `input_invalid` | Fix the flag, argument, or recipe id the message names — check for a "did you mean" suggestion first. |
 | `workspace_invalid` | Pass an existing, non-symlink directory as the workspace path. |
-| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. |
+| `plan_digest_mismatch` | Run `bob plan --json`, review the new digest, then issue a new guarded apply or upgrade. For remove, rerun `bob remove --dry-run --json` with the same flags and review the new `removal_digest`. |
+| `workspace_busy` | Wait for the other Bob operation on the workspace to finish, then retry the same command. Do not delete `.bob.apply.lock` while a Bob process is running. |
 | `command_failed` | Read the message; it is the whole diagnosis. If it looks like a bug, `bob learn --json` won't help further — that's a report, not a retry loop. |
 
 Every failure envelope's `next_actions` array already contains this same

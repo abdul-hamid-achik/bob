@@ -99,6 +99,10 @@ removed.
   apply safety rules; dry-run is read-only and digest gating is available.
 - `remove` deletes only lock-owned files whose ownership is still proven,
   keeps the manifest and seed-once artifacts, and removes the lock last.
+  Optional `--expect-removal-digest` binds it to the removal decision reviewed
+  with `remove --dry-run`, recomputed under the workspace lock before the first
+  unlink; a mismatch deletes nothing. The removal digest is a separate
+  namespace from the plan digest.
 - All nine MCP tools have read-only repository effects. Manifest validation may
   also operate on bounded inline YAML; recipe description needs no workspace.
 - MCP starts with an exact workspace allowlist. `--allow-workspace` adds exact

@@ -277,7 +277,8 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 	}
 	recipeID = plan.Recipe.ID
 	recipeVersion = plan.Recipe.Version
-	counts, clean, warnings, nextActions := summarizePlan(root, plan)
+	digest := engine.DigestPlan(plan)
+	counts, clean, warnings, nextActions := summarizePlan(root, plan, digest)
 	recordedCounts = counts
 	outcome, reason = telemetry.OutcomeOK, ""
 	if plan.HasConflicts() {
@@ -285,7 +286,6 @@ func (s *Server) handleCheck(ctx context.Context, _ *sdkmcp.CallToolRequest, in 
 	} else if !clean {
 		outcome, reason = telemetry.OutcomeDrift, telemetry.ReasonOwnershipConflict
 	}
-	digest := engine.DigestPlan(plan)
 	out := &CheckOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Workspace: root, Authority: s.authority.info(root),
 		PlanDigest: digest.SHA256, PlanDigestQualified: digest.Qualified(), Clean: clean, LockChanged: plan.LockChanged,
@@ -509,7 +509,8 @@ func projectAction(action engine.Action) PlanAction {
 }
 
 func (s *Server) projectPlan(root string, plan engine.PlanResult, includeUnchanged bool, maxActions int) *PlanOutput {
-	counts, clean, warnings, nextActions := summarizePlan(root, plan)
+	digest := engine.DigestPlan(plan)
+	counts, clean, warnings, nextActions := summarizePlan(root, plan, digest)
 	eligible := make([]PlanAction, 0, len(plan.Actions))
 	filteredUnchanged := 0
 	for _, action := range plan.Actions {
@@ -523,7 +524,6 @@ func (s *Server) projectPlan(root string, plan engine.PlanResult, includeUnchang
 	if returned > maxActions {
 		returned = maxActions
 	}
-	digest := engine.DigestPlan(plan)
 	out := &PlanOutput{
 		SchemaVersion: toolSchemaVersion, OK: true, Workspace: root, Authority: s.authority.info(root),
 		PlanDigest: digest.SHA256, PlanDigestQualified: digest.Qualified(), Clean: clean, LockChanged: plan.LockChanged,
@@ -550,7 +550,7 @@ func (s *Server) projectPlan(root string, plan engine.PlanResult, includeUnchang
 	return out
 }
 
-func summarizePlan(root string, plan engine.PlanResult) (inspectpkg.ActionCounts, bool, []string, []inspectpkg.CommandAction) {
+func summarizePlan(root string, plan engine.PlanResult, digest engine.PlanDigest) (inspectpkg.ActionCounts, bool, []string, []inspectpkg.CommandAction) {
 	var counts inspectpkg.ActionCounts
 	for _, action := range plan.Actions {
 		switch action.Kind {
@@ -566,7 +566,7 @@ func summarizePlan(root string, plan engine.PlanResult) (inspectpkg.ActionCounts
 			counts.Conflict++
 		}
 	}
-	clean := !plan.LockChanged && counts.Unchanged == len(plan.Actions)
+	clean := plan.Clean()
 	warnings := []string{}
 	nextActions := []inspectpkg.CommandAction{}
 	switch {
@@ -581,7 +581,7 @@ func summarizePlan(root string, plan engine.PlanResult) (inspectpkg.ActionCounts
 	default:
 		nextActions = append(nextActions, inspectpkg.CommandAction{
 			Reason: "apply the reviewed conflict-free plan through the approved shell path", CWD: root,
-			Argv: []string{"bob", "apply", root}, RequiresExplicitAuthority: true,
+			Argv: []string{"bob", "apply", root, "--expect-plan-digest", digest.Qualified()}, RequiresExplicitAuthority: true,
 		})
 	}
 	return counts, clean, warnings, nextActions
