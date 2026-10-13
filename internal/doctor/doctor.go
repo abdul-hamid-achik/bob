@@ -189,6 +189,9 @@ func stackTools(m manifest.Manifest) []tool {
 			{name: "Elixir", command: "elixir", args: []string{"--version"}, note: "runs the Elixir toolchain"},
 			{name: "Mix", command: "mix", args: []string{"--version"}, note: "builds and tests the Elixir project"},
 		},
+		"java": {
+			{name: "Java", command: "java", args: []string{"-version"}, note: "runs the Java toolchain"},
+		},
 	}
 	var optional []tool
 	if m.Runtime.Language == "typescript" || m.Runtime.Language == "javascript" {

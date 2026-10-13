@@ -94,6 +94,7 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 		"lua":        manifest.RecipeLuaLib,
 		"rust":       manifest.RecipeRustCLI,
 		"swift":      manifest.RecipeSwiftPkg,
+		"java":       manifest.RecipeJavaApp,
 		"elixir":     manifest.RecipeElixirApp,
 		"static-web": manifest.RecipeStaticWeb,
 	}
@@ -375,6 +376,7 @@ var stackExtraSeeds = map[string][]string{
 	manifest.RecipeElixirApp: {".formatter.exs"},
 	manifest.RecipeStaticWeb: {".htmlhintrc"},
 	manifest.RecipeGoHygiene: {".golangci.yml"},
+	manifest.RecipeJavaApp:   {},
 }
 
 func TestStackVersionOneBytesRemainImmutable(t *testing.T) {

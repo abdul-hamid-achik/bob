@@ -19,8 +19,8 @@ const maxDetectionFileBytes = 1 << 20
 
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
-	// ID is a closed identifier: go, rust, swift, elixir, python, ruby, lua,
-	// nuxt, vue, typescript, javascript, or static-web.
+	// ID is a closed identifier: go, rust, swift, java, elixir, python, ruby,
+	// lua, nuxt, vue, typescript, javascript, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -87,7 +87,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue/nuxt outrank the generic typescript/javascript stacks they imply.
-var primaryPrecedence = []string{"go", "rust", "swift", "elixir", "ruby", "python", "lua", "nuxt", "vue", "typescript", "javascript", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "swift", "java", "elixir", "ruby", "python", "lua", "nuxt", "vue", "typescript", "javascript", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -180,6 +180,17 @@ func Detect(root string) Result {
 	if names["Package.swift"] {
 		addStack("swift", "Package.swift")
 		kindHints["swift"] = "package"
+	}
+
+	// Java (Maven or Gradle).
+	var javaMarkers []string
+	for _, marker := range []string{"pom.xml", "build.gradle", "build.gradle.kts"} {
+		if names[marker] {
+			javaMarkers = append(javaMarkers, marker)
+		}
+	}
+	if len(javaMarkers) > 0 {
+		addStack("java", javaMarkers...)
 	}
 
 	// Elixir applications and umbrella projects.

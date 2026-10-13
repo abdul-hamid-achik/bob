@@ -57,7 +57,8 @@ Three kinds of recipe are embedded: `go-agent-tool@6`, documented below;
 `files@1`, a plain file-tree recipe documented in its own section further
 down; and the stack hygiene recipes (`ts-app@2`, `js-app@2`, `vue-app@2`,
 `nuxt-app@2`, `python-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
-`swift-package@2`, `elixir-app@2`, `static-web@2`, and `go-hygiene@2`),
+`java-app@2`, `swift-package@2`, `elixir-app@2`, `static-web@2`, and
+`go-hygiene@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
 guessing.
@@ -243,7 +244,7 @@ watching Bob report `content_update` on the next plan.
 ## The stack hygiene recipes
 
 `ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `python-app@2`, `ruby-app@2`,
-`lua-lib@2`, `rust-cli@2`, `swift-package@2`, `elixir-app@2`,
+`lua-lib@2`, `rust-cli@2`, `java-app@2`, `swift-package@2`, `elixir-app@2`,
 `static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
 **seed-once** artifacts `README.md`, `AGENTS.md`, `SECURITY.md`, `.gitignore`,
@@ -290,6 +291,7 @@ Schema, relative to `go-agent-tool`:
   | `ruby-app` | `ruby` | `app` or `gem` |
   | `lua-lib` | `lua` | `lib` or `plugin` |
   | `rust-cli` | `rust` | `cli`, `lib`, or `workspace` |
+  | `java-app` | `java` | `app` or `library` |
   | `swift-package` | `swift` | `package` |
   | `elixir-app` | `elixir` | `app` or `umbrella` |
   | `static-web` | `html` | `site` |
@@ -308,8 +310,9 @@ Schema, relative to `go-agent-tool`:
 `bob init` detects the repository stack from marker files (`go.mod`,
 `package.json`/`tsconfig.json`/lockfiles, a `nuxt` dependency or `nuxt.config.*`,
 a `vue` dependency or `.vue` files, `pyproject.toml`, `Gemfile`/`*.gemspec`,
-`*.rockspec`/`init.lua`/`lua/`, `Cargo.toml`, `Package.swift`, `mix.exs`, or a
-bare `index.html`) and defaults to the matching recipe.
+`*.rockspec`/`init.lua`/`lua/`, `Cargo.toml`, `Package.swift`, `mix.exs`,
+`pom.xml`/`build.gradle`/`build.gradle.kts`, or a bare `index.html`) and
+defaults to the matching recipe.
 When the chosen recipe's stack does not match the detected one, the preview
 warns and `--write` refuses without `--force`.
 

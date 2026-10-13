@@ -22,6 +22,8 @@ var publishedGoldens = map[string]string{
 	"go-hygiene@2/default":                     "9c95ddfa81352eaa3573303ba1bc53fdb3da226864cbf66ab52b94b3f1f7b2c2",
 	"go-hygiene@2/kind-lib":                    "9c95ddfa81352eaa3573303ba1bc53fdb3da226864cbf66ab52b94b3f1f7b2c2",
 	"go-hygiene@2/kind-app":                    "9c95ddfa81352eaa3573303ba1bc53fdb3da226864cbf66ab52b94b3f1f7b2c2",
+	"java-app@2/default":                       "e24563dbc137592c83687602cdf1ad3d03040ba9c0c4cf10bfa749a42a8e7225",
+	"java-app@2/kind-library":                  "e24563dbc137592c83687602cdf1ad3d03040ba9c0c4cf10bfa749a42a8e7225",
 	"js-app@2/default":                         "34bc930637961d20c422ead5d07bdf85ba97551f4bbeb408293f3e4b94c9a763",
 	"js-app@2/kind-monorepo":                   "34bc930637961d20c422ead5d07bdf85ba97551f4bbeb408293f3e4b94c9a763",
 	"js-app@2/pm-bun":                          "83612e06a98ea841d9bf24cfa793077d3cc5645eb1727d27099847f2f0302a56",
