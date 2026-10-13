@@ -217,10 +217,6 @@ func recheckManifestSource(root string, source []byte) error {
 	return nil
 }
 
-func planIsConverged(plan PlanResult) bool {
-	return plan.Clean()
-}
-
 func validateApplyOptions(options ApplyOptions) error {
 	if options.ExpectedPlanDigest == "" {
 		return nil

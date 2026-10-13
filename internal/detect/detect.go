@@ -14,8 +14,8 @@ import (
 	"strings"
 )
 
-// maxPackageJSONBytes bounds the only file detection parses.
-const maxPackageJSONBytes = 1 << 20
+// maxDetectionFileBytes bounds every manifest file detection parses.
+const maxDetectionFileBytes = 1 << 20
 
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
@@ -369,7 +369,7 @@ func regularFileExists(path string) bool {
 // yields the zero value: detection is advisory and must not fail init.
 func readPackageJSON(path string) packageJSON {
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > maxPackageJSONBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxDetectionFileBytes {
 		return packageJSON{}
 	}
 	data, err := os.ReadFile(path)
@@ -475,7 +475,7 @@ func hasSassFiles(root string, entries []os.DirEntry) bool {
 // fails init.
 func readGoModule(path string) string {
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > maxPackageJSONBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxDetectionFileBytes {
 		return ""
 	}
 	data, err := os.ReadFile(path)
@@ -504,7 +504,7 @@ const cobraModule = "github.com/spf13/cobra"
 // requires module, either as a single-line `require` directive or inside a
 // `require ( ... )` block. Read failures report false.
 func goModRequires(path, module string) bool {
-	data, ok := readBounded(path, maxPackageJSONBytes)
+	data, ok := readBounded(path, maxDetectionFileBytes)
 	if !ok {
 		return false
 	}
