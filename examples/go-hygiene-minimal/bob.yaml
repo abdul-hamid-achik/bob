@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: go-hygiene
+product:
+  name: go-hygiene-demo
+  description: A local-first, agent-ready Go repository.
+runtime:
+  language: go
+  kind: service
+distribution:
+  github_actions: true

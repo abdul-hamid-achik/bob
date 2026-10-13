@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: rust-cli
+product:
+  name: rust-cli-demo
+  description: A small Rust command-line tool
+runtime:
+  language: rust
+  kind: cli
+distribution:
+  github_actions: true
