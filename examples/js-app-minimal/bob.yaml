@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: js-app
+product:
+  name: acme-js
+  description: A plain JavaScript application with Bob-seeded hygiene files
+runtime:
+  language: javascript
+  kind: app
+distribution:
+  github_actions: true

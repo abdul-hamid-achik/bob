@@ -21,6 +21,14 @@ conflict-free plan.
   [`python-app-minimal/bob.yaml`](python-app-minimal/bob.yaml), and
   [`rust-cli-minimal/bob.yaml`](rust-cli-minimal/bob.yaml) demonstrate the Go,
   Python application, and Rust CLI stack hygiene contracts.
+- [`js-app-minimal/bob.yaml`](js-app-minimal/bob.yaml),
+  [`vue-app-minimal/bob.yaml`](vue-app-minimal/bob.yaml),
+  [`nuxt-app-minimal/bob.yaml`](nuxt-app-minimal/bob.yaml),
+  [`ruby-app-minimal/bob.yaml`](ruby-app-minimal/bob.yaml),
+  [`lua-lib-minimal/bob.yaml`](lua-lib-minimal/bob.yaml), and
+  [`static-web-minimal/bob.yaml`](static-web-minimal/bob.yaml) demonstrate the
+  JavaScript app, Vue app, Nuxt app, Ruby app, Lua library, and static web
+  stack hygiene contracts.
 
 Preview any example in a temporary directory by copying it as `bob.yaml`, then
 running `bob plan`. Review and replace the example module path before using

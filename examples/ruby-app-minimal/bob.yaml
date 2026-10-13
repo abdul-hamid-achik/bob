@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: ruby-app
+product:
+  name: acme-ruby
+  description: A Ruby application with Bob-seeded hygiene files
+runtime:
+  language: ruby
+  kind: app
+distribution:
+  github_actions: true
