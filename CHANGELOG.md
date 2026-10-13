@@ -50,6 +50,14 @@ and the project uses semantic versioning after the first tagged release.
   `internal/` package (`detect`, `fsutil`, `strsim`).
 - A Glyphrun spec covers the `bob check` exit-code contract: `0` when converged,
   `3` for safe drift, and `2` for a conflict.
+- `bob remove --expect-removal-digest` binds a real removal to the digest of a
+  reviewed `remove --dry-run`, so the only destructive command is reviewed-bound
+  like apply and upgrade. The removal digest is a separate namespace from the
+  plan digest, and includes the `force` decision and the exact `bob.lock` bytes.
+- Test-only digest goldens pin every published recipe contract (`files@1`,
+  every `*@2` stack recipe with its kind and package-manager variants, and
+  `go-agent-tool@6`), with a coverage guard that fails when a recipe or version
+  ships unpinned.
 
 ## [0.12.0] - 2026-09-28
 

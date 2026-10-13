@@ -1005,7 +1005,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "playbook", "purpose": "list, show, or resolve a closed recipe procedure without executing its steps", "mutates": false, "json": true},
 		{"name": "plan", "purpose": "compare recipe, lock, and working tree without writing", "mutates": false, "json": true},
 		{"name": "apply", "purpose": "apply one complete conflict-free repository plan; refuses all writes when any conflict exists", "mutates": true, "json": true},
-		{"name": "remove", "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews", "mutates": true, "json": true},
+		{"name": "remove", "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews, and --expect-removal-digest binds a real removal to a reviewed dry-run digest (a namespace separate from the plan digest)", "mutates": true, "json": true},
 		{"name": "upgrade", "purpose": "upgrade bob.lock to the current recipe version; --dry-run previews, --expect-plan-digest gates authority", "mutates": true, "json": true},
 		{"name": "check", "purpose": "exit non-zero when managed repository state would change; CI drift gate", "mutates": false, "json": true},
 		{"name": "doctor", "purpose": "probe required and selected optional development tools", "mutates": false, "json": true},
@@ -1064,7 +1064,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
 			"3": "check found drift with no ownership conflict",
 			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, bob init --write refusing an existing bob.yaml or a recipe that does not match the detected stack, or missing/incompatible ownership state for remove or upgrade",
-			"5": "guarded apply or upgrade refused because the fresh plan differs from the reviewed plan digest",
+			"5": "guarded apply, upgrade, or remove refused because the fresh plan or removal decision differs from the reviewed digest",
 		},
 		"error_codes": map[string]string{
 			"missing_manifest":     "no bob.yaml was found at the resolved workspace path",
@@ -1072,7 +1072,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"input_invalid":        "a flag, argument, or recipe id was invalid",
 			"conflicts":            "the plan contains ownership conflicts, or remove skipped or rejected managed paths; the requested mutation did not complete",
 			"workspace_invalid":    "the workspace path could not be resolved safely",
-			"plan_digest_mismatch": "the fresh apply or upgrade plan differs from the explicitly reviewed plan digest; no repository writes occurred",
+			"plan_digest_mismatch": "the fresh apply or upgrade plan — or the reviewed removal decision — differs from the explicitly reviewed digest; no repository writes occurred",
 			"command_failed":       "an unclassified failure; read the message for detail",
 		},
 		"mcp": map[string]any{
