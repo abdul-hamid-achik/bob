@@ -372,14 +372,28 @@ intent.
 
 ## Future architecture
 
-Future work may add:
+Future work may add, driven by explicit demand:
 
-- standalone `adopt` and `verify` workflows;
-- bounded, redacted persistent verification receipts;
-- additional recipe versions and languages;
-- explicit deletion and migration plans;
-- new ownership strategies, including managed blocks, only after their merge
-  semantics are separately specified and tested.
+- additional recipe versions and languages, added as new versioned IDs because
+  published recipe versions are immutable;
+- explicit deletion and migration plans: digest-gated `remove` and an upgrade
+  dry-run plan digest have shipped, and a first-class `retire` action stays
+  deferred until a recipe actually needs to drop a path.
+
+## Deliberately not planned
+
+These were evaluated and are intentionally not on the roadmap, because they
+would break a core invariant or cross Bob's product boundary:
+
+- standalone `adopt` and `verify` workflows. `verify` would execute generated
+  project commands, which specialist runners own, and adopting differing content
+  would turn a conflict into a destructive update.
+- bounded, redacted persistent verification receipts. Bob is not a verification
+  authority and persists no receipts; it exposes bindable receipt fields, and the
+  artifact store owns evidence.
+- new ownership strategies, including managed blocks. Bob owns whole files;
+  managed-block merge semantics are not planned, and `ownership.release` plus
+  seed-once files cover the common shared-file cases.
 
 Future features must remain clearly distinguishable from implemented behavior.
 They must preserve plan-before-mutation, explicit authority, workspace safety,

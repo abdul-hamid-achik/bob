@@ -47,6 +47,9 @@ and the project uses semantic versioning after the first tagged release.
 - An `upgrade` on an already-current workspace now builds a plan so it can
   report its digest; I/O errors that `plan`, `check`, or `apply` would already
   surface are no longer a silent no-op.
+- Docs: the future-architecture list now records the shipped safe increments and
+  marks the evaluated `adopt`/`verify`, persistent-receipt, and managed-block
+  items as deliberately not planned.
 
 ### Added
 

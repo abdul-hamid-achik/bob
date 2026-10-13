@@ -174,10 +174,13 @@ Bob currently does not:
 
 ## Future directions
 
-Possible later additions include digest-gated MCP apply, richer repository
-inspection, an explicit existing-repository adoption workflow, and bounded
-verification receipts. Those features must not weaken deterministic planning,
-whole-file ownership, or explicit mutation.
+Possible later additions include additional recipe versions and languages, and
+richer repository inspection. Digest-gated MCP apply shipped as the opt-in
+`bob_apply` tool. Standalone adoption/verification workflows and persistent
+verification receipts are deliberately not planned; see the
+[architecture notes](architecture.md#deliberately-not-planned). Later features
+must not weaken deterministic planning, whole-file ownership, or explicit
+mutation.
 
 ## Success criteria
 
