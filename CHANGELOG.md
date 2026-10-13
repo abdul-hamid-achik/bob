@@ -30,6 +30,9 @@ and the project uses semantic versioning after the first tagged release.
 - MCP `bob_plan` and `bob_check` drift continuations now carry `bob apply
   <workspace> --expect-plan-digest <sha256:...>` instead of an unguarded
   `bob apply`.
+- `bob init` and `bob new` stack detection: the Cobra-layout `go-agent-tool`
+  hint now also requires `github.com/spf13/cobra` in `go.mod`, so a Cobra-shaped
+  layout without the dependency falls back to `go-hygiene`.
 
 ### Added
 

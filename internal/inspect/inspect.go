@@ -248,7 +248,7 @@ func inspectRepository(root string, report *Report) (manifest.Manifest, bool, *e
 			report.Repository.Actions.Conflict++
 		}
 	}
-	report.Repository.Converged = !plan.LockChanged && report.Repository.Actions.Unchanged == len(plan.Actions)
+	report.Repository.Converged = plan.Clean()
 	report.Repository.Ready = !plan.HasConflicts()
 	switch {
 	case plan.HasConflicts():
