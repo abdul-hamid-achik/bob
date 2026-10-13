@@ -1,0 +1,94 @@
+version: 1
+name: bob_check_exit_codes
+intent: |
+    bob check reports reconciliation state through its exit code and the JSON
+    ok flag. A converged workspace exits 0 with ok=true. A safe, conflict-free
+    drift (a declared file that does not exist yet) exits 3 with ok=false and
+    data.clean=false. A hand-edited managed file is a conflict and exits 2 with
+    ok=false and data.clean=false.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-check.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'EOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: acme
+            description: Check exit-code fixture.
+          files:
+            - path: notes.txt
+              content: |
+                hello
+          EOF
+          report() {
+            set +e
+            out="$(./bin/bob check "$root" --json 2>/dev/null)"
+            code=$?
+            set -e
+            printf '%s_exit=%s\n' "$1" "$code"
+            printf '%s_ok=%s\n' "$1" "$(printf '%s' "$out" | jq -r '.ok')"
+            printf '%s_clean=%s\n' "$1" "$(printf '%s' "$out" | jq -r '.data.clean')"
+          }
+          report drift
+          ./bin/bob apply "$root" >/dev/null
+          report converged
+          printf 'edited by hand\n' > "$root/notes.txt"
+          report conflict
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: check_exit_codes
+outcomes:
+    - id: converged_exits_zero
+      description: a converged workspace makes bob check exit 0
+      verify:
+        screen:
+            contains: converged_exit=0
+    - id: converged_ok_true
+      description: a converged workspace reports ok=true
+      verify:
+        screen:
+            contains: converged_ok=true
+    - id: conflict_exits_two
+      description: a hand-edited managed file makes bob check exit 2
+      verify:
+        screen:
+            contains: conflict_exit=2
+    - id: conflict_ok_false
+      description: a conflict reports ok=false
+      verify:
+        screen:
+            contains: conflict_ok=false
+    - id: conflict_not_clean
+      description: a conflict reports data.clean=false
+      verify:
+        screen:
+            contains: conflict_clean=false
+    - id: drift_exits_three
+      description: a safe, conflict-free drift makes bob check exit 3
+      verify:
+        screen:
+            contains: drift_exit=3
+    - id: drift_ok_false
+      description: a safe drift reports ok=false
+      verify:
+        screen:
+            contains: drift_ok=false
+    - id: drift_not_clean
+      description: a safe drift reports data.clean=false
+      verify:
+        screen:
+            contains: drift_clean=false
+contractHash: sha256:de65e6468e390e60d92a10a917f3d3bb637502abf51f00693e89dc29a6ca8f73
