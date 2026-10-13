@@ -1422,13 +1422,14 @@ func planNextActions(plan engine.PlanResult, workspace string) []string {
 		}
 		return []string{"resolve unmanaged or modified-file conflicts", withWorkspaceArg("rerun bob plan", workspace)}
 	}
+	applyCommand := withWorkspaceArg("run bob apply", workspace) + " --expect-plan-digest " + engine.DigestPlan(plan).Qualified()
 	for _, action := range plan.Actions {
 		if action.Kind != engine.ActionUnchanged {
-			return []string{"review the plan", withWorkspaceArg("run bob apply", workspace)}
+			return []string{"review the plan", applyCommand}
 		}
 	}
 	if plan.LockChanged {
-		return []string{"review the lock update", withWorkspaceArg("run bob apply", workspace)}
+		return []string{"review the lock update", applyCommand}
 	}
 	return []string{"repository is converged"}
 }
