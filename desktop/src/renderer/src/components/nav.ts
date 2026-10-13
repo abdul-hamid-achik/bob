@@ -97,7 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: 'console',
     label: 'Console',
     items: [
-      { panel: 'mcp', label: 'MCP', icon: Cable, featureId: 'mcp-serve', hint: 'Drive the nine read-only tools' },
+      { panel: 'mcp', label: 'MCP', icon: Cable, featureId: 'mcp-serve', hint: 'Read tools plus opt-in, digest-gated bob_apply' },
       { panel: 'console', label: 'Command console', icon: Terminal, featureId: 'console', hint: 'Run any Bob command, inspect the envelope' },
       { panel: 'tasks', label: 'Dev gates', icon: Hammer, featureId: 'tasks', hint: 'Taskfile gates with streamed output' },
       { panel: 'docs', label: 'Docs', icon: BookMarked, featureId: 'docs', hint: 'Published reference pages and guides' },

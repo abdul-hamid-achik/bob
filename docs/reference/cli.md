@@ -32,7 +32,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@6`, and the stack hygiene recipes). |
 | `bob recipe show <id>` | Read-only | Describe one recipe; `files` includes its schema and a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
-| `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools. |
+| `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools plus `bob_apply`, a digest-gated mutation tool disabled unless `--allow-apply-workspace` names the exact workspace. |
 
 `bob inspect --probe-integrations` is an explicit exception to the plain
 read-only inventory: it launches selected Codemap and Vecgrep status commands.
@@ -183,7 +183,10 @@ returns ordered, argv-shaped steps; Bob executes none of them. Unknown keys,
 duplicate keys, invalid values, and all missing required keys are reported as
 input errors. See [Deterministic Playbooks](./playbooks.md).
 
-`stats`, Studio, and MCP never mutate repositories. When local telemetry is
+`stats`, Studio, and the nine read-only MCP tools never mutate repositories.
+The MCP `bob_apply` tool writes only when `bob mcp serve` was started with
+`--allow-apply-workspace` for that workspace and a fresh plan matches the
+exact reviewed `expect_plan_digest`. When local telemetry is
 explicitly enabled, normal CLI and MCP operations may append privacy-bounded
 events beneath Bob's XDG state directory. Studio and stats do not record their
 own use. See [Configuration & local telemetry](../configuration.md).
@@ -495,6 +498,12 @@ workspaces. `--allow-any-workspace` explicitly accepts any existing workspace
 the process can read. The hosting process and agent runtime remain responsible
 for filesystem access control.
 
+Mutation authority for `bob_apply` is separate and empty by default. Repeat
+`--allow-apply-workspace <path>` to name each exact existing workspace it may
+mutate; each such workspace is also added to the read allowlist so its plan can
+be reviewed. `--allow-workspace` and `--allow-any-workspace` never grant apply
+authority.
+
 ## Configuration and stats flags
 
 `bob config init` previews by default. `--write` creates the file without
@@ -523,6 +532,27 @@ suggested actions are inert text.
 | `bob_validate_manifest` | Strict normalized validation of workspace `bob.yaml` or bounded inline YAML. |
 | `bob_recipe_describe` | Embedded recipe schema, version, surfaces, and supported choices. |
 | `bob_stats` | Aggregate local usage for one authorized workspace or all pseudonymous workspaces. |
+| `bob_apply` | **Mutating, opt-in.** Digest-gated apply of a reviewed plan; disabled unless `--allow-apply-workspace` names the exact workspace. |
+
+The first nine tools are annotated repository-read-only, non-destructive,
+idempotent, and closed-world. `bob_apply` is annotated destructive,
+non-idempotent, closed-world, and not read-only; annotations describe intent
+and grant no permission.
+
+`bob_apply` accepts an optional `workspace` and a required
+`expect_plan_digest` in the exact `sha256:<64-lowercase-hex>` form (copy
+`plan_digest_qualified`). It calls the same lock-owned engine path as
+[digest-gated apply](#digest-gated-apply) and returns a typed `outcome`:
+`applied` with the apply `receipt`; `plan_digest_mismatch` with
+`expected_plan_digest`, `actual_plan_digest`, and `converged` (the current plan
+is clean — Bob keeps no history and never claims "already applied");
+`conflicts` with one `conflicts[]` entry per blocked path; `workspace_busy`
+with `retryable: true` (lock contention fails immediately, without waiting);
+`apply_unauthorized`; `workspace_invalid`; or `input_invalid`. Every outcome
+other than `applied` writes nothing. Cancellation is honored only before the
+engine starts; once staging begins, apply runs to completion so files are never
+left published without their lock. Telemetry records the existing `apply`
+operation under the `mcp` surface.
 
 `bob_plan` excludes unchanged actions by default, accepts at most 500 requested
 actions, and also enforces a transport byte budget. `bob_validate_manifest`

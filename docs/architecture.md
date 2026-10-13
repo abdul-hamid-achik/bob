@@ -9,7 +9,7 @@ planning, mutation, and drift checks so generation remains inspectable.
 ```text
                   human or agent
                         |
-       CLI / JSON / context / Studio / read-only MCP
+  CLI / JSON / context / Studio / MCP (read tools + opt-in apply)
                         |
                         v
                   manifest loader
@@ -33,8 +33,9 @@ planning, mutation, and drift checks so generation remains inspectable.
 
 The CLI provides human-readable and versioned JSON output. Studio presents the
 same coherent offline inspection and plan snapshot interactively. A typed stdio
-MCP projection exposes nine repository-read-only operations. MCP mutation is not
-implemented.
+MCP projection exposes nine repository-read-only operations plus one explicitly
+authorized, digest-gated, opt-in mutation tool (`bob_apply`) that is disabled
+unless `bob mcp serve` is started with `--allow-apply-workspace`.
 
 ## Implemented components
 
@@ -231,9 +232,11 @@ instead of control sequences.
 
 `bob mcp serve` uses the official Go MCP SDK and newline-delimited stdio. It
 exposes context, exact-path, closed-playbook, inspect, plan, check,
-manifest-validation, recipe-description, and aggregate-stats tools. All publish
-repository-read-only, non-destructive, idempotent, closed-world annotations and
-inferred input/output schemas.
+manifest-validation, recipe-description, and aggregate-stats tools. Those nine
+publish repository-read-only, non-destructive, idempotent, closed-world
+annotations and inferred input/output schemas. The tenth tool, `bob_apply`, is
+annotated as destructive, non-idempotent, closed-world, and not read-only.
+Annotations describe intent; they never grant permission.
 
 The MCP inspector never enables specialist probes. Planning is bounded by both
 an action count and a byte budget, excludes unchanged actions by default, and
@@ -250,8 +253,26 @@ SDK's equivalent JSON text projection.
 
 The server's canonical startup workspace is its exact allowlist by default.
 Repeatable additional paths and explicit any-workspace mode expand that read
-authority. Agents must use the separately approved CLI path for `bob apply`,
-preferably guarded by the reviewed plan digest, then check or plan again.
+authority.
+
+Mutation authority is separate and empty by default. Only workspaces named with
+the repeatable `--allow-apply-workspace <path>` flag may be applied through
+`bob_apply`; `--allow-workspace` and `--allow-any-workspace` never imply it. An
+apply workspace is also readable, so the caller can review the plan whose
+digest it applies. `bob_apply` requires an exact `expect_plan_digest`
+(`sha256:` plus 64 lowercase hex characters) and calls the same lock-owned
+engine path as `bob apply --expect-plan-digest`: the engine takes the workspace
+lock, reloads `bob.yaml` under it, fresh-plans, and compares digests before any
+conflict handling, staging, or publication. Its typed outcomes are `applied`
+(with the apply receipt), `plan_digest_mismatch` (expected and actual digests
+plus `converged`, which reports only that the current plan is clean, never that
+the reviewed plan was "already applied"), `conflicts` (one entry per blocked
+path), `workspace_busy` (lock contention fails immediately and is marked
+`retryable`), `apply_unauthorized`, and `workspace_invalid`. Cancellation is
+honored only before the engine starts; once staging begins, apply runs to
+completion so files are never left published without their lock. Without apply
+authority, agents use the separately approved CLI path for `bob apply`, guarded
+by the reviewed plan digest, then check or plan again.
 
 ### Output
 
@@ -278,7 +299,7 @@ internal/paths/      side-effect-free XDG layout resolution
 internal/settings/   strict user settings and private initialization
 internal/telemetry/  local-only event storage, pruning, and aggregation
 internal/studio/     read-only Bubble Tea projection
-internal/mcp/        typed repository-read-only stdio projection
+internal/mcp/        typed stdio projection: read-only tools plus opt-in, digest-gated bob_apply
 internal/version/    build metadata
 internal/workspace/  shared canonical workspace resolution
 internal/detect/     read-only stack detection for bob init and new
@@ -286,8 +307,10 @@ internal/fsutil/     shared filesystem utilities across internal packages
 internal/strsim/     dependency-free string similarity for did-you-mean hints
 ```
 
-The CLI coordinates these packages. There is no verifier, MCP mutation handler,
-remote telemetry transport, or integration orchestrator.
+The CLI coordinates these packages. The single MCP mutation handler,
+`bob_apply`, delegates every write to `internal/engine` and is disabled unless
+explicitly authorized. There is no verifier, remote telemetry transport, or
+integration orchestrator.
 
 ## Ecosystem ownership map
 
@@ -298,7 +321,7 @@ Bob declares optional seams without absorbing specialist behavior.
 | Repository desired state | Bob | Render, plan, apply, and check whole files |
 | Agent reasoning and goals | Agent runtime | Invoke Bob through CLI/JSON |
 | Evidence-guided investigation | Reasoning kernel | Outside Bob; may inspect Bob output |
-| MCP aggregation and harness sync | MCP gateway | Bob supplies nine typed repository-read-only tools; gateway owns routing, authorization, and sync |
+| MCP aggregation and harness sync | MCP gateway | Bob supplies nine typed repository-read-only tools plus opt-in, digest-gated `bob_apply` (disabled unless `--allow-apply-workspace` is set); gateway owns routing, authorization, and sync |
 | Local Bob operations view | Bob Studio | Offline Overview/Plan plus aggregate local Stats; no action execution |
 | Local product usage | Bob telemetry | Disabled by default; private XDG events and aggregate-only public projections |
 | Structural code impact | Code graph tool | Optional generated seam and doctor probe |
@@ -327,9 +350,11 @@ intent.
 
 ## Implemented safety invariants
 
-1. `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, Studio, and all nine MCP tools do
-   not mutate repository files. Optional telemetry writes are isolated to XDG
-   state.
+1. `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, Studio, and the nine read-only MCP tools do
+   not mutate repository files. The one MCP mutation tool, `bob_apply`, writes
+   only when `--allow-apply-workspace` authorizes the exact workspace and a
+   fresh plan matches the reviewed digest. Optional telemetry writes are
+   isolated to XDG state.
 2. `new` and `init` preview unless `--write` is explicit.
 3. The same validated manifest, recipe version, files, and lock produce the same
    plan.
@@ -349,7 +374,6 @@ intent.
 
 Future work may add:
 
-- digest-gated, receipt-bearing MCP apply after its race and retry semantics are specified;
 - standalone `adopt` and `verify` workflows;
 - bounded, redacted persistent verification receipts;
 - additional recipe versions and languages;

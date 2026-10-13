@@ -1,6 +1,8 @@
 // Package mcp exposes Bob's repository-read-only inventory and planning surface
-// over stdio. It never invokes Cobra, parses CLI output, or writes to stdout
-// outside the MCP transport. When explicitly enabled, machine-local telemetry
+// over stdio, plus one opt-in, digest-gated mutation tool (bob_apply) that is
+// disabled unless the server is started with an explicit apply allowlist. It
+// never invokes Cobra, parses CLI output, or writes to stdout outside the MCP
+// transport. When explicitly enabled, machine-local telemetry
 // records privacy-bounded operation events under Bob's XDG state directory.
 package mcp
 
@@ -21,12 +23,16 @@ const instructions = `Bob is a deterministic repository contract compiler and fa
 bob_path to classify one exact path, bob_playbook to select a closed procedure, and bob_inspect or bob_check to
 read Bob-managed state, bob_validate_manifest to validate a workspace manifest or bounded inline
 YAML, bob_recipe_describe to inspect the embedded recipe contract, bob_stats to summarize opt-in
-local usage, and bob_plan to review proposed file actions. These MCP tools never mutate repositories; opt-in telemetry may update Bob's local XDG state. To apply a conflict-free reviewed plan, use the normal approved
-shell path with "bob apply <workspace> --expect-plan-digest sha256:<digest>", then call bob_check again. Codemap and Vecgrep search,
+local usage, and bob_plan to review proposed file actions. Those nine tools never mutate repositories; opt-in telemetry may update Bob's local XDG state.
+bob_apply is the single mutation tool: it is disabled unless the server was started with --allow-apply-workspace for that exact
+workspace, and it applies only when a fresh plan matches the exact reviewed expect_plan_digest from bob_plan or bob_check.
+Its annotations describe intent and do not grant permission. Without that authority, apply a conflict-free reviewed plan through the
+approved shell path with "bob apply <workspace> --expect-plan-digest sha256:<digest>", then call bob_check again. Codemap and Vecgrep search,
 impact analysis, indexing, and verification remain owned by those tools and Cortex.`
 
 type Server struct {
 	authority        workspaceAuthority
+	apply            applyAuthority
 	runner           inspectpkg.Runner
 	recorder         telemetry.Recorder
 	telemetry        *telemetry.Store
@@ -40,8 +46,12 @@ type Server struct {
 type ServerOptions struct {
 	AllowedWorkspaces []string
 	AllowAnyWorkspace bool
-	Recorder          telemetry.Recorder
-	Telemetry         *telemetry.Store
+	// AllowedApplyWorkspaces is the separate, empty-by-default mutation
+	// allowlist for bob_apply. Neither AllowedWorkspaces nor
+	// AllowAnyWorkspace ever implies it.
+	AllowedApplyWorkspaces []string
+	Recorder               telemetry.Recorder
+	Telemetry              *telemetry.Store
 	// contextByteLimit, when positive, overrides the context profile's
 	// projection budget for every bob_context call; the emitted
 	// truncation.byte_limit always reflects the override. Tests use it to
@@ -50,7 +60,7 @@ type ServerOptions struct {
 	lookPath         func(string) (string, error)
 }
 
-// NewServer constructs the compact read-only MCP surface.
+// NewServer constructs the compact MCP surface with bob_apply disabled.
 func NewServer(defaultWorkspace string, runner inspectpkg.Runner) (*Server, error) {
 	return NewServerWithOptions(defaultWorkspace, runner, ServerOptions{})
 }
@@ -82,8 +92,12 @@ func NewServerWithOptions(defaultWorkspace string, runner inspectpkg.Runner, opt
 	if err != nil {
 		return nil, err
 	}
+	apply, err := newApplyAuthority(&authority, options.AllowedApplyWorkspaces)
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
-		authority: authority, runner: runner,
+		authority: authority, apply: apply, runner: runner,
 		recorder: telemetry.BestEffort(options.Recorder), telemetry: options.Telemetry,
 		lookPath:         options.lookPath,
 		contextByteLimit: options.contextByteLimit,
@@ -142,6 +156,24 @@ func (s *Server) register() {
 		"bob_stats", "Summarize local Bob usage",
 		"Return aggregate opt-in local telemetry for an authorized workspace or all pseudonymous workspaces. Never returns individual events or stored raw paths, arguments, filenames, manifests, or raw errors.",
 	), s.handleStats)
+	sdkmcp.AddTool(s.srv, mutationTool(
+		"bob_apply", "Apply a reviewed conflict-free plan",
+		"Mutates the repository. Disabled unless the server was started with --allow-apply-workspace for this exact workspace. Applies only when a fresh plan, computed under Bob's workspace lock, matches the exact reviewed sha256 expect_plan_digest from bob_plan or bob_check; otherwise returns plan_digest_mismatch, conflicts, workspace_busy, or apply_unauthorized without writing. Cancellation is honored before staging; once publication starts the write completes. A retry after a lost response reports plan_digest_mismatch with converged: true.",
+	), s.handleApply)
+}
+
+// mutationTool annotates bob_apply honestly. Annotations describe intent only;
+// authority comes from the server's explicit apply allowlist.
+func mutationTool(name, title, description string) *sdkmcp.Tool {
+	destructive := true
+	openWorld := false
+	return &sdkmcp.Tool{
+		Name: name, Title: title, Description: description,
+		Annotations: &sdkmcp.ToolAnnotations{
+			Title: title, ReadOnlyHint: false, DestructiveHint: &destructive,
+			IdempotentHint: false, OpenWorldHint: &openWorld,
+		},
+	}
 }
 
 func readOnlyTool(name, title, description string) *sdkmcp.Tool {

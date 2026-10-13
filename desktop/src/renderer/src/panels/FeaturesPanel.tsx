@@ -258,14 +258,14 @@ export function FeaturesPanel(): JSX.Element {
         }
       >
         <Callout tone="info" title="What this matrix proves">
-          Each row is a real Bob surface — a CLI command and flag set, one of the nine MCP tools, or a console capability built on Bob's
+          Each row is a real Bob surface — a CLI command and flag set, one of the nine read MCP tools, or a console capability built on Bob's
           contracts. Probing executes the underlying read-only call against the active workspace and records the exit code, so integration is
           demonstrated rather than claimed. Mutating and authority-gated features are never probed automatically; open their panel to drive
           them deliberately.
         </Callout>
         {mcpInfo && !mcpInfo.started ? (
           <Callout tone="caution" title="MCP server is stopped">
-            Start it on the MCP panel to probe the nine tools. {mcpInfo.error ?? ''}
+            Start it on the MCP panel to probe the nine read tools (bob_apply is never probed). {mcpInfo.error ?? ''}
           </Callout>
         ) : null}
       </Section>

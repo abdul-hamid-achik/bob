@@ -411,6 +411,7 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 			Invariants []string `json:"invariants"`
 			Commands   []struct {
 				Name    string `json:"name"`
+				Purpose string `json:"purpose"`
 				Mutates bool   `json:"mutates"`
 			} `json:"commands"`
 			MCP struct {
@@ -429,7 +430,7 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 	if got.SchemaVersion != 1 || !got.OK || got.Command != "learn" {
 		t.Fatalf("unexpected envelope: %#v", got)
 	}
-	if len(got.Data.Lifecycle) != 5 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 9 {
+	if len(got.Data.Lifecycle) != 5 || len(got.Data.Invariants) == 0 || len(got.Data.MCP.Tools) != 10 {
 		t.Fatalf("unexpected learn data: %#v", got.Data)
 	}
 	for _, tool := range []string{"bob_context", "bob_path", "bob_playbook"} {
@@ -447,6 +448,16 @@ func TestLearnEmitsAgentBriefWithoutMutation(t *testing.T) {
 	for _, command := range got.Data.Commands {
 		if command.Name == "learn" && command.Mutates {
 			t.Fatal("learn must describe itself as non-mutating")
+		}
+		if command.Name == "mcp" {
+			if command.Mutates {
+				t.Fatal("mcp must be cataloged by its read-only default")
+			}
+			for _, want := range []string{"read-only by default", "bob_apply", "--allow-apply-workspace"} {
+				if !strings.Contains(command.Purpose, want) {
+					t.Fatalf("mcp purpose must disclose opt-in apply (%q): %q", want, command.Purpose)
+				}
+			}
 		}
 		if command.Name == "context" {
 			contextFound = true

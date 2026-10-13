@@ -190,9 +190,9 @@ export async function runSmoke(window: BrowserWindow, state: ConsoleState, works
 
   /* MCP */
   await evaluate<{ started: boolean; tools: { name: string }[] }>(
-    'mcp serve starts with nine tools',
+    'mcp serve starts with ten tools',
     `window.bob.mcpStart({ workspace: ${JSON.stringify(workspace)} })`,
-    (value) => (value.started && value.tools.length === 9 ? null : `started=${value.started} tools=${value.tools.length}`)
+    (value) => (value.started && value.tools.length === 10 ? null : `started=${value.started} tools=${value.tools.length}`)
   )
 
   await evaluate<{ ok: boolean }>(

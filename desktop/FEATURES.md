@@ -113,9 +113,11 @@ The console is a client of Bob, so Bob's own contract still holds:
   plain `inspect`, `stats`, `studio`, `explain`, and `learn`.
 - `--probe-integrations` is the only specialist subprocess the console can start,
   and it needs both a Settings opt-in and a per-run confirmation.
-- The nine MCP tools are repository read-only; the console starts the server with
-  an exact workspace allowlist and treats `--allow-any-workspace` as an explicit,
-  gated choice.
+- The nine read MCP tools never write to a repository. The one MCP mutation
+  tool, `bob_apply`, is opt-in and digest-gated, disabled unless
+  `--allow-apply-workspace` is set; the console never passes that flag. It
+  starts the server with an exact workspace allowlist and treats
+  `--allow-any-workspace` as an explicit, gated choice.
 - Apply and upgrade can be bound to the plan digest actually reviewed, so a
   workspace that changed underneath is refused rather than overwritten.
 - `bob.yaml` is human-owned: the editor writes only what the operator typed, and

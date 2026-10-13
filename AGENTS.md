@@ -32,7 +32,7 @@ internal/paths     side-effect-free XDG path resolution
 internal/settings  strict per-user settings load and private initialization
 internal/telemetry privacy-bounded local event store and aggregates
 internal/studio    read-only Bubble Tea repository and usage projection
-internal/mcp       typed repository-read-only stdio projection
+internal/mcp       typed stdio projection; read-only tools plus opt-in bob_apply
 internal/version   build metadata injected by ldflags
 internal/workspace shared canonical workspace resolution
 internal/fsutil    shared filesystem utilities used across internal packages
@@ -50,9 +50,16 @@ Keep command handlers thin. Filesystem ownership and mutation rules belong in
   do not mutate repositories.
 - `inspect --probe-integrations` is explicit subprocess authority. It never
   initializes, indexes, resets, searches, or repairs a specialist tool.
-- The nine MCP tools never mutate repositories or run specialist probes.
+- The nine read-only MCP tools never mutate repositories or run specialist
+  probes. The one MCP mutation tool, `bob_apply`, is explicitly authorized,
+  digest-gated, and opt-in: it is disabled unless `bob mcp serve` is started
+  with `--allow-apply-workspace` for the exact workspace, and it writes only
+  through the engine's lock-owned apply when a fresh plan matches the exact
+  reviewed `expect_plan_digest`. Annotations describe intent; they never grant
+  permission.
 - MCP defaults to an exact startup workspace allowlist. Broader read authority
-  requires `--allow-workspace` or explicit `--allow-any-workspace`.
+  requires `--allow-workspace` or explicit `--allow-any-workspace`; neither
+  ever implies apply authority.
 - Telemetry is disabled by default, has no network transport, and never stores
   paths, arguments, filenames, manifest content, or raw errors.
 - When telemetry is enabled, CLI and MCP operations may append private XDG

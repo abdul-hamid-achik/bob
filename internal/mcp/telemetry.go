@@ -46,7 +46,7 @@ func reasonFromToolCode(code string) telemetry.Reason {
 		return telemetry.ReasonInvalidInput
 	case "manifest_invalid":
 		return telemetry.ReasonInvalidManifest
-	case "workspace_invalid", "workspace_unauthorized":
+	case "workspace_invalid", "workspace_unauthorized", "apply_unauthorized":
 		return telemetry.ReasonUnsafePath
 	default:
 		return telemetry.ReasonInternal

@@ -25,7 +25,8 @@ bob.yaml + embedded recipe + bob.lock + working tree
 > `go-agent-tool`, `files`, and twelve stack hygiene recipes (`ts-app`,
 > `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`,
 > `rust-cli`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`) —
-> plus a read-only Studio and nine typed MCP tools. Review every plan and
+> plus a read-only Studio, nine typed read-only MCP tools, and one opt-in,
+> digest-gated MCP apply tool. Review every plan and
 > resulting diff before publishing.
 
 ## Why Bob exists
@@ -198,7 +199,8 @@ file.cheap    durable evidence artifacts
 Monitor       bounded runtime observations
 ```
 
-Bob exposes a typed stdio MCP projection with nine repository-read-only tools:
+Bob exposes a typed stdio MCP projection with nine repository-read-only tools
+plus one explicitly authorized, digest-gated, opt-in mutation tool:
 
 - `bob_context` returns the bounded workspace contract and current plan identity;
 - `bob_path` classifies one exact repository-relative path;
@@ -208,10 +210,17 @@ Bob exposes a typed stdio MCP projection with nine repository-read-only tools:
 - `bob_check` returns a compact convergence and drift result;
 - `bob_validate_manifest` strictly validates workspace or inline YAML;
 - `bob_recipe_describe` reports the embedded recipe contract;
-- `bob_stats` returns aggregate opt-in local usage without individual events.
+- `bob_stats` returns aggregate opt-in local usage without individual events;
+- `bob_apply` applies a reviewed plan, and is disabled unless `bob mcp serve`
+  is started with `--allow-apply-workspace <path>` for that exact workspace.
 
-Mutation deliberately remains on the normal approved command path. Approval-aware
-callers can bind it to the exact reviewed plan:
+`bob_apply` requires the exact reviewed `expect_plan_digest` and returns a
+typed `applied`, `plan_digest_mismatch`, `conflicts`, `workspace_busy`, or
+`apply_unauthorized` result. `--allow-workspace` and `--allow-any-workspace`
+never grant apply authority, and tool annotations describe intent rather than
+permission. Without that explicit authority, mutation stays on the normal
+approved command path. Approval-aware callers can bind it to the exact reviewed
+plan:
 
 ```bash
 bob plan <workspace> --json

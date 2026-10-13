@@ -103,7 +103,7 @@ bob inspect [path]      summarize Bob and integration readiness
 bob config show|init    inspect or initialize XDG user settings
 bob stats [path]        summarize opt-in local usage
 bob studio [path]       open a read-only terminal operations board
-bob mcp serve           expose nine typed repository-read-only MCP tools
+bob mcp serve           expose nine typed read-only MCP tools plus opt-in, digest-gated bob_apply
 bob context [path]      compile a bounded, read-only workspace contract
 bob path <path>         classify one exact repository path through Bob ownership
 bob playbook ...        resolve a closed typed procedure without executing it
@@ -162,7 +162,8 @@ Bob currently does not:
 - overwrite an unmanaged differing file or a managed file changed by a person;
 - own managed blocks inside otherwise user-owned files;
 - delete unmanaged, seed-once, drifted-without-force, symlink, or special files;
-- expose Studio mutation or MCP mutation surfaces;
+- expose Studio mutation, or MCP mutation beyond the opt-in, digest-gated
+  `bob_apply` tool that requires `--allow-apply-workspace`;
 - provide standalone `adopt` or `verify` commands;
 - persist plans, detailed execution histories, or verification receipts;
 - infer natural-language intent or provide autonomous playbook routing;

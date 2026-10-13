@@ -23,12 +23,16 @@ Bob generates and reconciles repository files. It does not sandbox commands,
 manage secrets, or make agent authorization decisions. It does not run generated
 project commands during `plan` or `apply`.
 
-Bob's MCP tools never mutate repositories. By default, they may read only the
-canonical startup workspace. Repeatable `--allow-workspace` flags add exact
-existing workspaces. `--allow-any-workspace` deliberately expands this to any
-existing workspace path the hosting process can access; it is not a sandbox
-boundary. MCP annotations describe intended repository effects; MCPHub and
-agent runtimes must still enforce their own authorization policies.
+Bob's nine read-only MCP tools never mutate repositories. By default, they may
+read only the canonical startup workspace. Repeatable `--allow-workspace` flags
+add exact existing workspaces. `--allow-any-workspace` deliberately expands this
+to any existing workspace path the hosting process can access; it is not a
+sandbox boundary. The one MCP mutation tool, `bob_apply`, is disabled unless
+the server is started with `--allow-apply-workspace` for the exact workspace;
+read authority never implies it, and it writes only when a fresh plan matches
+the exact reviewed `expect_plan_digest`. MCP annotations describe intended
+repository effects and grant no permission; MCPHub and agent runtimes must
+still enforce their own authorization policies.
 
 Telemetry is disabled by default and has no network transport. When explicitly
 enabled, CLI and MCP operations write bounded JSON events only beneath Bob's

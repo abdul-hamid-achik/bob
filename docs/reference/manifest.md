@@ -85,7 +85,8 @@ for example a `headless mcp` subcommand — without changing what Bob owns.
 `bob context` additionally warns when a disabled surface has declared
 repository evidence (see the [workspace context
 reference](context.md#structured-actions-and-notices)). Declaring a product
-surface does not conflict with Bob itself exposing read-only MCP tools.
+surface does not conflict with Bob's own MCP server (nine read-only tools
+plus the opt-in, digest-gated `bob_apply`).
 
 ## Integrations
 
