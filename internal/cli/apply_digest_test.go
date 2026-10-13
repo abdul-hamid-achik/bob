@@ -279,3 +279,69 @@ func TestApplyJSONReceiptBoundsLargeFilesRecipe(t *testing.T) {
 		t.Fatalf("returned=%d omitted=%d want=%d", returned, omitted, fileCount)
 	}
 }
+
+// TestApplyDigestMismatchConvergedAfterLostResponse proves a rerun of a
+// guarded apply whose first response was lost reports data.converged=true,
+// while a managed file edited after the review reports converged=false.
+func TestApplyDigestMismatchConvergedAfterLostResponse(t *testing.T) {
+	t.Parallel()
+	decode := func(t *testing.T, stdout string) bool {
+		t.Helper()
+		var envelope struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Converged *bool `json:"converged"`
+				Error     struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+			t.Fatalf("decode JSON: %v\n%s", err, stdout)
+		}
+		if envelope.OK || envelope.Data.Error.Code != "plan_digest_mismatch" || envelope.Data.Converged == nil {
+			t.Fatalf("mismatch envelope = %s", stdout)
+		}
+		return *envelope.Data.Converged
+	}
+	reviewAndApply := func(t *testing.T) (string, string) {
+		t.Helper()
+		root := pendingWorkspace(t)
+		digest := planDigestForCLI(t, root)
+		if stdout, stderr, err := executeForTest("--json", "apply", root, "--expect-plan-digest", digest); err != nil {
+			t.Fatalf("apply: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+		}
+		return root, digest
+	}
+
+	t.Run("rerun after success", func(t *testing.T) {
+		t.Parallel()
+		root, digest := reviewAndApply(t)
+		stdout, _, err := executeForTest("--json", "apply", root, "--expect-plan-digest", digest)
+		if ExitCode(err) != ExitPlanMismatch {
+			t.Fatalf("rerun exit=%d err=%v", ExitCode(err), err)
+		}
+		if !decode(t, stdout) {
+			t.Fatalf("rerun of a converged workspace must report converged=true: %s", stdout)
+		}
+	})
+
+	t.Run("managed file edited after review", func(t *testing.T) {
+		t.Parallel()
+		root, digest := reviewAndApply(t)
+		lock, err := engine.LoadLock(root)
+		if err != nil || len(lock.Files) == 0 {
+			t.Fatalf("lock = %#v, %v", lock, err)
+		}
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(lock.Files[0].Path)), []byte("edited after review\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		stdout, _, err := executeForTest("--json", "apply", root, "--expect-plan-digest", digest)
+		if ExitCode(err) != ExitPlanMismatch {
+			t.Fatalf("edited exit=%d err=%v", ExitCode(err), err)
+		}
+		if decode(t, stdout) {
+			t.Fatalf("an edited managed file must report converged=false: %s", stdout)
+		}
+	})
+}

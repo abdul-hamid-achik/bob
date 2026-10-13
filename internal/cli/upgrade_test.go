@@ -271,3 +271,68 @@ func TestUpgradeCLIMatchingDigestOnUpToDateWorkspaceSucceeds(t *testing.T) {
 		t.Fatalf("matching-digest no-op envelope = %#v", envelope)
 	}
 }
+
+func upgradePlanDigest(t *testing.T, args ...string) string {
+	t.Helper()
+	stdout, stderr, err := executeForTest(append([]string{"--json", "upgrade"}, args...)...)
+	if err != nil {
+		t.Fatalf("upgrade %v: %v\nstdout=%s\nstderr=%s", args, err, stdout, stderr)
+	}
+	var envelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			PlanDigest        string `json:"plan_digest"`
+			PlanDigestVersion int    `json:"plan_digest_version"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, stdout)
+	}
+	if !envelope.OK || envelope.Data.PlanDigestVersion != engine.PlanDigestVersion {
+		t.Fatalf("upgrade envelope = %s", stdout)
+	}
+	return envelope.Data.PlanDigest
+}
+
+// TestUpgradeDryRunDigestMatchesPlan proves the digest a dry-run upgrade
+// reports is the same reviewed-plan identity bob plan reports, so it can be
+// handed straight to a guarded upgrade.
+func TestUpgradeDryRunDigestMatchesPlan(t *testing.T) {
+	t.Parallel()
+	root := scaffoldUpgradeV4Workspace(t)
+	planned := planDigestForCLI(t, root)
+	if dry := upgradePlanDigest(t, root, "--dry-run"); dry != planned {
+		t.Fatalf("dry-run plan_digest = %q, plan plan_digest = %q", dry, planned)
+	}
+	lock, err := engine.LoadLock(root)
+	if err != nil || lock.Recipe.Version != 4 {
+		t.Fatalf("dry-run changed lock = %#v, %v", lock, err)
+	}
+	stdout, stderr, err := executeForTest("--json", "upgrade", root, "--expect-plan-digest", planned)
+	if err != nil {
+		t.Fatalf("guarded upgrade: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, `"applied": true`) {
+		t.Fatalf("guarded upgrade did not apply: %s", stdout)
+	}
+	lock, err = engine.LoadLock(root)
+	if err != nil || lock.Recipe.Version != 6 {
+		t.Fatalf("guarded upgrade lock = %#v, %v", lock, err)
+	}
+}
+
+// TestUpgradeCurrentReportsPlanDigest proves an up-to-date upgrade reports
+// the fresh plan digest and still refuses a stale reviewed digest.
+func TestUpgradeCurrentReportsPlanDigest(t *testing.T) {
+	t.Parallel()
+	root := upToDateWorkspace(t)
+	planned := planDigestForCLI(t, root)
+	if current := upgradePlanDigest(t, root); current != planned {
+		t.Fatalf("upgrade plan_digest = %q, plan plan_digest = %q", current, planned)
+	}
+	stale := "sha256:" + strings.Repeat("f", 64)
+	_, _, err := executeForTest("--json", "upgrade", root, "--expect-plan-digest", stale)
+	if ExitCode(err) != ExitPlanMismatch || !errors.Is(err, engine.ErrPlanDigestMismatch) {
+		t.Fatalf("stale digest exit=%d err=%v", ExitCode(err), err)
+	}
+}

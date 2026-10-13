@@ -39,6 +39,9 @@ func TestApplyReclaimsStaleLockFromDeadProcessOnThisHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := Apply(root, testManifest(), []recipe.Artifact{artifact("README.md", "one\n")})
+	if errors.Is(err, ErrWorkspaceBusy) {
+		t.Fatalf("a reclaimed stale lock must not report ErrWorkspaceBusy: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("apply should reclaim a stale lock from a dead local process: %v", err)
 	}
@@ -73,6 +76,50 @@ func TestApplyKeepsLockFromAnotherHostOrLiveProcess(t *testing.T) {
 			data, readErr := os.ReadFile(filepath.Join(root, ApplyLockFilename))
 			if readErr != nil || string(data) != content {
 				t.Fatalf("foreign or live lock was modified: %q, %v", data, readErr)
+			}
+		})
+	}
+}
+
+// TestApplyLockBusyIsTyped proves every mutating entrypoint that contends on
+// the workspace lock reports ErrWorkspaceBusy, so transports can classify it
+// as workspace_busy instead of a generic workspace failure.
+func TestApplyLockBusyIsTyped(t *testing.T) {
+	t.Parallel()
+	live := fmt.Sprintf("pid: %d\nhost: %s\n", os.Getpid(), mustHostname(t))
+	holdLock := func(t *testing.T, root string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, ApplyLockFilename), []byte(live), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := map[string]func(t *testing.T) error{
+		"apply": func(t *testing.T) error {
+			root := t.TempDir()
+			writeManifest(t, root, testManifest())
+			holdLock(t, root)
+			_, err := ApplyWorkspaceWithOptions(root, ApplyOptions{})
+			return err
+		},
+		"remove": func(t *testing.T) error {
+			root := setupVersionWorkspace(t, 6)
+			holdLock(t, root)
+			_, err := Remove(root, RemoveOptions{})
+			return err
+		},
+		"upgrade": func(t *testing.T) error {
+			root := setupVersionWorkspace(t, 4)
+			holdLock(t, root)
+			_, err := Upgrade(root, UpgradeOptions{})
+			return err
+		},
+	}
+	for name, run := range cases {
+		run := run
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if err := run(t); !errors.Is(err, ErrWorkspaceBusy) {
+				t.Fatalf("%s error = %v, want ErrWorkspaceBusy", name, err)
 			}
 		})
 	}
