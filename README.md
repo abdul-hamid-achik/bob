@@ -21,10 +21,11 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds fourteen recipes —
-> `go-agent-tool`, `files`, and twelve stack hygiene recipes (`ts-app`,
+> **Status: early alpha.** The current contract embeds fifteen recipes —
+> `go-agent-tool`, `files`, and thirteen stack hygiene recipes (`ts-app`,
 > `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`,
-> `rust-cli`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`) —
+> `rust-cli`, `java-app`, `swift-package`, `elixir-app`, `static-web`,
+> `go-hygiene`) —
 > plus a read-only Studio, nine typed read-only MCP tools, and one opt-in,
 > digest-gated MCP apply tool. Review every plan and
 > resulting diff before publishing.
@@ -91,7 +92,7 @@ bob check
 
 To initialize Bob in an empty or existing directory, write only the human-owned
 manifest first. `bob init` detects the repository's stack (Go, TypeScript,
-JavaScript, Vue, Nuxt, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a
+JavaScript, Vue, Nuxt, Python, Ruby, Lua, Rust, SwiftPM, Java, Elixir/Mix, or a
 static web site) and defaults to the matching recipe — the seed-once stack
 hygiene recipes never own application source. A plain Go module selects
 `go-hygiene`; only a Cobra `cmd/` + `internal/cli` layout (or an existing

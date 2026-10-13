@@ -126,7 +126,8 @@ become a task runner.
 
 Three recipe kinds are embedded. Stack hygiene recipes (`ts-app`, `js-app`,
 `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`,
-`swift-package`, `elixir-app`, `static-web`, `go-hygiene`) seed docs, ignore
+`java-app`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`) seed
+docs, ignore
 files, and optional CI once onto an existing language repository and never
 own application source. `files` materializes a tree declared in `bob.yaml`.
 `go-agent-tool` is the deep factory: a Go/Cobra CLI with JSON output, version

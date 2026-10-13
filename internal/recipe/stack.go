@@ -296,6 +296,15 @@ var stackDefinitions = map[string]stackDefinition{
 			{Path: ".golangci.yml", Source: stackGolangciConfig},
 		},
 	},
+	manifest.RecipeJavaApp: {
+		ID:            manifest.RecipeJavaApp,
+		Description:   "Seed-once hygiene for a Java application or library: docs, .gitignore, and a Maven CI stub; never owns application source",
+		LanguageLabel: "Java (Maven or Gradle)",
+		Stacks:        []string{"java"},
+		Commands:      []string{"mvn -B verify"},
+		Gitignore:     stackGitignoreJava,
+		CIWorkflow:    stackCIJava,
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
@@ -1065,6 +1074,16 @@ htmlcov/
 !.env.example
 `
 
+const stackGitignoreJava = `/target/
+/.gradle/
+/build/
+*.class
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
         with:
           go-version: stable
@@ -1076,6 +1095,13 @@ const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28
       - uses: golangci/golangci-lint-action@e6bba7d6934198d6e88b2d02e3316f2943a7f53f # v6.8.0
         with:
           version: latest
+`
+
+const stackCIJava = stackCIHeader + `      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: mvn -B verify
 `
 
 const stackGolangciConfig = `run:

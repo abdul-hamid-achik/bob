@@ -53,6 +53,8 @@ and the project uses semantic versioning after the first tagged release.
 
 ### Added
 
+- A new `java-app@2` stack hygiene recipe seeds Java repository hygiene (docs,
+  `.gitignore`, and a Maven CI stub) without owning application source.
 - `bob mcp serve` gains an opt-in `bob_apply` tool: digest-gated mutation,
   disabled unless `--allow-apply-workspace <path>` is set (never implied by
   `--allow-workspace` or `--allow-any-workspace`). It requires the exact

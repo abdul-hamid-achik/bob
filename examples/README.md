@@ -18,9 +18,10 @@ conflict-free plan.
   [`elixir-app-minimal/bob.yaml`](elixir-app-minimal/bob.yaml) demonstrate the
   SwiftPM and Mix stack hygiene contracts.
 - [`go-hygiene-minimal/bob.yaml`](go-hygiene-minimal/bob.yaml),
-  [`python-app-minimal/bob.yaml`](python-app-minimal/bob.yaml), and
-  [`rust-cli-minimal/bob.yaml`](rust-cli-minimal/bob.yaml) demonstrate the Go,
-  Python application, and Rust CLI stack hygiene contracts.
+  [`python-app-minimal/bob.yaml`](python-app-minimal/bob.yaml),
+  [`rust-cli-minimal/bob.yaml`](rust-cli-minimal/bob.yaml), and
+  [`java-app-minimal/bob.yaml`](java-app-minimal/bob.yaml) demonstrate the Go,
+  Python application, Rust CLI, and Java application stack hygiene contracts.
 - [`js-app-minimal/bob.yaml`](js-app-minimal/bob.yaml),
   [`vue-app-minimal/bob.yaml`](vue-app-minimal/bob.yaml),
   [`nuxt-app-minimal/bob.yaml`](nuxt-app-minimal/bob.yaml),

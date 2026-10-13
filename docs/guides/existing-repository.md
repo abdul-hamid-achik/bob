@@ -27,15 +27,15 @@ bob check
 `check` confirms the lock and the seeds.
 
 `bob init` detects the stack from marker files (`package.json`,
-`tsconfig.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `index.html`,
-and the rest of the [detected
+`tsconfig.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `go.mod`,
+`index.html`, and the rest of the [detected
 stacks](../reference/manifest.md#the-stack-hygiene-recipes)) and defaults
 to the matching recipe:
 
 | Detected stack | Recipe | What Bob does |
 |---|---|---|
 | TypeScript / JS / Vue / Nuxt | `ts-app`, `js-app`, `vue-app`, `nuxt-app` | Seed-once hygiene. Package manager comes from the lockfile when present. |
-| Python / Ruby / Lua / Rust / Swift / Elixir / static HTML | matching `@2` recipe | Same seed-once contract. Never owns application source. |
+| Python / Ruby / Lua / Rust / Swift / Elixir / Java / static HTML | matching `@2` recipe | Same seed-once contract. Never owns application source. |
 | Plain Go (`go.mod` without a Cobra `cmd/` + `internal/cli` layout) | `go-hygiene` | Same seed-once contract, plus a golangci-lint CI stub when GitHub Actions is on. |
 | Go with `cmd/` + `internal/cli/root.go`, or an existing `recipe: go-agent-tool` | `go-agent-tool` | The deep factory. `--module` is required unless `go.mod` already has a module path. |
 

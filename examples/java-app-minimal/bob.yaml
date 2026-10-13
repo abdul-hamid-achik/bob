@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: java-app
+product:
+  name: java-app-demo
+  description: A small Java application
+runtime:
+  language: java
+  kind: app
+distribution:
+  github_actions: true

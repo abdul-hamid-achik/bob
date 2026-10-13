@@ -45,6 +45,7 @@ const (
 	RecipeElixirApp = "elixir-app"
 	RecipeStaticWeb = "static-web"
 	RecipeGoHygiene = "go-hygiene"
+	RecipeJavaApp   = "java-app"
 )
 
 // StackRuntime is the closed runtime contract of one stack hygiene recipe.
@@ -70,6 +71,7 @@ var stackRecipeRuntimes = map[string]StackRuntime{
 	RecipeElixirApp: {Languages: []string{"elixir"}, Kinds: []string{"app", "umbrella"}},
 	RecipeStaticWeb: {Languages: []string{"html"}, Kinds: []string{"site"}},
 	RecipeGoHygiene: {Languages: []string{"go"}, Kinds: []string{"service", "lib", "app"}},
+	RecipeJavaApp:   {Languages: []string{"java"}, Kinds: []string{"app", "library"}},
 }
 
 // StackRecipeRuntime reports the runtime contract for a stack hygiene recipe

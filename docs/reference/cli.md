@@ -46,6 +46,7 @@ elixir-app@2  Seed-once hygiene for an Elixir application or umbrella: Mix forma
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
 go-agent-tool@6  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
 go-hygiene@2  Seed-once hygiene for an existing Go repository: docs, .gitignore, and golangci-lint CI; never owns application source
+java-app@2  Seed-once hygiene for a Java application or library: docs, .gitignore, and a Maven CI stub; never owns application source
 js-app@2  Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source
 lua-lib@2  Seed-once hygiene for a Lua library or Neovim plugin with kind-aligned runtime configuration; never owns application source
 nuxt-app@2  Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source
@@ -75,7 +76,7 @@ does not match the target's detected stack warns on preview and refuses
 `bob new`, `--module` is required by `go-agent-tool` and rejected by every
 other recipe, which does not scaffold a Go module.
 `bob init` detects the repository's stack (Go, TypeScript, JavaScript,
-Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults to the
+Vue, Python, Ruby, Lua, Rust, SwiftPM, Java, Elixir/Mix, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. For Go, a
 `recipe:` already declared in an existing `bob.yaml` wins; otherwise a Cobra
 layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool` only when
