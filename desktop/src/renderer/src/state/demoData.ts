@@ -247,7 +247,7 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "next_actions"
         ],
         "flag": "--json",
-        "notes": "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line."
+        "notes": "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Exceptions: check on drift and a not-ready doctor keep their normal data and carry no data.error; they signal through the exit code alone. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line."
       },
       "lifecycle": [
         "bob new|init previews by default; --write authorizes creation",
