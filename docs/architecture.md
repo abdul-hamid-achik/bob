@@ -281,6 +281,9 @@ internal/studio/     read-only Bubble Tea projection
 internal/mcp/        typed repository-read-only stdio projection
 internal/version/    build metadata
 internal/workspace/  shared canonical workspace resolution
+internal/detect/     read-only stack detection for bob init and new
+internal/fsutil/     shared filesystem utilities across internal packages
+internal/strsim/     dependency-free string similarity for did-you-mean hints
 ```
 
 The CLI coordinates these packages. There is no verifier, MCP mutation handler,
