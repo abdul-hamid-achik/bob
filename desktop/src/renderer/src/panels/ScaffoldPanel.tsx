@@ -198,7 +198,7 @@ export function ScaffoldPanel(): JSX.Element {
                 />
                 {init.data.detection.kind_hint ? (
                   <Callout tone="info" title={`Kind hint: ${init.data.detection.kind_hint}`}>
-                    A plain Go module selects go-hygiene; only a Cobra cmd/ plus internal/cli layout selects the go-agent-tool factory.
+                    A plain Go module selects go-hygiene; a go.mod that requires github.com/spf13/cobra selects the go-agent-tool factory. A recipe declared in bob.yaml still wins.
                   </Callout>
                 ) : null}
               </div>
