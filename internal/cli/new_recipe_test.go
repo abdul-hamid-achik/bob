@@ -254,7 +254,7 @@ func TestNewGoHygieneVsGoAgentTool(t *testing.T) {
 		{
 			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
 			files: map[string]string{
-				"go.mod":               "module example.com/cli\ngo 1.26\n",
+				"go.mod":               "module example.com/cli\ngo 1.26\n\nrequire github.com/spf13/cobra v1.9.1\n",
 				"cmd/demo/main.go":     "package main\n",
 				"internal/cli/root.go": "package cli\n",
 			},
