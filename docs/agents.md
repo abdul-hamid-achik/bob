@@ -1,5 +1,5 @@
 ---
-description: How a coding agent should onboard to Bob — bob learn, the JSON envelope, exit codes, and the read-only MCP surface.
+description: How a coding agent should onboard to Bob — bob learn, the JSON envelope, exit codes, and the MCP surface (read-only tools plus opt-in, digest-gated bob_apply).
 ---
 
 # Bob for coding agents
@@ -48,7 +48,7 @@ bob learn --json
 | `recommended_agent_bootstrap` | Ordered `learn`, `context`, `plan`, and `check` argv guidance. |
 | `json_envelope` | A field guide to the envelope itself — what `ok`, `data`, `warnings`, and `next_actions` mean. |
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
-| `mcp` | The `bob mcp serve` command and the nine read-only tools it exposes. |
+| `mcp` | The `bob mcp serve` command, its nine read-only tools, and the opt-in, digest-gated `bob_apply` mutation tool. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
 | `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@6`, and the twelve stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `python-app`, `ruby-app`, `lua-lib`, `rust-cli`, `swift-package`, `elixir-app`, `static-web`, and `go-hygiene`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
@@ -296,10 +296,12 @@ Every failure envelope's `next_actions` array already contains this same
 guidance as literal, copy-pasteable commands — this table exists so an agent
 can branch on the code without parsing prose.
 
-## The read-only MCP surface
+## The MCP surface
 
-`bob mcp serve` runs Bob's MCP server over stdio. It exposes nine tools, and
-none of them mutate a repository:
+`bob mcp serve` runs Bob's MCP server over stdio. It exposes nine read-only
+tools plus one explicitly authorized, digest-gated, opt-in mutation tool
+(`bob_apply`) that is disabled unless `--allow-apply-workspace` is set. The
+nine read-only tools never mutate a repository:
 
 | Tool | Result |
 |---|---|
@@ -314,10 +316,43 @@ none of them mutate a repository:
 | `bob_validate_manifest` | Strict validation of a workspace manifest or bounded inline YAML. |
 
 A computed conflict from `bob_plan` or `bob_check` is still a successful,
-read-only result. It carries no mutation authority. Apply always goes through
-the normal approved shell path. Prefer
-`bob apply <workspace> --expect-plan-digest sha256:<digest>` after review, then
-call `bob_check` to confirm convergence.
+read-only result. It carries no mutation authority.
+
+### Opt-in apply: `bob_apply`
+
+`bob_apply` is the only MCP tool that can write to a repository. It is
+listed by every server but refuses with `apply_unauthorized` unless the
+server was started with `--allow-apply-workspace <path>` naming that exact
+workspace. Its annotations (`readOnlyHint: false`, `destructiveHint: true`,
+`idempotentHint: false`, `openWorldHint: false`) describe intent; they do not
+grant permission.
+
+| Input | Meaning |
+|---|---|
+| `workspace` | Optional; defaults to the startup workspace. Must be in the apply allowlist. |
+| `expect_plan_digest` | Required. The exact `plan_digest_qualified` value (`sha256:` plus 64 lowercase hex characters) from a reviewed `bob_plan` or `bob_check`. |
+
+It calls the same lock-owned engine path as
+`bob apply --expect-plan-digest`: Bob takes the workspace lock, reloads
+`bob.yaml` under it, fresh-plans, and applies only when the fresh digest
+equals the reviewed one. Every result is typed in `structuredContent` with an
+`outcome`:
+
+| `outcome` | Meaning |
+|---|---|
+| `applied` | Written. `receipt` carries the apply receipt; call `bob_check` next. |
+| `plan_digest_mismatch` | Nothing written. `expected_plan_digest`, `actual_plan_digest`, and `converged` (the current plan is already clean). Bob keeps no history, so this never means "already applied" — replan and review. |
+| `conflicts` | Nothing written. `conflicts[]` lists each blocked path with its code and reason. |
+| `workspace_busy` | Nothing written. Another mutating Bob operation holds the lock; the call fails immediately rather than waiting and is marked `retryable: true`. |
+| `apply_unauthorized` | Nothing written. The workspace is not in the apply allowlist (or apply is disabled). |
+| `workspace_invalid` | Nothing written. The workspace path could not be resolved safely. |
+| `input_invalid` | Nothing written. `expect_plan_digest` is not the exact `sha256:<64-lowercase-hex>` form. |
+
+Cancellation is honored only before the engine starts. Once staging begins,
+apply runs to completion so published files are never left without their
+lock. When the server has no apply authority, use the normal approved shell
+path — `bob apply <workspace> --expect-plan-digest sha256:<digest>` after
+review — then call `bob_check` to confirm convergence.
 
 ### Workspace allowlist
 
@@ -330,9 +365,10 @@ bob mcp serve --help
 
 ```text
 Flags:
-      --allow-any-workspace           allow MCP tools to read any existing workspace accessible to Bob
-      --allow-workspace stringArray   additional exact existing workspace allowed to MCP tools (repeatable)
-      --workspace string              default existing workspace (defaults to startup cwd)
+      --allow-any-workspace                 allow MCP tools to read any existing workspace accessible to Bob
+      --allow-apply-workspace stringArray   exact existing workspace bob_apply may mutate with a reviewed plan digest (repeatable; never implied by other flags)
+      --allow-workspace stringArray         additional exact existing workspace allowed to MCP tools (repeatable)
+      --workspace string                    default existing workspace (defaults to startup cwd)
 ```
 
 - `--workspace` sets the default workspace explicitly instead of relying on
@@ -343,6 +379,10 @@ Flags:
   read any existing workspace the Bob process can access. It is read
   authority, not a sandbox — the hosting process and agent runtime remain
   responsible for what the Bob process itself can reach.
+- `--allow-apply-workspace` is repeatable and is the only way to grant
+  `bob_apply` mutation authority. It is never implied by `--allow-workspace`
+  or `--allow-any-workspace`. Each apply workspace is also readable so its
+  plan can be reviewed.
 
 Pick the narrowest mode that gets the job done. One repository needs
 `--workspace` and nothing else.
@@ -374,8 +414,10 @@ without re-verifying each session:
 
 - `context`, `path`, `playbook`, `plan`, `check`, plain `inspect`, `stats`, `learn`, and Studio never mutate a
   repository.
-- All nine MCP tools are read-only; none of them run specialist probes or
-  write to the target repository.
+- The nine read-only MCP tools never run specialist probes or write to the
+  target repository. The one MCP mutation tool, `bob_apply`, is disabled
+  unless `--allow-apply-workspace` names the exact workspace, and then writes
+  only a plan whose fresh digest equals the reviewed `expect_plan_digest`.
 - `apply` preflights the complete plan first and writes nothing if any single
   action is a conflict.
 - Bob never overwrites an unmanaged file that differs from the desired
@@ -394,7 +436,7 @@ without re-verifying each session:
   tree, and `go-agent-tool` for a new Go/Cobra CLI — with an agent-focused
   section on looping `check --json --conflicts-only`.
 - [MCPHub & local-agent](./guides/mcphub-local-agent.md) for wiring the same
-  nine tools through MCPHub and scoping them to a local-agent gateway.
+  tools through MCPHub and scoping them to a local-agent gateway.
 - [Ownership & Safety](./ownership-and-safety.md) for the full plan-state
   vocabulary (`create`, `adopt`, `unchanged`, `update`, `conflict`).
 - [CLI Reference](./reference/cli.md) for every command's flags in one table.

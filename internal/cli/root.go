@@ -1025,7 +1025,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "config", "purpose": "inspect or initialize XDG user settings; init previews unless --write", "mutates": true, "json": true},
 		{"name": "stats", "purpose": "summarize privacy-bounded local usage aggregates", "mutates": false, "json": true},
 		{"name": "studio", "purpose": "interactive read-only repository and usage board; rejects --json", "mutates": false, "json": false},
-		{"name": "mcp", "purpose": "serve nine repository-read-only MCP tools over stdio", "mutates": false, "json": false},
+		{"name": "mcp", "purpose": "serve nine repository-read-only MCP tools over stdio, plus bob_apply, a digest-gated mutation tool disabled unless --allow-apply-workspace is set", "mutates": false, "json": false},
 		{"name": "explain", "purpose": "describe Bob's product contract and boundaries", "mutates": false, "json": true},
 		{"name": "learn", "purpose": "emit this onboarding brief for coding agents", "mutates": false, "json": true},
 		{"name": "recipe", "purpose": "inspect the embedded recipe catalog", "mutates": false, "json": true},
@@ -1090,10 +1090,11 @@ func newLearnCommand(opts *options) *cobra.Command {
 		},
 		"mcp": map[string]any{
 			"serve":     "bob mcp serve <workspace>",
-			"authority": "repository read-only; defaults to an exact startup workspace allowlist",
+			"authority": "nine repository-read-only tools default to an exact startup workspace allowlist; bob_apply is a digest-gated mutation tool disabled unless --allow-apply-workspace names the exact workspace, which --allow-workspace and --allow-any-workspace never imply",
 			"tools": []string{
 				"bob_context", "bob_path", "bob_playbook", "bob_plan", "bob_check",
 				"bob_inspect", "bob_stats", "bob_recipe_describe", "bob_validate_manifest",
+				"bob_apply",
 			},
 		},
 		"boundaries": []string{"model execution", "agent scheduling", "canonical verification", "secrets", "tool discovery", "application business logic"},
@@ -1119,7 +1120,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, workspace_busy, command_failed) plus next_actions with runnable corrective commands, except check on drift and doctor with a missing or unusable required tool, which keep their normal data and signal through the exit code; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
-			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
+			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook, plus bob_apply, which is disabled unless --allow-apply-workspace names the workspace and then applies only an exact reviewed plan digest; otherwise repository mutation remains on the approved shell path.\n")
 			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web, go-hygiene) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")

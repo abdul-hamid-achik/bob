@@ -103,10 +103,17 @@ removed.
   with `remove --dry-run`, recomputed under the workspace lock before the first
   unlink; a mismatch deletes nothing. The removal digest is a separate
   namespace from the plan digest.
-- All nine MCP tools have read-only repository effects. Manifest validation may
-  also operate on bounded inline YAML; recipe description needs no workspace.
+- The nine read-only MCP tools have read-only repository effects. Manifest
+  validation may also operate on bounded inline YAML; recipe description needs
+  no workspace.
+- The one MCP mutation tool, `bob_apply`, is explicitly authorized,
+  digest-gated, and opt-in. It is disabled unless `--allow-apply-workspace`
+  names the exact workspace, requires the exact reviewed `expect_plan_digest`,
+  and uses the same lock-owned apply path as the CLI, so a mismatch, conflict,
+  or busy lock writes nothing.
 - MCP starts with an exact workspace allowlist. `--allow-workspace` adds exact
-  paths and `--allow-any-workspace` deliberately broadens read authority.
+  paths and `--allow-any-workspace` deliberately broadens read authority;
+  neither grants apply authority.
 
 Repository-read-only does not mean Bob never writes any machine-local state.
 When telemetry is explicitly enabled, recorded CLI and MCP operations may

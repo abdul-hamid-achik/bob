@@ -39,7 +39,7 @@ func (r *offlineRunner) calls() int {
 	return r.runCalls
 }
 
-func TestServerExposesNineTypedReadOnlyTools(t *testing.T) {
+func TestServerExposesNineTypedReadOnlyToolsPlusApply(t *testing.T) {
 	t.Parallel()
 	root := mcpWorkspace(t)
 	runner := &offlineRunner{}
@@ -48,8 +48,8 @@ func TestServerExposesNineTypedReadOnlyTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tools) != 9 {
-		t.Fatalf("tool count = %d, want 9", len(listed.Tools))
+	if len(listed.Tools) != 10 {
+		t.Fatalf("tool count = %d, want 10", len(listed.Tools))
 	}
 	want := map[string]bool{
 		"bob_context": true, "bob_path": true, "bob_playbook": true,
@@ -58,6 +58,9 @@ func TestServerExposesNineTypedReadOnlyTools(t *testing.T) {
 		"bob_stats": true,
 	}
 	for _, tool := range listed.Tools {
+		if tool.Name == "bob_apply" {
+			continue
+		}
 		if !want[tool.Name] {
 			t.Fatalf("unexpected tool %q", tool.Name)
 		}
@@ -143,7 +146,7 @@ func TestMCPStdioSubprocessHasCleanNewlineFraming(t *testing.T) {
 		t.Fatalf("stdio handshake: %v (stderr: %s)", err, stderr.String())
 	}
 	listed, err := session.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 9 {
+	if err != nil || len(listed.Tools) != 10 {
 		t.Fatalf("list tools: count=%d err=%v stderr=%s", len(listed.Tools), err, stderr.String())
 	}
 	contextResult, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "bob_context", Arguments: map[string]any{}})

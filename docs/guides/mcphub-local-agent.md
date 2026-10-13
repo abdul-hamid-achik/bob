@@ -1,14 +1,17 @@
 ---
-description: Wire Bob's nine read-only MCP tools into MCPHub and local-agent, and keep digest-gated apply on the approved shell path.
+description: Wire Bob's nine read-only MCP tools and its opt-in, digest-gated bob_apply tool into MCPHub and local-agent.
 ---
 
 # MCPHub & local-agent
 
-Bob exposes nine typed MCP tools for repository context, exact ownership,
-closed guidance, validation, planning, convergence, recipe discovery, and
-aggregate local usage. None of them mutate a repository or run specialist
-probes. Repository mutation stays on the agent runtime's normal approved shell
-path, with a human or policy watching.
+Bob exposes nine typed read-only MCP tools for repository context, exact
+ownership, closed guidance, validation, planning, convergence, recipe
+discovery, and aggregate local usage. None of them mutate a repository or run
+specialist probes. Bob also lists one explicitly authorized, digest-gated,
+opt-in mutation tool, `bob_apply`, that is disabled unless `bob mcp serve` is
+started with `--allow-apply-workspace`. Without that flag, repository mutation
+stays on the agent runtime's normal approved shell path, with a human or policy
+watching.
 
 ## Tools
 
@@ -23,9 +26,10 @@ path, with a human or policy watching.
 | `bob_validate_manifest` | Strictly validate workspace or bounded inline YAML. | Repository-read-only; never writes a manifest. |
 | `bob_recipe_describe` | Describe the embedded recipe contract. | Read-only; does not require a workspace. |
 | `bob_stats` | Return aggregate opt-in local usage. | Reads XDG state; never returns individual events. |
+| `bob_apply` | Apply a reviewed conflict-free plan by exact `expect_plan_digest`. | **Mutates.** Disabled unless `--allow-apply-workspace` names the exact workspace; writes nothing on mismatch, conflicts, busy lock, or missing authority. |
 
-After reviewing a conflict-free plan, prefer an explicitly approved guarded
-shell call:
+After reviewing a conflict-free plan without MCP apply authority, prefer an
+explicitly approved guarded shell call:
 
 ```bash
 bob apply <workspace> --expect-plan-digest sha256:<64-lowercase-hex> --json
@@ -36,6 +40,31 @@ raw `plan_digest` remains available for wire compatibility. Bob fresh-plans
 under its apply lock. A mismatch returns
 `plan_digest_mismatch` and writes nothing. The successful apply receipt is not
 a behavioral verification receipt.
+
+## Opt in to MCP apply
+
+`bob_apply` uses the same lock-owned engine path and the same digest gate as
+`bob apply --expect-plan-digest`. Grant it only for exact repositories:
+
+```bash
+mcphub add bob "$BOB_BIN/bob" --force \
+  --description "Deterministic agent-ready repository builder" \
+  --tag builder --tag code -- \
+  mcp serve \
+    --workspace /absolute/path/to/repository \
+    --allow-apply-workspace /absolute/path/to/repository
+```
+
+`--allow-workspace` and `--allow-any-workspace` never imply apply authority.
+Pass `plan_digest_qualified` from a reviewed `bob_plan` or `bob_check` as
+`expect_plan_digest`. Results are typed by `outcome`: `applied` (with the
+receipt), `plan_digest_mismatch` (with `converged`; Bob keeps no history, so a
+mismatch never means "already applied"), `conflicts` (one entry per blocked
+path), `workspace_busy` (fails immediately, `retryable: true`),
+`apply_unauthorized`, or `workspace_invalid`. The tool's annotations mark it
+destructive and not read-only; they describe intent and do not grant
+permission, so MCPHub and the calling agent should still route it through
+approval policy.
 
 ## Install from a checkout
 
@@ -138,6 +167,7 @@ mcphub__bob__bob_check
 mcphub__bob__bob_validate_manifest
 mcphub__bob__bob_recipe_describe
 mcphub__bob__bob_stats
+mcphub__bob__bob_apply
 ```
 
 It conservatively classifies MCP calls as unknown-effect and prompts under the
@@ -183,8 +213,8 @@ through normal approval policy.
 ## Local telemetry remains local
 
 MCP uses the same disabled-by-default settings as the CLI. If telemetry is
-enabled, inspect, plan, check, manifest validation, and recipe description may
-append one privacy-bounded event to Bob's XDG state. `bob_stats` does not record
+enabled, inspect, plan, check, manifest validation, recipe description, and
+apply may append one privacy-bounded event to Bob's XDG state. `bob_stats` does not record
 itself. No event is sent through MCPHub or over a telemetry network, and the
 stats tool returns aggregates rather than individual events.
 
