@@ -135,7 +135,8 @@ envelope to stdout and nothing else:
 - `schema_version` is `1`. Bob rejects wire formats it does not recognize
   rather than guessing at a shape.
 - `ok` is `true` on success. On failure it is `false`, and `data` carries an
-  error code and message instead of the command's normal result.
+  error code and message instead of the command's normal result. `check` and
+  `doctor` are the exceptions; see [Exit codes](#exit-codes).
 - `command` names the command that produced the envelope.
 - `warnings` and `next_actions` are always arrays, even when empty.
 - stdout carries only this JSON document. Diagnostics, Cobra usage text, and
@@ -150,24 +151,30 @@ envelope above.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), or an unresolvable workspace path (`workspace_invalid`). |
+| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), or `doctor` reporting required tools missing. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |
 | `5` | Guarded apply or upgrade refused because the fresh plan no longer matches the reviewed digest. No repository write occurred. |
 
 `bob check` is the deliberate special case: it exits non-zero when the
-repository or lock *would* change, even though its JSON body is a normal,
-successful plan. Non-zero here is the answer, not an error. Note that `2` and
-`3` are both "non-zero, drift found" — `2` means a conflict is in the mix and
-apply would refuse; `3` means every change is safe and apply would proceed.
+repository or lock *would* change. On drift, `bob check --json` emits `ok: false`
+with `data.clean: false`, `data.plan`, `data.plan_digest`, and
+`data.plan_digest_version`, and no `data.error`. Non-zero here is the answer,
+not an error. Note that `2` and `3` are both "non-zero, drift found" — `2` means
+a conflict is in the mix and apply would refuse; `3` means every change is safe
+and apply would proceed.
+
+`bob doctor` follows the same pattern. When a required tool is missing, it
+emits `ok: false` with its normal probe data and no `data.error`, and exits `1`.
 
 An agent scripting Bob should branch on the exit code first and only inspect
 `data` for detail — do not infer success from the presence of JSON alone.
 
 ## Error codes
 
-Every failure envelope carries `data.error.code`, one of:
+Every failure envelope, except `check` and `doctor`, carries `data.error.code`,
+one of:
 
 | Code | Meaning |
 |---|---|
@@ -199,6 +206,7 @@ Non-conflict codes (safe to act on):
 | `mode_drift` | `update` | Managed file's mode would change; content already matches. |
 | `in_sync` | `unchanged` | Managed file already matches desired content and mode. |
 | `identical_content` | `adopt` | Unmanaged file already byte-matches; Bob may adopt it without writing. |
+| `seed_exists` | `unchanged` | A seed-once file already exists; Bob never updates or owns it. |
 
 Conflict codes (apply refuses the *entire* plan if any of these appear):
 

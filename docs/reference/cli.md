@@ -212,7 +212,12 @@ JSON envelope around transport errors.
 ### Failure envelopes
 
 A failed command still writes one JSON document, with `ok: false` and the
-command's normal `data` replaced by an error:
+command's normal `data` replaced by an error. `check` and `doctor` are the
+exceptions: they keep their normal `data` with `ok: false` and carry no
+`data.error`. `check` reports drift in `data.clean`, `data.plan`, and the plan
+digest fields, and `doctor` reports its probe results. For both, the non-zero
+exit code is the signal. The envelope shape below applies to all other
+failures:
 
 ```json
 {
