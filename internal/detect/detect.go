@@ -146,12 +146,13 @@ func Detect(root string) Result {
 		result.Module = readGoModule(filepath.Join(root, "go.mod"))
 		// A declared bob.yaml recipe wins over the Cobra layout heuristic.
 		// Without a declared recipe, the cmd/ + internal/cli/root.go layout
-		// suggests the agent-tool shape.
+		// suggests the agent-tool shape only when go.mod requires Cobra.
 		isGoAgentTool := false
 		if declared := declaredRecipe(filepath.Join(root, "bob.yaml")); declared != "" {
 			isGoAgentTool = declared == "go-agent-tool"
 		} else if dirs["cmd"] && dirs["internal"] {
-			if regularFileExists(filepath.Join(root, "internal", "cli", "root.go")) {
+			if regularFileExists(filepath.Join(root, "internal", "cli", "root.go")) &&
+				goModRequires(filepath.Join(root, "go.mod"), cobraModule) {
 				isGoAgentTool = true
 			}
 		}
@@ -493,6 +494,51 @@ func readGoModule(path string) string {
 		return module
 	}
 	return ""
+}
+
+// cobraModule is the module path whose go.mod requirement confirms the
+// Cobra layout heuristic.
+const cobraModule = "github.com/spf13/cobra"
+
+// goModRequires reports whether the bounded prefix of the go.mod at path
+// requires module, either as a single-line `require` directive or inside a
+// `require ( ... )` block. Read failures report false.
+func goModRequires(path, module string) bool {
+	data, ok := readBounded(path, maxPackageJSONBytes)
+	if !ok {
+		return false
+	}
+	inBlock := false
+	for _, line := range strings.Split(data, "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if inBlock {
+			if fields[0] == ")" {
+				inBlock = false
+				continue
+			}
+			if fields[0] == module {
+				return true
+			}
+			continue
+		}
+		if fields[0] != "require" || len(fields) < 2 {
+			continue
+		}
+		if fields[1] == "(" {
+			inBlock = true
+			continue
+		}
+		if fields[1] == module {
+			return true
+		}
+	}
+	return false
 }
 
 // maxBobYAMLBytes bounds the bob.yaml prefix scanned for the declared recipe.

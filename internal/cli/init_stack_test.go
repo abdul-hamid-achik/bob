@@ -300,7 +300,7 @@ func TestInitGoHygieneVsGoAgentTool(t *testing.T) {
 		{
 			name: "Cobra layout (cmd/ + internal/cli/root.go) → go-agent-tool",
 			files: map[string]string{
-				"go.mod":               "module example.com/cli\ngo 1.26\n",
+				"go.mod":               "module example.com/cli\ngo 1.26\n\nrequire github.com/spf13/cobra v1.9.1\n",
 				"cmd/demo/main.go":     "package main\n",
 				"internal/cli/root.go": "package cli\n",
 			},
@@ -417,7 +417,7 @@ func TestInitWriteRefusesExistingManifest(t *testing.T) {
 func TestInitReadsGoModuleFromGoMod(t *testing.T) {
 	t.Parallel()
 	root := writeStackFixture(t, map[string]string{
-		"go.mod":               "module github.com/acme/acme-tool\n\ngo 1.26.6\n",
+		"go.mod":               "module github.com/acme/acme-tool\n\ngo 1.26.6\n\nrequire github.com/spf13/cobra v1.9.1\n",
 		"cmd/acme/main.go":     "package main\n",
 		"internal/cli/root.go": "package cli\n",
 	})

@@ -78,7 +78,8 @@ other recipe, which does not scaffold a Go module.
 Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. For Go, a
 `recipe:` already declared in an existing `bob.yaml` wins; otherwise a Cobra
-layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool`, and any
+layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool` only when
+`go.mod` requires `github.com/spf13/cobra`, and any
 other Go module defaults to `go-hygiene`. When a regular-file `bob.yaml`
 already exists at the target, the preview warns (stderr in human mode,
 `warnings[]` in JSON) and points `next_actions` at `bob plan <path> --json`
