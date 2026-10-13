@@ -591,11 +591,21 @@ func containsBounded(path, needle string) bool {
 	return ok && strings.Contains(data, needle)
 }
 
-// readBounded reads up to limit bytes of the regular file at path. A short
-// file yields its full content; read failures report false.
+// readBounded reads up to limit bytes of the regular file at path. A symlink is
+// followed to its target, but a target that is not a regular file (a FIFO,
+// device, or directory) is refused before opening, so detection can never
+// block. A short file yields its full content; read failures report false.
 func readBounded(path string, limit int64) (string, bool) {
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil {
+		return "", false
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		if info, err = os.Stat(path); err != nil {
+			return "", false
+		}
+	}
+	if !info.Mode().IsRegular() {
 		return "", false
 	}
 	file, err := os.Open(path)

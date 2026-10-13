@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestReadBoundedFollowsSymlinkButRejectsNonRegular(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := readBounded(link, 64); !ok || got != "hello" {
+		t.Fatalf("readBounded(symlink to regular file) = %q, %v; want %q, true", got, ok, "hello")
+	}
+	dirLink := filepath.Join(dir, "dirlink")
+	if err := os.Symlink(dir, dirLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readBounded(dirLink, 64); ok {
+		t.Fatal("readBounded(symlink to directory) reported ok; want false")
+	}
+}
+
 // fixture builds a temporary repository whose files map paths to contents.
 // Directories are created implicitly; a trailing slash declares an empty
 // directory.

@@ -151,7 +151,7 @@ envelope above.
 | Code | Meaning |
 |---|---|
 | `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
-| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), or `doctor` reporting required tools missing. |
+| `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), or `doctor` reporting required tools missing or unusable. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
 | `4` | Invalid input: a missing or invalid manifest (including an unrecognized `recipe:` id), a bad flag or argument, a missing remove lock, or missing/incompatible upgrade ownership state. |

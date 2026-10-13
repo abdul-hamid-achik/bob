@@ -17,9 +17,9 @@ and the project uses semantic versioning after the first tagged release.
   to the reviewed digest (`bob apply <workspace> --expect-plan-digest
   <data.plan_digest>`) instead of an unguarded `bob apply`.
 - `bob init --write` now refuses when a regular-file `bob.yaml` already exists,
-  exiting `4` (`input_invalid`) with a message that names `bob plan` and leaving
-  the file untouched; the preview warns and points at `bob plan` instead of
-  suggesting `--write`.
+  exiting `4` (`input_invalid`, previously `1` / `command_failed`) with a message
+  that names `bob plan` and leaving the file untouched; the preview warns and
+  points at `bob plan` instead of suggesting `--write`.
 
 ### Changed
 

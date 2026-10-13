@@ -1019,7 +1019,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			"1": "unclassified command failure (command_failed), an unresolvable workspace path (workspace_invalid), or doctor reporting required tools missing or unusable",
 			"2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
 			"3": "check found drift with no ownership conflict",
-			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, or missing/incompatible ownership state for remove or upgrade",
+			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, bob init --write refusing an existing bob.yaml or a recipe that does not match the detected stack, or missing/incompatible ownership state for remove or upgrade",
 			"5": "guarded apply or upgrade refused because the fresh plan differs from the reviewed plan digest",
 		},
 		"error_codes": map[string]string{
