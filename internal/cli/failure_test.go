@@ -2,8 +2,12 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/bob/internal/engine"
 )
 
 func TestNextActionsForFailureDrift(t *testing.T) {
@@ -41,6 +45,25 @@ func TestNextActionsForFailureDrift(t *testing.T) {
 				t.Fatalf("next actions = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestClassifyErrorCodeWorkspaceBusy(t *testing.T) {
+	t.Parallel()
+
+	err := fmt.Errorf("apply: acquire workspace lock: %w", engine.ErrWorkspaceBusy)
+	if got := classifyErrorCode(err); got != "workspace_busy" {
+		t.Fatalf("classifyErrorCode = %q, want workspace_busy", got)
+	}
+	if got := ExitCode(err); got != 1 {
+		t.Fatalf("ExitCode = %d, want 1", got)
+	}
+	next := nextActionsForCode("workspace_busy", ".")
+	if !strings.Contains(strings.Join(next, "\n"), engine.ApplyLockFilename) {
+		t.Fatalf("workspace_busy next actions must mention %s: %#v", engine.ApplyLockFilename, next)
+	}
+	if got := nextActionsForFailure(err, "."); !reflect.DeepEqual(got, next) {
+		t.Fatalf("nextActionsForFailure = %#v, want %#v", got, next)
 	}
 }
 

@@ -110,7 +110,14 @@ func Upgrade(root string, opts UpgradeOptions) (*UpgradeResult, error) {
 			return nil, fmt.Errorf("upgrade: %w", planErr)
 		}
 		result.Plan = plan
-		result.setPlanDigest(DigestPlan(plan))
+		digest := DigestPlan(plan)
+		result.setPlanDigest(digest)
+		if opts.ExpectedPlanDigest != "" && opts.ExpectedPlanDigest != digest.Qualified() {
+			return result, &PlanDigestMismatchError{
+				ExpectedPlanDigest: opts.ExpectedPlanDigest,
+				ActualPlanDigest:   digest.Qualified(),
+			}
+		}
 		return result, nil
 	}
 	if opts.DryRun {
