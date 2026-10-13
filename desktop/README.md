@@ -6,7 +6,8 @@ binary through its versioned JSON envelope, or the real `bob mcp serve`
 projection, and renders exactly what came back.
 
 The complete feature inventory lives in [`FEATURES.md`](FEATURES.md): 53
-surfaces — 26 CLI commands and subcommands, the nine MCP tools, and 18 console
+surfaces — 26 CLI commands and subcommands, the nine read MCP tools (the opt-in, digest-gated `bob_apply` is not
+driven by the console), and 18 console
 capabilities built on Bob's contracts.
 
 ## What it is for

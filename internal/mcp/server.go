@@ -158,7 +158,7 @@ func (s *Server) register() {
 	), s.handleStats)
 	sdkmcp.AddTool(s.srv, mutationTool(
 		"bob_apply", "Apply a reviewed conflict-free plan",
-		"Mutates the repository. Disabled unless the server was started with --allow-apply-workspace for this exact workspace. Applies only when a fresh plan, computed under Bob's workspace lock, matches the exact reviewed sha256 expect_plan_digest from bob_plan or bob_check; otherwise returns plan_digest_mismatch, conflicts, workspace_busy, or apply_unauthorized without writing.",
+		"Mutates the repository. Disabled unless the server was started with --allow-apply-workspace for this exact workspace. Applies only when a fresh plan, computed under Bob's workspace lock, matches the exact reviewed sha256 expect_plan_digest from bob_plan or bob_check; otherwise returns plan_digest_mismatch, conflicts, workspace_busy, or apply_unauthorized without writing. Cancellation is honored before staging; once publication starts the write completes. A retry after a lost response reports plan_digest_mismatch with converged: true.",
 	), s.handleApply)
 }
 

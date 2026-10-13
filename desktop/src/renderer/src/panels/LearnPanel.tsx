@@ -149,7 +149,7 @@ export function LearnPanel(): JSX.Element {
             </Section>
           </div>
 
-          <Section title="MCP surface" hint="Repository read-only, with an exact startup workspace allowlist by default.">
+          <Section title="MCP surface" hint="Read-only by default, with an exact startup workspace allowlist; bob_apply mutates only with --allow-apply-workspace and a reviewed digest.">
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Mono className="rounded border border-line bg-sunken px-2 py-1 text-ink">{data.mcp.serve}</Mono>

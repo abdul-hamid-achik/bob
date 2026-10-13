@@ -348,9 +348,10 @@ equals the reviewed one. Every result is typed in `structuredContent` with an
 | `workspace_invalid` | Nothing written. The workspace path could not be resolved safely. |
 | `input_invalid` | Nothing written. `expect_plan_digest` is not the exact `sha256:<64-lowercase-hex>` form. |
 
-Cancellation is honored only before the engine starts. Once staging begins,
-apply runs to completion so published files are never left without their
-lock. When the server has no apply authority, use the normal approved shell
+Cancellation is honored before staging; once publication starts the write
+completes, so published files are never left without their lock. A retry
+after a lost response reports `plan_digest_mismatch` with `converged: true`.
+When the server has no apply authority, use the normal approved shell
 path — `bob apply <workspace> --expect-plan-digest sha256:<digest>` after
 review — then call `bob_check` to confirm convergence.
 

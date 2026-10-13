@@ -50,6 +50,11 @@ and the project uses semantic versioning after the first tagged release.
 
 ### Added
 
+- `bob mcp serve` gains an opt-in `bob_apply` tool: digest-gated mutation,
+  disabled unless `--allow-apply-workspace <path>` is set (never implied by
+  `--allow-workspace` or `--allow-any-workspace`). It requires the exact
+  reviewed `sha256:` plan digest and returns the same apply receipt as the
+  CLI; the nine existing MCP tools remain read-only.
 - Examples for the `go-hygiene`, `python-app`, and `rust-cli` recipes.
 - Examples for the remaining stack recipes (`js-app`, `vue-app`, `nuxt-app`,
   `ruby-app`, `lua-lib`, `static-web`), so every built-in recipe ships one.
