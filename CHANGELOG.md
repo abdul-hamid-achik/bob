@@ -40,6 +40,13 @@ and the project uses semantic versioning after the first tagged release.
   `bob apply <workspace> --expect-plan-digest <sha256:...>`.
 - Bob Console's detection hint and captured `learn` demo now match the CLI's
   detection rule and corrected envelope contract.
+- A held workspace apply lock now returns the typed `workspace_busy` error code
+  (still exit `1`; previously mislabelled `workspace_invalid`) with retry
+  guidance, and the `apply`/`upgrade` `plan_digest_mismatch` payloads now
+  include `converged`.
+- An `upgrade` on an already-current workspace now builds a plan so it can
+  report its digest; I/O errors that `plan`, `check`, or `apply` would already
+  surface are no longer a silent no-op.
 
 ### Added
 
@@ -58,6 +65,10 @@ and the project uses semantic versioning after the first tagged release.
   every `*@2` stack recipe with its kind and package-manager variants, and
   `go-agent-tool@6`), with a coverage guard that fails when a recipe or version
   ships unpinned.
+- `bob upgrade` now reports `data.plan_digest` and `data.plan_digest_version`
+  (on `--dry-run`, a real upgrade, and an already-current workspace), and the
+  human dry-run prints a `plan digest:` line, so the value
+  `--expect-plan-digest` needs is visible without a separate `bob plan`.
 
 ## [0.12.0] - 2026-09-28
 
