@@ -1053,7 +1053,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		"json_envelope": map[string]any{
 			"flag":   "--json",
 			"fields": []string{"schema_version", "ok", "command", "data", "warnings", "next_actions"},
-			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
+			"notes":  "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Two exceptions keep their normal data and carry no data.error: check on drift and doctor reporting a required tool missing or unusable; both emit ok:false and the non-zero exit code is the signal. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line.",
 		},
 		"invariants": []string{
 			"context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
@@ -1066,7 +1066,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		},
 		"exit_codes": map[string]string{
 			"0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
-			"1": "unclassified command failure, or doctor reporting required tools missing",
+			"1": "unclassified command failure (command_failed), an unresolvable workspace path (workspace_invalid), or doctor reporting required tools missing or unusable",
 			"2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
 			"3": "check found drift with no ownership conflict",
 			"4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, or missing/incompatible ownership state for remove or upgrade",
@@ -1110,7 +1110,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("Guarantees: context/path/playbook/plan/check/inspect/stats/learn never write; one conflict means zero writes; unmanaged differing files are never overwritten; repeated apply converges to a no-op.\n")
 			b.WriteString("Guidance: context describes the workspace contract; path classifies one exact repository path; playbook resolves a closed typed procedure but never executes it.\n")
 			b.WriteString("Machine use: add --json to any non-interactive command for a versioned envelope {schema_version, ok, command, data, warnings, next_actions}; stdout stays machine-clean.\n")
-			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands; the same steps print as \"next: ...\" lines on stderr without --json.\n")
+			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, command_failed) plus next_actions with runnable corrective commands, except check on drift and doctor with a missing or unusable required tool, which keep their normal data and signal through the exit code; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook; repository mutation remains on the approved shell path.\n")
 			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, python-app, ruby-app, lua-lib, rust-cli, swift-package, elixir-app, static-web, go-hygiene) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
