@@ -759,26 +759,28 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 			}
 			captureWorkspaceMetrics(opts, root, m.Recipe)
 			if !needsUpgrade {
-				if expectedPlanDigest != "" {
-					artifacts, renderErr := recipe.Render(m)
-					if renderErr != nil {
-						return classifyInvalidInput(renderErr)
+				artifacts, renderErr := recipe.Render(m)
+				if renderErr != nil {
+					return classifyInvalidInput(renderErr)
+				}
+				plan, planErr := engine.Plan(root, m, artifacts)
+				if planErr != nil {
+					return fmt.Errorf("upgrade: %w", planErr)
+				}
+				digest := engine.DigestPlan(plan)
+				if expectedPlanDigest != "" && digest.Qualified() != expectedPlanDigest {
+					mismatch := &engine.PlanDigestMismatchError{
+						ExpectedPlanDigest: expectedPlanDigest,
+						ActualPlanDigest:   digest.Qualified(),
 					}
-					plan, planErr := engine.Plan(root, m, artifacts)
-					if planErr != nil {
-						return fmt.Errorf("upgrade: %w", planErr)
-					}
-					digest := engine.DigestPlan(plan)
-					if digest.Qualified() != expectedPlanDigest {
-						mismatch := &engine.PlanDigestMismatchError{
-							ExpectedPlanDigest: expectedPlanDigest,
-							ActualPlanDigest:   digest.Qualified(),
-						}
-						return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
-					}
+					return upgradePlanDigestMismatchFailure(cmd, opts, root, mismatch)
 				}
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "upgrade", engine.UpgradeResult{FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{}}, nil, []string{"repository is already at the current recipe version"})
+					current := engine.UpgradeResult{
+						FromVersion: from, ToVersion: to, Recipe: m.Recipe, Written: []string{},
+						PlanDigest: digest.Qualified(), PlanDigestVersion: digest.Version,
+					}
+					return emitJSON(cmd.OutOrStdout(), "upgrade", current, nil, []string{"repository is already at the current recipe version"})
 				}
 				_, err := fmt.Fprintf(cmd.OutOrStdout(), "already at recipe version %d; nothing to upgrade\n", to)
 				return err
@@ -828,7 +830,13 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 				verb = "would upgrade"
 				prefix = "dry-run: "
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s%s recipe %s from v%d to v%d: %d files written\n", prefix, verb, result.Recipe, result.FromVersion, result.ToVersion, result.Actions)
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s%s recipe %s from v%d to v%d: %d files written\n", prefix, verb, result.Recipe, result.FromVersion, result.ToVersion, result.Actions); err != nil {
+				return err
+			}
+			if !dryRun {
+				return nil
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "plan digest: %s (v%d)\n", result.PlanDigest, result.PlanDigestVersion)
 			return err
 		},
 	}
