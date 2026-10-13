@@ -347,6 +347,15 @@ func newInitCommand(opts *options) *cobra.Command {
 				}
 				name = filepath.Base(absolute)
 			}
+			path := filepath.Join(root, manifest.Filename)
+			reviewExisting := "run: bob plan " + root + " --json"
+			existing := false
+			if info, statErr := os.Lstat(path); statErr == nil && info.Mode().IsRegular() {
+				existing = true
+				if write {
+					return classifyInvalidInput(fmt.Errorf("init: %s already exists; refusing to overwrite it (review it with bob plan %s --json, or edit it by hand)", path, root))
+				}
+			}
 
 			detection := detect.Detect(root)
 			chosen, err := chooseInitRecipe(recipeID, detection)
@@ -365,6 +374,15 @@ func newInitCommand(opts *options) *cobra.Command {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", mismatch)
 				}
 			}
+			nextActions := []string{"rerun with --write", "review with bob plan"}
+			if existing {
+				warning := fmt.Sprintf("%s already exists; init --write will refuse to overwrite it, review the existing manifest with bob plan instead", path)
+				warnings = append(warnings, warning)
+				nextActions = []string{reviewExisting}
+				if !opts.json {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\nnext: %s\n", warning, reviewExisting)
+				}
+			}
 
 			m, err := buildInitManifest(chosen, name, module, description, detection)
 			if err != nil {
@@ -375,13 +393,12 @@ func newInitCommand(opts *options) *cobra.Command {
 			}
 			if !write {
 				if opts.json {
-					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": filepath.Join(root, manifest.Filename), "manifest": m, "detection": detection, "written": false}, warnings, []string{"rerun with --write", "review with bob plan"})
+					return emitJSON(cmd.OutOrStdout(), "init", map[string]any{"path": path, "manifest": m, "detection": detection, "written": false}, warnings, nextActions)
 				}
 				data, _ := manifest.Encode(m)
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), string(data))
 				return err
 			}
-			path := filepath.Join(root, manifest.Filename)
 			if err := manifest.WriteFile(path, m, false); err != nil {
 				return fmt.Errorf("init: %w", err)
 			}

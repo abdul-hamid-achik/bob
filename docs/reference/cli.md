@@ -76,7 +76,15 @@ does not match the target's detected stack warns on preview and refuses
 other recipe, which does not scaffold a Go module.
 `bob init` detects the repository's stack (Go, TypeScript, JavaScript,
 Vue, Python, Ruby, Lua, Rust, SwiftPM, Elixir/Mix, or a static web site) and defaults to the
-matching recipe; pass `--recipe <id>` to choose explicitly. When the chosen
+matching recipe; pass `--recipe <id>` to choose explicitly. For Go, a
+`recipe:` already declared in an existing `bob.yaml` wins; otherwise a Cobra
+layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool`, and any
+other Go module defaults to `go-hygiene`. When a regular-file `bob.yaml`
+already exists at the target, the preview warns (stderr in human mode,
+`warnings[]` in JSON) and points `next_actions` at `bob plan <path> --json`
+instead of suggesting `--write`; `bob init --write` refuses with exit code `4`
+(`input_invalid`), names `bob plan`, and leaves the existing manifest
+byte-for-byte unchanged. When the chosen
 recipe does not match the detected stack, the preview prints a prominent
 warning and `--write` refuses with exit code `4` (`input_invalid`) unless
 `--force` is passed. `--module` is required only by `go-agent-tool`; for the
