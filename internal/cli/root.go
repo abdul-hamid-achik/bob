@@ -587,6 +587,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 
 func newRemoveCommand(opts *options) *cobra.Command {
 	var force, dryRun bool
+	var expectedRemovalDigest string
 	cmd := &cobra.Command{
 		Use:   "remove [path]",
 		Short: "Remove Bob-managed files and bob.lock from a workspace",
@@ -594,8 +595,15 @@ func newRemoveCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
-			result, err := engine.Remove(root, engine.RemoveOptions{Force: force, DryRun: dryRun})
+			result, err := engine.Remove(root, engine.RemoveOptions{Force: force, DryRun: dryRun, ExpectedRemovalDigest: expectedRemovalDigest})
 			if err != nil {
+				var mismatch *engine.RemovalDigestMismatchError
+				if errors.As(err, &mismatch) {
+					return removalDigestMismatchFailure(cmd, opts, root, mismatch)
+				}
+				if errors.Is(err, engine.ErrInvalidRemovalDigest) {
+					return classifyInvalidInput(err)
+				}
 				if errors.Is(err, engine.ErrNoLock) {
 					return classifyInvalidInput(err)
 				}
@@ -637,7 +645,37 @@ func newRemoveCommand(opts *options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "remove managed files even when their content drifted from bob.lock")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed without removing anything")
+	cmd.Flags().StringVar(&expectedRemovalDigest, "expect-removal-digest", "", "remove only when a fresh removal decision matches this exact sha256:<64-lowercase-hex> digest from remove --dry-run")
 	return cmd
+}
+
+// removalDigestMismatchFailure reports a reviewed removal digest that no
+// longer matches the workspace. Nothing was deleted.
+func removalDigestMismatchFailure(cmd *cobra.Command, opts *options, root string, mismatch *engine.RemovalDigestMismatchError) error {
+	failure := newExitError(ExitPlanMismatch, fmt.Errorf("remove: %w", mismatch))
+	next := []string{
+		"run: " + withWorkspaceArg("bob remove", root) + " --dry-run --json",
+		"review the new removal before rerunning with --expect-removal-digest <data.removal_digest>",
+	}
+	if !opts.json {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "bob:", failure)
+		for _, step := range next {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "next: %s\n", step)
+		}
+		return reportedError{err: failure}
+	}
+	data := map[string]any{
+		"expected_removal_digest": mismatch.ExpectedRemovalDigest,
+		"actual_removal_digest":   mismatch.ActualRemovalDigest,
+		"error": map[string]string{
+			"code":    "plan_digest_mismatch",
+			"message": mismatch.Error(),
+		},
+	}
+	if emitErr := emitJSONStatus(cmd.OutOrStdout(), false, "remove", data, nil, next); emitErr != nil {
+		return fmt.Errorf("%w; emit JSON error: %v", failure, emitErr)
+	}
+	return reportedError{err: failure}
 }
 
 func printRemove(w io.Writer, result *engine.RemoveResult, dryRun bool) error {
@@ -664,7 +702,13 @@ func printRemove(w io.Writer, result *engine.RemoveResult, dryRun bool) error {
 	if dryRun {
 		prefix = "dry-run: "
 	}
-	_, err := fmt.Fprintf(w, "%sremoved %d, skipped %d, conflicts %d; lock removed: %t\n", prefix, len(result.Removed), len(result.Skipped), len(result.Conflicts), result.LockRemoved)
+	if _, err := fmt.Fprintf(w, "%sremoved %d, skipped %d, conflicts %d; lock removed: %t\n", prefix, len(result.Removed), len(result.Skipped), len(result.Conflicts), result.LockRemoved); err != nil {
+		return err
+	}
+	if !dryRun {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "removal digest: %s (v%d)\n", result.RemovalDigest, result.RemovalDigestVersion)
 	return err
 }
 

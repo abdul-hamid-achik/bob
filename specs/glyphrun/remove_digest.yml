@@ -1,0 +1,144 @@
+version: 1
+name: bob_remove_digest
+intent: |
+    bob remove --expect-removal-digest binds a destructive remove to the exact
+    decision reviewed with remove --dry-run. A matching digest deletes exactly
+    the previewed files; an edit after review, or adding --force to a digest
+    reviewed without it, exits 5 with plan_digest_mismatch and leaves every
+    file and bob.lock byte-identical; a malformed digest is invalid input.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          base="$(mktemp -d "/tmp/bob-glyph-rmdigest.XXXXXX")"
+          trap 'rm -rf "$base"' EXIT
+          setup() {
+            ./bin/bob init "$1" --name acme --module github.com/acme/acme --write >/dev/null
+            ./bin/bob apply "$1" >/dev/null
+          }
+
+          ok="$base/ok"; mkdir "$ok"; setup "$ok"
+          preview="$(./bin/bob remove "$ok" --dry-run --json)"
+          digest="$(printf '%s' "$preview" | jq -r '.data.removal_digest')"
+          printf 'digest_version=%s\n' "$(printf '%s' "$preview" | jq -r '.data.removal_digest_version')"
+          case "$digest" in sha256:*) printf 'digest_qualified=true\n' ;; esac
+          printf '%s' "$preview" | jq -r '.data.removed[]' | sort >"$base/listed"
+          real="$(./bin/bob remove "$ok" --expect-removal-digest "$digest" --json)"
+          printf '%s' "$real" | jq -r '.data.removed[]' | sort >"$base/removed"
+          if cmp -s "$base/listed" "$base/removed" && [ -s "$base/listed" ]; then printf 'removed_exactly_listed=true\n'; fi
+          gone=true
+          while IFS= read -r path; do [ -e "$ok/$path" ] && gone=false; done <"$base/listed"
+          printf 'listed_files_gone=%s\n' "$gone"
+
+          edit="$base/edit"; mkdir "$edit"; setup "$edit"
+          target="$(./bin/bob remove "$edit" --dry-run --json | jq -r '.data.removed[0]')"
+          digest="$(./bin/bob remove "$edit" --dry-run --force --json | jq -r '.data.removal_digest')"
+          printf 'human edit after review\n' >>"$edit/$target"
+          cp "$edit/$target" "$base/edited.before"
+          cp "$edit/bob.lock" "$base/lock.before"
+          set +e
+          out="$(./bin/bob remove "$edit" --force --expect-removal-digest "$digest" --json)"
+          status=$?
+          set -e
+          printf 'edit_exit_code=%s\n' "$status"
+          printf 'edit_error_code=%s\n' "$(printf '%s' "$out" | jq -r '.data.error.code')"
+          if cmp -s "$edit/$target" "$base/edited.before"; then printf 'edited_file_identical=true\n'; fi
+          if cmp -s "$edit/bob.lock" "$base/lock.before"; then printf 'edit_lock_identical=true\n'; fi
+
+          force="$base/force"; mkdir "$force"; setup "$force"
+          digest="$(./bin/bob remove "$force" --dry-run --json | jq -r '.data.removal_digest')"
+          cp "$force/bob.lock" "$base/force.lock.before"
+          set +e
+          out="$(./bin/bob remove "$force" --force --expect-removal-digest "$digest" --json)"
+          status=$?
+          set -e
+          printf 'force_exit_code=%s\n' "$status"
+          printf 'force_error_code=%s\n' "$(printf '%s' "$out" | jq -r '.data.error.code')"
+          if cmp -s "$force/bob.lock" "$base/force.lock.before"; then printf 'force_lock_identical=true\n'; fi
+
+          set +e
+          ./bin/bob remove "$force" --expect-removal-digest "sha256:NOT-A-DIGEST" --json >/dev/null 2>&1
+          status=$?
+          set -e
+          printf 'malformed_exit_code=%s\n' "$status"
+          if cmp -s "$force/bob.lock" "$base/force.lock.before"; then printf 'malformed_lock_identical=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 30000
+    - snapshot: remove_digest
+outcomes:
+    - id: dry_run_exposes_versioned_digest
+      description: remove --dry-run --json reports a qualified version-1 removal digest
+      verify:
+        screen:
+            contains: digest_version=1
+    - id: dry_run_digest_qualified
+      description: the removal digest uses the sha256-qualified form
+      verify:
+        screen:
+            contains: digest_qualified=true
+    - id: matching_digest_removes_exactly_listed
+      description: a matching digest removes exactly the files the dry-run listed
+      verify:
+        screen:
+            contains: removed_exactly_listed=true
+    - id: listed_files_deleted
+      description: every listed file is gone after the guarded remove
+      verify:
+        screen:
+            contains: listed_files_gone=true
+    - id: edit_after_review_exits_five
+      description: a managed file edited after review refuses with exit code 5
+      verify:
+        screen:
+            contains: edit_exit_code=5
+    - id: edit_after_review_error_code
+      description: the refusal uses the shared plan_digest_mismatch machine code
+      verify:
+        screen:
+            contains: edit_error_code=plan_digest_mismatch
+    - id: edited_file_preserved
+      description: the human-edited file is byte-identical after the refusal
+      verify:
+        screen:
+            contains: edited_file_identical=true
+    - id: edit_lock_preserved
+      description: bob.lock is byte-identical after the refusal
+      verify:
+        screen:
+            contains: edit_lock_identical=true
+    - id: force_not_reviewed_exits_five
+      description: a digest reviewed without --force cannot authorize a --force remove
+      verify:
+        screen:
+            contains: force_exit_code=5
+    - id: force_not_reviewed_error_code
+      description: the force mismatch uses plan_digest_mismatch
+      verify:
+        screen:
+            contains: force_error_code=plan_digest_mismatch
+    - id: force_mismatch_lock_preserved
+      description: bob.lock is byte-identical after the force mismatch
+      verify:
+        screen:
+            contains: force_lock_identical=true
+    - id: malformed_digest_invalid_input
+      description: a malformed removal digest exits 4 as invalid input
+      verify:
+        screen:
+            contains: malformed_exit_code=4
+    - id: malformed_digest_no_writes
+      description: a malformed removal digest leaves bob.lock untouched
+      verify:
+        screen:
+            contains: malformed_lock_identical=true
+contractHash: sha256:b0384e67ccc51fa0eed9abd91ac45048cacc1df7de9f0cd803df12f77736743a

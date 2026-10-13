@@ -25,6 +25,10 @@ type RemoveOptions struct {
 	Force bool
 	// DryRun performs every ownership and hash check but removes nothing.
 	DryRun bool
+	// ExpectedRemovalDigest, when set, binds the removal to one reviewed
+	// decision. It must use the exact sha256:<64-lowercase-hex> form and is
+	// compared with a fresh digest under the workspace lock before any unlink.
+	ExpectedRemovalDigest string
 	// beforeDelete is a test seam for proving the final precondition check. It
 	// is deliberately unexported so callers cannot insert behavior into the
 	// destructive path.
@@ -49,6 +53,10 @@ type RemoveResult struct {
 	Skipped     []string `json:"skipped"`
 	Conflicts   []string `json:"conflicts"`
 	LockRemoved bool     `json:"lock_removed"`
+	// RemovalDigest identifies the complete removal decision observed under
+	// the workspace lock, for dry-run and real runs alike.
+	RemovalDigest        string `json:"removal_digest"`
+	RemovalDigestVersion int    `json:"removal_digest_version"`
 }
 
 // Remove deletes every Bob-managed file recorded in bob.lock whose current
@@ -61,6 +69,11 @@ type RemoveResult struct {
 // files are cleaned up bottom-up, never removing the workspace root or a
 // directory that still holds other files.
 func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
+	if opts.ExpectedRemovalDigest != "" {
+		if err := ValidateExpectedRemovalDigest(opts.ExpectedRemovalDigest); err != nil {
+			return nil, fmt.Errorf("remove: validate expected removal digest: %w", err)
+		}
+	}
 	canonicalRoot, err := validateRoot(root)
 	if err != nil {
 		return nil, fmt.Errorf("remove: %w", err)
@@ -94,11 +107,20 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 		return nil, fmt.Errorf("remove: lock recipe %s@%d is newer than supported %s@%d", lock.Recipe.ID, lock.Recipe.Version, m.Recipe, recipeVersion)
 	}
 
-	result := &RemoveResult{
-		Removed:   []string{},
-		Skipped:   []string{},
-		Conflicts: []string{},
+	type removalCandidate struct {
+		path   string
+		locked string
 	}
+	result := &RemoveResult{
+		Removed:              []string{},
+		Skipped:              []string{},
+		Conflicts:            []string{},
+		RemovalDigestVersion: RemovalDigestVersion,
+	}
+	// Observe and classify every managed path before any unlink so the
+	// complete removal decision can be bound to a reviewed digest.
+	entries := make([]removalDigestEntry, 0, len(lock.Files))
+	candidates := make([]removalCandidate, 0, len(lock.Files))
 	for _, entry := range lock.Files {
 		path, err := validateRelativePath(entry.Path)
 		if err != nil {
@@ -112,9 +134,22 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 			return nil, fmt.Errorf("remove: inspect %q: %w", path, err)
 		}
 		decision := decideRemoval(observation, entry.SHA256, opts.Force)
+		entries = append(entries, newRemovalDigestEntry(path, entry.SHA256, observation, decision))
 		if recordNonRemoval(result, path, decision) {
 			continue
 		}
+		candidates = append(candidates, removalCandidate{path: path, locked: entry.SHA256})
+	}
+	result.RemovalDigest = digestRemoval(lockBytes, opts.Force, entries)
+	if opts.ExpectedRemovalDigest != "" && opts.ExpectedRemovalDigest != result.RemovalDigest {
+		return nil, &RemovalDigestMismatchError{
+			ExpectedRemovalDigest: opts.ExpectedRemovalDigest,
+			ActualRemovalDigest:   result.RemovalDigest,
+		}
+	}
+
+	for _, candidate := range candidates {
+		path := candidate.path
 		if !opts.DryRun {
 			if opts.beforeDelete != nil {
 				opts.beforeDelete(path)
@@ -122,11 +157,11 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 			// Editors commonly save by replacing a file after the initial hash
 			// check. Re-observe immediately before unlink so a newly written human
 			// version is preserved unless --force explicitly authorized its removal.
-			observation, err = inspectDestination(canonicalRoot, path)
+			observation, err := inspectDestination(canonicalRoot, path)
 			if err != nil {
 				return result, fmt.Errorf("remove: recheck %q: %w", path, err)
 			}
-			decision = decideRemoval(observation, entry.SHA256, opts.Force)
+			decision := decideRemoval(observation, candidate.locked, opts.Force)
 			if recordNonRemoval(result, path, decision) {
 				continue
 			}
@@ -137,6 +172,9 @@ func Remove(root string, opts RemoveOptions) (*RemoveResult, error) {
 		}
 		result.Removed = append(result.Removed, path)
 	}
+	sort.Strings(result.Removed)
+	sort.Strings(result.Skipped)
+	sort.Strings(result.Conflicts)
 
 	// The lock is removed only when every managed path was fully cleared. A
 	// skipped or conflicted file keeps its ownership record so a later
