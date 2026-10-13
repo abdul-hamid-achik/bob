@@ -1025,7 +1025,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 		{"name": "config", "purpose": "inspect or initialize XDG user settings; init previews unless --write", "mutates": true, "json": true},
 		{"name": "stats", "purpose": "summarize privacy-bounded local usage aggregates", "mutates": false, "json": true},
 		{"name": "studio", "purpose": "interactive read-only repository and usage board; rejects --json", "mutates": false, "json": false},
-		{"name": "mcp", "purpose": "serve nine repository-read-only MCP tools over stdio, plus bob_apply, a digest-gated mutation tool disabled unless --allow-apply-workspace is set", "mutates": false, "json": false},
+		{"name": "mcp", "purpose": "serve Bob's MCP tools over stdio; read-only by default (mutates reports this default): nine repository-read-only tools, plus bob_apply, a separately authorized, digest-gated tool that can mutate the repository only when --allow-apply-workspace names the exact workspace", "mutates": false, "json": false},
 		{"name": "explain", "purpose": "describe Bob's product contract and boundaries", "mutates": false, "json": true},
 		{"name": "learn", "purpose": "emit this onboarding brief for coding agents", "mutates": false, "json": true},
 		{"name": "recipe", "purpose": "inspect the embedded recipe catalog", "mutates": false, "json": true},

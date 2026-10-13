@@ -614,7 +614,7 @@ export const FEATURES: Feature[] = [
     title: 'MCP server',
     command: 'bob mcp serve',
     surface: 'mcp',
-    summary: 'Run the read-only stdio MCP projection and drive its nine typed tools.',
+    summary: 'Run the stdio MCP projection: nine read tools plus one opt-in, digest-gated apply tool.',
     detail:
       'The console starts the server with an exact workspace allowlist, lists tools with their input schemas, calls any tool interactively, and shows the server instructions. stdout stays JSON-RPC-only.',
     panel: 'mcp',
@@ -626,7 +626,11 @@ export const FEATURES: Feature[] = [
       { name: '--allow-any-workspace', kind: 'boolean', label: 'Allow any workspace', help: 'Expands read authority to any workspace Bob can reach. Must be an explicit choice.' }
     ],
     docs: ['docs/guides/mcphub-local-agent.md', 'docs/agents.md'],
-    invariants: ['The nine MCP tools never mutate repositories or run specialist probes', 'MCP stdout is JSON-RPC-only']
+    invariants: [
+      'The nine read MCP tools never write to a repository, and no MCP tool runs specialist probes',
+      'bob_apply is disabled unless --allow-apply-workspace names the exact workspace; the console never passes it',
+      'MCP stdout is JSON-RPC-only'
+    ]
   },
   {
     id: 'mcp-bob_context',

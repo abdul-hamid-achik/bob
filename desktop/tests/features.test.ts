@@ -71,8 +71,9 @@ describe('feature registry', () => {
     expect(CLI_COMMANDS.length).toBeGreaterThanOrEqual(27)
   })
 
-  it('covers all nine MCP tools', () => {
+  it('covers every read MCP tool and never registers bob_apply', () => {
     expect(MCP_TOOL_FEATURE_IDS.sort()).toEqual([...MCP_TOOLS].sort())
+    expect(MCP_TOOL_FEATURE_IDS).not.toContain('bob_apply')
   })
 
   it('assigns every feature to a known group and panel', () => {

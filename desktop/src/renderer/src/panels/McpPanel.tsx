@@ -130,7 +130,7 @@ export function McpPanel(): JSX.Element {
           </Button>
         )
       }
-      subtitle="Bob's typed stdio MCP projection: nine repository-read-only tools over newline-delimited JSON-RPC. stdout is protocol-only; diagnostics stay on stderr."
+      subtitle="Bob's typed stdio MCP projection: nine repository-read-only tools plus one opt-in, digest-gated bob_apply tool (disabled unless --allow-apply-workspace is set; the console never sets it), over newline-delimited JSON-RPC. stdout is protocol-only; diagnostics stay on stderr."
     >
       <WorkspaceGate>
         <Section
@@ -148,7 +148,7 @@ export function McpPanel(): JSX.Element {
                 entries={[
                   ['binary', <Mono className="break-all">{binary?.path ?? 'not resolved'}</Mono>],
                   ['startup workspace', <Mono className="break-all">{workspace}</Mono>],
-                  ['authority', <Badge tone="info">repository read-only</Badge>],
+                  ['authority', <Badge tone="info">repository read-only (bob_apply not authorized)</Badge>],
                   ['tools', <Mono>{info?.tools.length ?? 0}</Mono>]
                 ]}
               />
@@ -199,7 +199,7 @@ export function McpPanel(): JSX.Element {
           ) : null}
         </Section>
 
-        <Section title={`Tools (${info?.tools.length ?? 0})`} hint="Every tool is repository read-only and never runs a specialist probe.">
+        <Section title={`Tools (${info?.tools.length ?? 0})`} hint="No tool runs a specialist probe. The nine read tools never write; bob_apply is listed but refuses with apply_unauthorized because the console never passes --allow-apply-workspace.">
           {info?.started && info.tools.length > 0 ? (
             <div className="grid grid-cols-[20rem_minmax(0,1fr)] gap-4">
               <ul className="max-h-[32rem] overflow-auto rounded-[8px] border border-line">
@@ -297,7 +297,7 @@ export function McpPanel(): JSX.Element {
           ) : (
             <EmptyState
               title="Server is not running"
-              hint="Start the server to list and call the nine read-only tools. The console spawns bob mcp serve with this workspace as the exact allowlist."
+              hint="Start the server to list and call the tools: nine that only read, plus bob_apply, which stays unauthorized here. The console spawns bob mcp serve with this workspace as the exact allowlist."
               action={
                 <Button variant="primary" loading={busy} onClick={() => void start()}>
                   Start bob mcp serve

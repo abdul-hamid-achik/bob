@@ -118,7 +118,7 @@ const ledger = [
     tag: 'AGENT',
     kind: 'read',
     title: 'Agent-native surfaces',
-    body: 'Versioned JSON envelopes on every command, a one-shot bob learn briefing, and nine read-only MCP tools. Machines are first-class readers here.',
+    body: 'Versioned JSON envelopes on every command, a one-shot bob learn briefing, and an MCP server whose read tools never write and whose one apply tool is opt-in and digest-gated. Machines are first-class readers here.',
   },
   {
     tag: 'SCOPE',
@@ -292,10 +292,12 @@ const refusals = [
 }</code></pre>
         </div>
         <div>
-          <h2 class="h2">Nine MCP tools.<br />Zero of them write.</h2>
+          <h2 class="h2">Ten MCP tools.<br />One can write, only if you say so.</h2>
           <p class="body-copy">
-            <code>bob mcp serve</code> exposes a compact, repository-read-only
-            surface over stdio. Diagnostics go to stderr; stdout stays
+            <code>bob mcp serve</code> exposes nine read-only tools over stdio,
+            plus <code>bob_apply</code>: off unless you pass
+            <code>--allow-apply-workspace</code>, and gated on the exact
+            reviewed plan digest. Diagnostics go to stderr; stdout stays
             JSON-RPC-clean.
           </p>
           <pre class="snippet"><code><span class="c-cmd">$ claude mcp add bob -- bob mcp serve .</span></code></pre>
@@ -303,8 +305,9 @@ const refusals = [
             <li>bob_context</li><li>bob_path</li><li>bob_playbook</li>
             <li>bob_inspect</li><li>bob_plan</li><li>bob_check</li>
             <li>bob_validate_manifest</li><li>bob_recipe_describe</li><li>bob_stats</li>
+            <li>bob_apply (opt-in)</li>
           </ul>
-          <p class="stamp-line">All nine stamped <span class="ro">READ-ONLY</span>.</p>
+          <p class="stamp-line">All nine stamped <span class="ro">READ-ONLY</span>. <code>bob_apply</code> is opt-in and digest-gated.</p>
         </div>
       </div>
     </section>

@@ -179,7 +179,7 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "json": false,
           "mutates": false,
           "name": "mcp",
-          "purpose": "serve nine repository-read-only MCP tools over stdio"
+          "purpose": "serve Bob's MCP tools over stdio; read-only by default (mutates reports this default): nine repository-read-only tools, plus bob_apply, a separately authorized, digest-gated tool that can mutate the repository only when --allow-apply-workspace names the exact workspace"
         },
         {
           "json": true,
@@ -257,7 +257,7 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "bob upgrade migrates an older same-recipe lock; bob remove releases only proven lock-owned files"
       ],
       "mcp": {
-        "authority": "repository read-only; defaults to an exact startup workspace allowlist",
+        "authority": "nine repository-read-only tools default to an exact startup workspace allowlist; bob_apply is a digest-gated mutation tool disabled unless --allow-apply-workspace names the exact workspace, which --allow-workspace and --allow-any-workspace never imply",
         "serve": "bob mcp serve <workspace>",
         "tools": [
           "bob_context",
@@ -268,7 +268,8 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "bob_inspect",
           "bob_stats",
           "bob_recipe_describe",
-          "bob_validate_manifest"
+          "bob_validate_manifest",
+          "bob_apply"
         ]
       },
       "product": "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
