@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/abdul-hamid-achik/bob/internal/engine"
+	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -96,6 +97,106 @@ func TestPlanFilteringDigestCheckAndReadOnlyContract(t *testing.T) {
 	if runner.calls() != 0 {
 		t.Fatalf("plan/check invoked subprocess runner %d time(s)", runner.calls())
 	}
+}
+
+func TestPlanCheckNextActionsCarryReviewedDigest(t *testing.T) {
+	t.Parallel()
+	callPlanCheck := func(t *testing.T, root string) (PlanOutput, CheckOutput) {
+		t.Helper()
+		session := connect(t, root, &offlineRunner{})
+		result, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_plan", Arguments: map[string]any{}})
+		if err != nil || result.IsError {
+			t.Fatalf("plan: result=%#v err=%v", result, err)
+		}
+		var plan PlanOutput
+		decodeStructured(t, result, &plan)
+		result, err = session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bob_check", Arguments: map[string]any{}})
+		if err != nil || result.IsError {
+			t.Fatalf("check: result=%#v err=%v", result, err)
+		}
+		var check CheckOutput
+		decodeStructured(t, result, &check)
+		return plan, check
+	}
+
+	t.Run("drift", func(t *testing.T) {
+		t.Parallel()
+		root := mcpWorkspace(t)
+		plan, check := callPlanCheck(t, root)
+		completePlan, _, err := buildPlan(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		qualified := engine.DigestPlan(completePlan).Qualified()
+		if !strings.HasPrefix(qualified, "sha256:") || len(qualified) != len("sha256:")+64 {
+			t.Fatalf("unexpected qualified digest shape: %q", qualified)
+		}
+		if _, err := hex.DecodeString(strings.TrimPrefix(qualified, "sha256:")); err != nil {
+			t.Fatalf("qualified digest is not hex: %q", qualified)
+		}
+		want := []string{"bob", "apply", root, "--expect-plan-digest", qualified}
+		for name, got := range map[string]struct {
+			clean     bool
+			qualified string
+			actions   []inspectpkg.CommandAction
+		}{
+			"bob_plan":  {plan.Clean, plan.PlanDigestQualified, plan.NextActions},
+			"bob_check": {check.Clean, check.PlanDigestQualified, check.NextActions},
+		} {
+			if got.clean || got.qualified != qualified {
+				t.Fatalf("%s: drift workspace clean=%v digest=%s want=%s", name, got.clean, got.qualified, qualified)
+			}
+			if len(got.actions) != 1 || !reflect.DeepEqual(got.actions[0].Argv, want) || !got.actions[0].RequiresExplicitAuthority || got.actions[0].CWD != root {
+				t.Fatalf("%s: drift continuation mismatch: got=%#v want argv=%#v", name, got.actions, want)
+			}
+		}
+	})
+
+	t.Run("clean", func(t *testing.T) {
+		t.Parallel()
+		root := mcpWorkspace(t)
+		applyWorkspace(t, root)
+		plan, check := callPlanCheck(t, root)
+		if !plan.Clean || !check.Clean || len(plan.NextActions) != 0 || len(check.NextActions) != 0 {
+			t.Fatalf("clean continuation changed: plan=%#v check=%#v", plan.NextActions, check.NextActions)
+		}
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		t.Parallel()
+		root := mcpWorkspace(t)
+		completePlan, _, err := buildPlan(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var target string
+		for _, action := range completePlan.Actions {
+			if action.Kind == engine.ActionCreate {
+				target = action.Path
+				break
+			}
+		}
+		if target == "" {
+			t.Fatal("no create action available to force a conflict")
+		}
+		path := filepath.Join(root, filepath.FromSlash(target))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("unmanaged differing content\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		plan, check := callPlanCheck(t, root)
+		want := []string{"bob", "plan", root}
+		for name, actions := range map[string][]inspectpkg.CommandAction{"bob_plan": plan.NextActions, "bob_check": check.NextActions} {
+			if len(actions) != 1 || !reflect.DeepEqual(actions[0].Argv, want) || actions[0].RequiresExplicitAuthority {
+				t.Fatalf("%s: conflict continuation changed: %#v", name, actions)
+			}
+		}
+		if plan.ConflictCount == 0 || check.ConflictCount == 0 {
+			t.Fatalf("expected conflicts: plan=%d check=%d", plan.ConflictCount, check.ConflictCount)
+		}
+	})
 }
 
 // legacyDigest is the exact pre-Phase-1 MCP implementation retained in the
