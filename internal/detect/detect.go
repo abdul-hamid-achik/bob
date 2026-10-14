@@ -19,9 +19,9 @@ const maxDetectionFileBytes = 1 << 20
 
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
-	// ID is a closed identifier: go, rust, cpp, swift, dotnet, kotlin, java,
-	// elixir, php, ruby, python, lua, nuxt, vue, deno, typescript, javascript,
-	// docker, terraform, nix, or static-web.
+	// ID is a closed identifier: go, rust, cpp, zig, swift, dart, dotnet,
+	// kotlin, java, scala, elixir, php, ruby, python, lua, nuxt, vue, deno,
+	// typescript, javascript, docker, terraform, nix, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -88,7 +88,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue/nuxt outrank the generic typescript/javascript stacks they imply.
-var primaryPrecedence = []string{"go", "rust", "cpp", "swift", "dotnet", "kotlin", "java", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "docker", "terraform", "nix", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "cpp", "zig", "swift", "dart", "dotnet", "kotlin", "java", "scala", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "docker", "terraform", "nix", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -183,9 +183,25 @@ func Detect(root string) Result {
 		kindHints["swift"] = "package"
 	}
 
+	// Dart/Flutter. pubspec.yaml (or pubspec.yml) proves the Dart contract.
+	var dartMarkers []string
+	for _, marker := range []string{"pubspec.yaml", "pubspec.yml"} {
+		if names[marker] {
+			dartMarkers = append(dartMarkers, marker)
+		}
+	}
+	if len(dartMarkers) > 0 {
+		addStack("dart", dartMarkers...)
+	}
+
 	// C/C++ with CMake. CMakeLists.txt proves the CMake contract.
 	if names["CMakeLists.txt"] {
 		addStack("cpp", "CMakeLists.txt")
+	}
+
+	// Zig. build.zig proves the Zig build contract.
+	if names["build.zig"] {
+		addStack("zig", "build.zig")
 	}
 
 	// Docker image. A Dockerfile or a Compose file proves the image contract.
@@ -253,6 +269,21 @@ func Detect(root string) Result {
 	// plain JVM build stays Java.
 	if markers := kotlinStackMarkers(root, entries, names); len(markers) > 0 {
 		addStack("kotlin", markers...)
+	}
+
+	// Scala (sbt). build.sbt or project/build.properties proves the sbt
+	// contract.
+	var scalaMarkers []string
+	for _, marker := range []string{"build.sbt"} {
+		if names[marker] {
+			scalaMarkers = append(scalaMarkers, marker)
+		}
+	}
+	if regularFileExists(filepath.Join(root, "project", "build.properties")) {
+		scalaMarkers = append(scalaMarkers, "project/build.properties")
+	}
+	if len(scalaMarkers) > 0 {
+		addStack("scala", scalaMarkers...)
 	}
 
 	// Elixir applications and umbrella projects.

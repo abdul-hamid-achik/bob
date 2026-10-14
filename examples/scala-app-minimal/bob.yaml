@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: scala-app
+product:
+  name: scala-app-demo
+  description: A small Scala application
+runtime:
+  language: scala
+  kind: app
+distribution:
+  github_actions: true

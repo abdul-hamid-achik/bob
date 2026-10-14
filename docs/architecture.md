@@ -59,10 +59,10 @@ library core), `python-tool@1` (a Python CLI with an argparse entry point
 over a tested pure function), and `ts-tool@1` (a TypeScript/Node CLI with a
 `process.argv` entry point over a tested pure function) — plus `files@1`,
 which materializes an arbitrary
-manifest-declared file tree, and the twenty-one
+manifest-declared file tree, and the twenty-four
 stack hygiene recipes (`ts-app@2` through `go-hygiene@2`, including Nuxt, SwiftPM,
-Elixir/Mix, Java, Kotlin, .NET, PHP, Deno, C/C++ with CMake, Docker,
-Terraform, and Nix) that render only
+Elixir/Mix, Java, Kotlin, .NET, PHP, Deno, C/C++ with CMake, Dart, Zig, Scala,
+Docker, Terraform, and Nix) that render only
 seed-once hygiene artifacts and never own application
 source. The original eight version-1 stack contracts remain renderable for
 immutable compatibility. There is no

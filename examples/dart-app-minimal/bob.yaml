@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: dart-app
+product:
+  name: dart-app-demo
+  description: A small Dart application
+runtime:
+  language: dart
+  kind: app
+distribution:
+  github_actions: true

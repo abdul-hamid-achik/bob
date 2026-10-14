@@ -380,6 +380,33 @@ var stackDefinitions = map[string]stackDefinition{
 		Gitignore:     stackGitignoreNix,
 		CIWorkflow:    stackCINix,
 	},
+	manifest.RecipeDartApp: {
+		ID:            manifest.RecipeDartApp,
+		Description:   "Seed-once hygiene for a Dart/Flutter project: docs, .gitignore, and an analyze/test CI stub; never owns application source",
+		LanguageLabel: "Dart (Flutter or pure Dart)",
+		Stacks:        []string{"dart"},
+		Commands:      []string{"dart pub get", "dart analyze", "dart test"},
+		Gitignore:     stackGitignoreDart,
+		CIWorkflow:    stackCIDart,
+	},
+	manifest.RecipeZigApp: {
+		ID:            manifest.RecipeZigApp,
+		Description:   "Seed-once hygiene for a Zig project: docs, .gitignore, and a build/test CI stub; never owns application source",
+		LanguageLabel: "Zig",
+		Stacks:        []string{"zig"},
+		Commands:      []string{"zig build", "zig build test"},
+		Gitignore:     stackGitignoreZig,
+		CIWorkflow:    stackCIZig,
+	},
+	manifest.RecipeScalaApp: {
+		ID:            manifest.RecipeScalaApp,
+		Description:   "Seed-once hygiene for a Scala sbt project: docs, .gitignore, and a test CI stub; never owns application source",
+		LanguageLabel: "Scala (sbt)",
+		Stacks:        []string{"scala"},
+		Commands:      []string{"sbt compile", "sbt test"},
+		Gitignore:     stackGitignoreScala,
+		CIWorkflow:    stackCIScala,
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
@@ -1232,6 +1259,33 @@ const stackGitignoreNix = `/result
 !.env.example
 `
 
+const stackGitignoreDart = `.dart_tool/
+/build/
+.packages
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreZig = `.zig-cache/
+zig-out/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreScala = `/target/
+/.bsp/
+/.metals/
+/.bloop/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
         with:
           go-version: stable
@@ -1304,6 +1358,25 @@ const stackCINix = stackCIHeader + `      - uses: cachix/install-nix-action@13d8
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: nix flake check
+`
+
+const stackCIDart = stackCIHeader + `      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1
+      - run: dart pub get
+      - run: dart analyze
+      - run: dart test
+`
+
+const stackCIZig = stackCIHeader + `      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+      - run: zig build
+      - run: zig build test
+`
+
+const stackCIScala = stackCIHeader + `      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1
+      - run: sbt test
 `
 
 const stackDockerignore = `.git

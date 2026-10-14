@@ -29,6 +29,8 @@ var publishedGoldens = map[string]string{
 	"java-app@2/kind-library":                  "e24563dbc137592c83687602cdf1ad3d03040ba9c0c4cf10bfa749a42a8e7225",
 	"cpp-cmake@2/default":                      "96e94a70c34bb8d062c1a5543f907b02dea3e0b1f32d0662ab6d5c8bf935a82f",
 	"cpp-cmake@2/kind-library":                 "96e94a70c34bb8d062c1a5543f907b02dea3e0b1f32d0662ab6d5c8bf935a82f",
+	"dart-app@2/default":                       "fb18680c843f604ed3a97ba75510ab619fda0c9043c90864dc618fec5db9d3ca",
+	"dart-app@2/kind-package":                  "fb18680c843f604ed3a97ba75510ab619fda0c9043c90864dc618fec5db9d3ca",
 	"docker-app@2/default":                     "1264f74000546e0c2fc784d3b2d097da41f07b3258db7863edca3833ac0506f9",
 	"nix-app@2/default":                        "65b045c8c14873b4b084e934a3132fcb56783dcfc8c8ba21a4f7488d81a7a0f9",
 	"nix-app@2/kind-package":                   "65b045c8c14873b4b084e934a3132fcb56783dcfc8c8ba21a4f7488d81a7a0f9",
@@ -55,6 +57,8 @@ var publishedGoldens = map[string]string{
 	"rust-cli@2/default":                       "3d52a23c701159b548913adce01988356fd3ea90b73bc7a31bfc09731a0e9be8",
 	"rust-cli@2/kind-lib":                      "3d52a23c701159b548913adce01988356fd3ea90b73bc7a31bfc09731a0e9be8",
 	"rust-cli@2/kind-workspace":                "3d52a23c701159b548913adce01988356fd3ea90b73bc7a31bfc09731a0e9be8",
+	"scala-app@2/default":                      "a2c87590b97afa896ea43be6cbdf284af26a0624bf7e32fcaaf3c1fedb609edd",
+	"scala-app@2/kind-library":                 "a2c87590b97afa896ea43be6cbdf284af26a0624bf7e32fcaaf3c1fedb609edd",
 	"static-web@2/default":                     "3adae01cd2f027252981b731d61c43cde376690cd9915a3147aaaa0e69e64d12",
 	"swift-package@2/default":                  "3ad0a2c3d5777a47f986fe838e026f8d7208fc34baca075ae28c5b165e7b5e14",
 	"elixir-app@2/default":                     "74fe805dd9b49014c15ac7aa79b4b40a32819e14be948d54e8335651669e0a75",
@@ -64,6 +68,8 @@ var publishedGoldens = map[string]string{
 	"ts-app@2/pm-pnpm":                         "4c0678d765ed277bcef2fd7587ee83a7c977f9f859c1fff0895f1f524b927a25",
 	"vue-app@2/default":                        "310f1f36832c1da92ac54c178b5b7fd07a28c0ff515dace3178e13bb4ba03f51",
 	"vue-app@2/pm-yarn":                        "11da8d2491c8d4c51fb5357ee632c75cfdb851aa3d3da275e0d07e43e5f22be8",
+	"zig-app@2/default":                        "0ca68236a2c50fc3cd4861f6c7a13084f1000af542469cafcf49772d26eb82d0",
+	"zig-app@2/kind-library":                   "0ca68236a2c50fc3cd4861f6c7a13084f1000af542469cafcf49772d26eb82d0",
 }
 
 type publishedFixture struct {

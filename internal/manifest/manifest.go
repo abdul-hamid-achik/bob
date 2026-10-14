@@ -65,6 +65,9 @@ const (
 	RecipeDockerApp    = "docker-app"
 	RecipeTerraformApp = "terraform-app"
 	RecipeNixApp       = "nix-app"
+	RecipeDartApp      = "dart-app"
+	RecipeZigApp       = "zig-app"
+	RecipeScalaApp     = "scala-app"
 )
 
 // StackRuntime is the closed runtime contract of one stack hygiene recipe.
@@ -99,6 +102,9 @@ var stackRecipeRuntimes = map[string]StackRuntime{
 	RecipeDockerApp:    {Languages: []string{"docker"}, Kinds: []string{"image"}},
 	RecipeTerraformApp: {Languages: []string{"hcl"}, Kinds: []string{"module", "stack"}},
 	RecipeNixApp:       {Languages: []string{"nix"}, Kinds: []string{"flake", "package"}},
+	RecipeDartApp:      {Languages: []string{"dart"}, Kinds: []string{"app", "package"}},
+	RecipeZigApp:       {Languages: []string{"zig"}, Kinds: []string{"app", "library"}},
+	RecipeScalaApp:     {Languages: []string{"scala"}, Kinds: []string{"app", "library"}},
 }
 
 // StackRecipeRuntime reports the runtime contract for a stack hygiene recipe
