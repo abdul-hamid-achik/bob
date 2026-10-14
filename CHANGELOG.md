@@ -50,9 +50,21 @@ and the project uses semantic versioning after the first tagged release.
 - Docs: the future-architecture list now records the shipped safe increments and
   marks the evaluated `adopt`/`verify`, persistent-receipt, and managed-block
   items as deliberately not planned.
+- The human `plan` summary line now ends with `… unchanged, N retire, N conflict`,
+  and Bob Console's watch-tally parser understands the new `retire` column.
 
 ### Added
 
+- A `retire` plan action: with the opt-in `--allow-retire` flag on `plan`,
+  `check`, `apply`, and `upgrade`, a lock-owned path the recipe no longer
+  declares and whose content still matches `bob.lock` is deleted by apply and
+  dropped from the lock. Drifted, symlinked, or special files stay conflicts,
+  and without the flag the behavior is byte-identical to before.
+- `rust-tool@1`: a public-ready Rust CLI scaffold — a Cargo project with a thin
+  binary over a tested library core, rustfmt/clippy tooling config, CI, a release
+  workflow, docs, and a Taskfile — the Rust analogue of `go-agent-tool`.
+- Glyphrun specs covering `bob remove --force`, the `bob context` profiles, and
+  `bob path --batch`.
 - A new `java-app@2` stack hygiene recipe seeds Java repository hygiene (docs,
   `.gitignore`, and a Maven CI stub) without owning application source.
 - Five new `@2` stack hygiene recipes — `dotnet-app` (.NET/C#), `php-app`,
