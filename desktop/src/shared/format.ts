@@ -73,6 +73,7 @@ export const KIND_META: Record<ActionKind, { label: string; tone: Tone; detail: 
   adopt: { label: 'Adopt', tone: 'info', detail: 'An unmanaged file already matches desired content; Bob takes ownership.' },
   update: { label: 'Update', tone: 'caution', detail: 'Lock-proven update: the current hash matches the prior lock.' },
   unchanged: { label: 'Unchanged', tone: 'neutral', detail: 'Already converged; nothing is written.' },
+  retire: { label: 'Retire', tone: 'caution', detail: 'A lock-owned path the recipe dropped; deleted only with --allow-retire.' },
   conflict: { label: 'Conflict', tone: 'danger', detail: 'Ownership is not proven; one conflict blocks the complete apply.' }
 }
 
@@ -81,7 +82,7 @@ export function familyForCode(code: string): ActionFamily {
 }
 
 export function actionCounts(actions: PlanAction[]): Record<ActionKind, number> {
-  const counts: Record<ActionKind, number> = { create: 0, update: 0, adopt: 0, unchanged: 0, conflict: 0 }
+  const counts: Record<ActionKind, number> = { create: 0, update: 0, adopt: 0, unchanged: 0, retire: 0, conflict: 0 }
   for (const action of actions) counts[action.kind] = (counts[action.kind] ?? 0) + 1
   return counts
 }

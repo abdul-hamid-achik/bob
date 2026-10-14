@@ -63,9 +63,15 @@ describe('parseWatchLine', () => {
   })
 
   it('reads the tally footer', () => {
+    const parsed = parseWatchLine('0 create, 0 update, 0 adopt, 29 unchanged, 0 retire, 1 conflict')
+    expect(parsed.type).toBe('tally')
+    if (parsed.type === 'tally') expect(parsed.tally).toEqual({ create: 0, update: 0, adopt: 0, unchanged: 29, retire: 0, conflict: 1 })
+  })
+
+  it('still reads a legacy tally footer without the retire column', () => {
     const parsed = parseWatchLine('0 create, 0 update, 0 adopt, 29 unchanged, 1 conflict')
     expect(parsed.type).toBe('tally')
-    if (parsed.type === 'tally') expect(parsed.tally).toEqual({ create: 0, update: 0, adopt: 0, unchanged: 29, conflict: 1 })
+    if (parsed.type === 'tally') expect(parsed.tally).toEqual({ create: 0, update: 0, adopt: 0, unchanged: 29, retire: 0, conflict: 1 })
   })
 
   it('ignores separators and unknown lines', () => {

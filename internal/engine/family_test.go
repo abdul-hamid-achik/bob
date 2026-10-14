@@ -25,6 +25,7 @@ var closedActionCodes = map[string]ActionFamily{
 	CodeInSync:               FamilyConvergence,
 	CodeIdenticalContent:     FamilyConvergence,
 	CodeSeedExists:           FamilyConvergence,
+	CodeRetiredUnchanged:     FamilyConvergence,
 }
 
 // TestFamilyByCodeMatchesClosedVocabularyMirror keeps the production map and
@@ -58,7 +59,7 @@ func TestFamilyByCodeMatchesClosedVocabularyMirror(t *testing.T) {
 
 func TestActionFamilyCoversClosedCodeVocabulary(t *testing.T) {
 	t.Parallel()
-	if len(closedActionCodes) != 13 {
+	if len(closedActionCodes) != 14 {
 		t.Fatalf("closed code table has %d entries; update it (and familyByCode, and the const block in engine.go) when the vocabulary changes", len(closedActionCodes))
 	}
 	for code, want := range closedActionCodes {

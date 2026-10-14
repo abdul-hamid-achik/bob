@@ -47,7 +47,7 @@ export interface RecipeRef {
   version: number
 }
 
-export type ActionKind = 'create' | 'adopt' | 'unchanged' | 'update' | 'conflict'
+export type ActionKind = 'create' | 'adopt' | 'unchanged' | 'update' | 'retire' | 'conflict'
 
 export type ConflictFamily = 'contract' | 'convergence' | 'ownership' | string
 

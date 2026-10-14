@@ -50,6 +50,7 @@ type ActionCounts struct {
 	Adopt     int `json:"adopt"`
 	Unchanged int `json:"unchanged"`
 	Conflict  int `json:"conflict"`
+	Retire    int `json:"retire,omitempty"`
 }
 
 type Repository struct {
@@ -246,6 +247,8 @@ func inspectRepository(root string, report *Report) (manifest.Manifest, bool, *e
 			report.Repository.Actions.Unchanged++
 		case engine.ActionConflict:
 			report.Repository.Actions.Conflict++
+		case engine.ActionRetire:
+			report.Repository.Actions.Retire++
 		}
 	}
 	report.Repository.Converged = plan.Clean()

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 )
@@ -32,6 +34,10 @@ var (
 // Apply behavior. ExpectedPlanDigest must use the exact sha256:<hex> form.
 type ApplyOptions struct {
 	ExpectedPlanDigest string
+	// AllowRetire authorizes deleting a lock-owned regular file the recipe no
+	// longer declares (a retire action). Without it, such a path stays a
+	// retired_owned conflict that blocks the entire apply.
+	AllowRetire bool
 }
 
 // PlanDigestMismatchError retains both plan identities for typed CLI and
@@ -223,6 +229,32 @@ func validateApplyOptions(options ApplyOptions) error {
 	}
 	if err := ValidateExpectedPlanDigest(options.ExpectedPlanDigest); err != nil {
 		return fmt.Errorf("validate expected plan digest: %w", err)
+	}
+	return nil
+}
+
+// retirePath deletes one lock-owned regular file whose current content still
+// matches the hash recorded in bob.lock. It re-observes the destination under
+// the apply lock immediately before unlink, so a human edit made after
+// planning is preserved as a conflict instead of being silently deleted. A
+// symlink, special file, or drifted regular file never reaches this path as a
+// retire action; the same guard keeps a raced edit safe here.
+func retirePath(root string, action Action) error {
+	observation, err := inspectDestination(root, action.Path)
+	if err != nil {
+		return err
+	}
+	if !observation.exists {
+		return errors.New("destination disappeared before retirement")
+	}
+	if observation.conflictCode != "" {
+		return fmt.Errorf("destination is %s; refusing to delete", observation.conflictReason)
+	}
+	if observation.hash != action.LockedSHA256 {
+		return errors.New("destination changed before retirement")
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(action.Path))); err != nil {
+		return err
 	}
 	return nil
 }
