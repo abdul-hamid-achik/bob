@@ -1,0 +1,110 @@
+version: 1
+name: bob_remove_force
+intent: |
+    bob remove --dry-run previews a hand-edited managed file as skipped and
+    reports that the lock would be retained; bob remove --force deletes the
+    drifted file and bob.lock while leaving bob.yaml untouched.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-rmforce.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'EOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: acme
+            description: Remove --force fixture.
+          files:
+            - path: notes.txt
+              content: |
+                hello
+          EOF
+          ./bin/bob apply "$root" >/dev/null
+          printf 'edited by hand\n' > "$root/notes.txt"
+
+          set +e
+          ./bin/bob remove "$root" --dry-run >"$root/dryrun.out" 2>"$root/dryrun.err"
+          dryrun_code=$?
+          set -e
+          printf 'dryrun_exit=%s\n' "$dryrun_code"
+          if grep -q '^skipped ' "$root/dryrun.out"; then printf 'dryrun_skipped=true\n'; fi
+          if grep -q 'lock removed: false' "$root/dryrun.out"; then printf 'dryrun_lock_kept=true\n'; fi
+          if [ -e "$root/bob.lock" ]; then printf 'dryrun_lock_present=true\n'; fi
+          if [ -e "$root/notes.txt" ]; then printf 'dryrun_file_present=true\n'; fi
+
+          set +e
+          ./bin/bob remove "$root" --force >"$root/force.out" 2>"$root/force.err"
+          force_code=$?
+          set -e
+          printf 'force_exit=%s\n' "$force_code"
+          if grep -q '^removed ' "$root/force.out"; then printf 'force_removed=true\n'; fi
+          if grep -q 'lock removed: true' "$root/force.out"; then printf 'force_lock_removed=true\n'; fi
+          if [ ! -e "$root/notes.txt" ]; then printf 'force_file_gone=true\n'; fi
+          if [ ! -e "$root/bob.lock" ]; then printf 'force_lock_gone=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: remove_force
+outcomes:
+    - id: dry_run_reports_skipped
+      description: dry-run classifies the hand-edited managed file as skipped
+      verify:
+        screen:
+            contains: dryrun_skipped=true
+    - id: dry_run_reports_lock_kept
+      description: dry-run reports the lock would be retained
+      verify:
+        screen:
+            contains: dryrun_lock_kept=true
+    - id: dry_run_exits_conflicts
+      description: a drifted file makes remove --dry-run exit 2
+      verify:
+        screen:
+            contains: dryrun_exit=2
+    - id: dry_run_preserves_lock_on_disk
+      description: bob.lock is physically present after dry-run
+      verify:
+        screen:
+            contains: dryrun_lock_present=true
+    - id: dry_run_preserves_file_on_disk
+      description: the drifted file is physically present after dry-run
+      verify:
+        screen:
+            contains: dryrun_file_present=true
+    - id: force_exits_zero
+      description: remove --force completes successfully
+      verify:
+        screen:
+            contains: force_exit=0
+    - id: force_reports_removed
+      description: force reports the drifted file as removed
+      verify:
+        screen:
+            contains: force_removed=true
+    - id: force_reports_lock_removed
+      description: force reports the lock was removed
+      verify:
+        screen:
+            contains: force_lock_removed=true
+    - id: force_deletes_drifted_file
+      description: the drifted file is gone after force
+      verify:
+        screen:
+            contains: force_file_gone=true
+    - id: force_deletes_lock
+      description: bob.lock is gone after force
+      verify:
+        screen:
+            contains: force_lock_gone=true
+contractHash: sha256:7fc6f6c283d62965df33eefc0f499c427861010759bc0950916c6d7b1c693cdb
