@@ -51,10 +51,10 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Six kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
-`rust-tool@1`, and `ts-tool@1`, the four
+Seven kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
+`rust-tool@1`, `ts-tool@1`, and `java-tool@1`, the five
 factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes
 (`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
@@ -248,6 +248,47 @@ the workflows — remains Bob-owned.
 repository; `bob init --recipe ts-tool` previews a manifest for an existing
 directory. `--module` is optional repository identity for this recipe, and
 `ts-tool` is never auto-detected: it must be selected explicitly.
+
+## The `java-tool` recipe
+
+`recipe: java-tool` is the Java (Maven) analogue of `go-agent-tool`: a
+public-ready Java CLI scaffold that owns a complete, reviewable repository. It
+renders a thin `src/main/java/<pkg>/Main.java` entry point over a tested pure
+`greet` function and CLI `main` in `src/main/java/<pkg>/Cli.java`, a JUnit 5
+suite in `src/test/java/<pkg>/CliTest.java`, Maven tooling configuration
+(`pom.xml`, `checkstyle.xml`), repository hygiene, `docs/index.md`, a
+`Taskfile.yml`, and `.github/workflows/ci.yml` plus a release workflow that
+attaches the shaded jar. `<pkg>` is a valid Java package derived from the
+module and product name: a host-path module such as
+`github.com/acme/acme-tool` becomes `com.acme.acmetool` (the host's top-level
+label plus the remaining segments lowercased with non-alphanumerics removed);
+otherwise the package is `com.example.<name>` with the same sanitization.
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity — the same shape rules
+  as a Go module path when present, but it is not a Java package path and is
+  never written into `pom.xml`.
+- `product.visibility` must be `public` or `private`, and `product.license`
+  must be `MIT`.
+- `runtime.language` must be `java` and `runtime.kind` must be `cli`.
+- `surfaces.cli` and `surfaces.json` must both be `true`.
+- `integrations` and `distribution` are unused and must stay zero-valued; the
+  recipe always renders its CI and release workflows.
+- `vars` and `files` are unsupported; `ownership.release` works as on
+  `go-agent-tool`.
+
+`java-tool@1` creates `pom.xml`, `README.md`, `AGENTS.md`, and
+`CHANGELOG.md` once and never lock-owns them: adding a dependency to
+`pom.xml` is a normal human edit that stays clean. Everything else the
+recipe renders — including `src/main/java/<pkg>/Main.java`,
+`src/main/java/<pkg>/Cli.java`, and `src/test/java/<pkg>/CliTest.java` —
+remains Bob-owned.
+
+`bob new <name> --recipe java-tool --module <repo> --write` scaffolds a fresh
+repository; `bob init --recipe java-tool` previews a manifest for an existing
+directory. `--module` is optional repository identity for this recipe, and
+`java-tool` is never auto-detected: it must be selected explicitly.
 
 ## The `files` recipe
 

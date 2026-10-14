@@ -36,6 +36,10 @@ const (
 	// process.argv entry point over a tested pure function, with docs, CI, and
 	// an npm release workflow.
 	RecipeTSTool = "ts-tool"
+	// RecipeJavaTool scaffolds a public-ready Java (Maven) CLI: a thin main
+	// entry point over a tested pure function, with docs, CI, and a release
+	// workflow.
+	RecipeJavaTool = "java-tool"
 	// RecipeFiles declares an arbitrary file tree inline.
 	RecipeFiles = "files"
 
@@ -151,7 +155,7 @@ var (
 // sync with recipe.IDs(); manifest cannot import recipe (recipe imports
 // manifest), so this list is the schema-side source of truth for the id set.
 var recipeIDs = func() []string {
-	ids := append([]string{RecipeFiles, RecipeGoAgentTool, RecipePythonTool, RecipeRustTool, RecipeTSTool}, StackRecipeIDs()...)
+	ids := append([]string{RecipeFiles, RecipeGoAgentTool, RecipeJavaTool, RecipePythonTool, RecipeRustTool, RecipeTSTool}, StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }()
@@ -323,6 +327,29 @@ func DefaultTSTool(name, module, description string) Manifest {
 	}
 }
 
+// DefaultJavaTool builds the default manifest for the java-tool factory
+// recipe: a public-ready Java (Maven) CLI scaffold. The module is optional
+// repository identity (not a Java package path); the recipe always renders
+// its CI and release workflows, so no distribution toggle is selected.
+func DefaultJavaTool(name, module, description string) Manifest {
+	if description == "" {
+		description = "A local-first, agent-ready Java command-line tool."
+	}
+	return Manifest{
+		SchemaVersion: SchemaVersion,
+		Recipe:        RecipeJavaTool,
+		Product: Product{
+			Name:        name,
+			Module:      module,
+			Description: description,
+			Visibility:  "public",
+			License:     "MIT",
+		},
+		Runtime:  Runtime{Language: "java", Kind: "cli"},
+		Surfaces: Surfaces{CLI: true, JSON: true},
+	}
+}
+
 // describeValue renders the offending value for a validation problem string.
 // Empty values are named explicitly rather than rendered as `""`, since a
 // bare pair of quotes reads as noise to a weak model scanning error text.
@@ -348,7 +375,7 @@ func (m Manifest) Validate() error {
 	if m.SchemaVersion != SchemaVersion {
 		problems = append(problems, fmt.Sprintf("schema_version must be %d (got %d)", SchemaVersion, m.SchemaVersion))
 	}
-	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeRustTool && m.Recipe != RecipePythonTool && m.Recipe != RecipeTSTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
+	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeRustTool && m.Recipe != RecipePythonTool && m.Recipe != RecipeTSTool && m.Recipe != RecipeJavaTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
 		problems = append(problems, fmt.Sprintf("recipe must be one of %s (got %s)%s", strings.Join(recipeIDs, ", "), describeValue(m.Recipe), suggestionSuffix(m.Recipe, recipeIDs)))
 	}
 	if !projectNamePattern.MatchString(m.Product.Name) {
@@ -369,6 +396,8 @@ func (m Manifest) Validate() error {
 		problems = append(problems, m.validatePythonToolRecipe()...)
 	case m.Recipe == RecipeTSTool:
 		problems = append(problems, m.validateTSToolRecipe()...)
+	case m.Recipe == RecipeJavaTool:
+		problems = append(problems, m.validateJavaToolRecipe()...)
 	case IsStackRecipe(m.Recipe):
 		problems = append(problems, m.validateStackRecipe()...)
 	default:
@@ -553,6 +582,44 @@ func (m Manifest) validateTSToolRecipe() []string {
 	}
 	if m.Distribution != (Distribution{}) {
 		problems = append(problems, "distribution is not used by recipe ts-tool")
+	}
+	if len(m.Vars) > 0 {
+		problems = append(problems, "vars is only supported by recipe files")
+	}
+	if len(m.Files) > 0 {
+		problems = append(problems, "files is only supported by recipe files")
+	}
+	problems = append(problems, ownershipReleaseProblems(m.Ownership.Release)...)
+	return problems
+}
+
+// validateJavaToolRecipe implements every java-tool validation rule. Like
+// rust-tool, python-tool, and ts-tool it owns a complete repository, so it
+// requires the same product identity and surface declarations; the module is
+// optional repository identity rather than a Java package path.
+func (m Manifest) validateJavaToolRecipe() []string {
+	var problems []string
+	problems = append(problems, optionalModuleProblems(m.Product.Module)...)
+	if m.Product.Visibility != "public" && m.Product.Visibility != "private" {
+		problems = append(problems, fmt.Sprintf("product.visibility must be public or private (got %s)%s", describeValue(m.Product.Visibility), suggestionSuffix(m.Product.Visibility, []string{"public", "private"})))
+	}
+	if m.Product.License != "MIT" {
+		problems = append(problems, fmt.Sprintf("product.license must be MIT in schema version 1 (got %s)", describeValue(m.Product.License)))
+	}
+	if m.Runtime.Language != "java" || m.Runtime.Kind != "cli" {
+		problems = append(problems, fmt.Sprintf("java-tool requires runtime.language=java and runtime.kind=cli (got language=%s, kind=%s)", describeValue(m.Runtime.Language), describeValue(m.Runtime.Kind)))
+	}
+	if !m.Surfaces.CLI {
+		problems = append(problems, "java-tool requires surfaces.cli=true")
+	}
+	if !m.Surfaces.JSON {
+		problems = append(problems, "java-tool requires surfaces.json=true")
+	}
+	if m.Integrations != (Integrations{}) {
+		problems = append(problems, "integrations is not used by recipe java-tool")
+	}
+	if m.Distribution != (Distribution{}) {
+		problems = append(problems, "distribution is not used by recipe java-tool")
 	}
 	if len(m.Vars) > 0 {
 		problems = append(problems, "vars is only supported by recipe files")

@@ -1,0 +1,14 @@
+schema_version: 1
+recipe: java-tool
+product:
+  name: java-tool-demo
+  module: github.com/example/java-tool-demo
+  description: A small Java command-line tool
+  visibility: public
+  license: MIT
+runtime:
+  language: java
+  kind: cli
+surfaces:
+  cli: true
+  json: true
