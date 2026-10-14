@@ -1,0 +1,129 @@
+version: 1
+name: bob_plan_sarif
+intent: |
+    bob plan --sarif and bob check --sarif emit a valid SARIF 2.1.0 log. After
+    a files workspace applies two declared files, hand-editing one managed file
+    forces a managed_hash_mismatch conflict while a newly declared third file
+    is a pending create. plan --sarif then prints a SARIF 2.1.0 document whose
+    tool driver is bob, with one rule per reported code, and whose results map
+    the action kind to a level (conflict -> error, create -> note). check
+    --sarif prints the same document and still exits 2 on conflict. plan
+    --sarif --json is rejected with exit code 4 (invalid input).
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-sarif.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'BOBEOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: sarif-demo
+            description: plan --sarif output spec
+          files:
+            - path: a.txt
+              content: alpha
+            - path: b.txt
+              content: beta
+          BOBEOF
+          ./bin/bob apply "$root" >/dev/null
+          printf 'edited by hand\n' > "$root/a.txt"
+          cat > "$root/bob.yaml" <<'BOBEOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: sarif-demo
+            description: plan --sarif output spec
+          files:
+            - path: a.txt
+              content: alpha
+            - path: b.txt
+              content: beta
+            - path: c.txt
+              content: gamma
+          BOBEOF
+          ./bin/bob plan "$root" --sarif > "$root/plan.sarif"
+          printf 'sarif_version=%s\n' "$(jq -r '.version' "$root/plan.sarif")"
+          printf 'sarif_schema=%s\n' "$(jq -r '."$schema"' "$root/plan.sarif")"
+          printf 'sarif_tool=%s\n' "$(jq -r '.runs[0].tool.driver.name' "$root/plan.sarif")"
+          printf 'sarif_rules_present=%s\n' "$(jq -r '(.runs[0].tool.driver.rules | length) > 0' "$root/plan.sarif")"
+          printf 'conflict_level=%s\n' "$(jq -r '.runs[0].results[] | select(.ruleId == "managed_hash_mismatch") | .level' "$root/plan.sarif")"
+          printf 'create_level=%s\n' "$(jq -r '.runs[0].results[] | select(.ruleId == "missing") | .level' "$root/plan.sarif")"
+          set +e
+          ./bin/bob check "$root" --sarif > "$root/check.sarif" 2>/dev/null
+          check_exit=$?
+          set -e
+          printf 'check_exit=%s\n' "$check_exit"
+          printf 'check_version=%s\n' "$(jq -r '.version' "$root/check.sarif")"
+          printf 'check_tool=%s\n' "$(jq -r '.runs[0].tool.driver.name' "$root/check.sarif")"
+          set +e
+          ./bin/bob plan "$root" --sarif --json >/dev/null 2>&1
+          mutex_exit=$?
+          set -e
+          printf 'mutex_exit=%s\n' "$mutex_exit"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: plan_sarif
+outcomes:
+    - id: sarif_version
+      description: plan --sarif emits SARIF version 2.1.0
+      verify:
+        screen:
+            contains: sarif_version=2.1.0
+    - id: sarif_schema
+      description: plan --sarif declares the SARIF 2.1.0 schema URI
+      verify:
+        screen:
+            contains: sarif_schema=https://json.schemastore.org/sarif-2.1.0.json
+    - id: sarif_tool_name
+      description: plan --sarif names bob as the tool driver
+      verify:
+        screen:
+            contains: sarif_tool=bob
+    - id: sarif_rules_present
+      description: plan --sarif emits at least one rules entry
+      verify:
+        screen:
+            contains: sarif_rules_present=true
+    - id: conflict_level_error
+      description: the managed_hash_mismatch conflict maps to level error
+      verify:
+        screen:
+            contains: conflict_level=error
+    - id: create_level_note
+      description: the missing-file create maps to level note
+      verify:
+        screen:
+            contains: create_level=note
+    - id: check_exits_conflict
+      description: check --sarif exits 2 when a conflict blocks the plan
+      verify:
+        screen:
+            contains: check_exit=2
+    - id: check_emits_sarif
+      description: check --sarif emits a valid SARIF 2.1.0 document
+      verify:
+        screen:
+            contains: check_version=2.1.0
+    - id: check_tool_name
+      description: check --sarif names bob as the tool driver
+      verify:
+        screen:
+            contains: check_tool=bob
+    - id: sarif_json_mutex
+      description: plan --sarif --json is rejected with exit code 4
+      verify:
+        screen:
+            contains: mutex_exit=4
+contractHash: sha256:c49e35080dec41fb420bd76198a2cc9e3937361d808bd8edb2d18904f890e932
