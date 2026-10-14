@@ -186,6 +186,30 @@ func TestRunJavaScriptStackUsesDeclaredPackageManager(t *testing.T) {
 	}
 }
 
+func TestRunRustToolRequiresCargoAndGit(t *testing.T) {
+	t.Parallel()
+	m := manifest.DefaultRustTool("acme", "github.com/acme/acme", "Acme CLI")
+	// A missing Go toolchain must not affect a Rust factory recipe.
+	result := Run(context.Background(), m, fakeProber{missing: map[string]bool{"go": true}})
+	if !result.Ready {
+		t.Fatalf("expected ready rust-tool doctor without Go, got %#v", result)
+	}
+	names := make([]string, 0, len(result.Checks))
+	for _, check := range result.Checks {
+		names = append(names, check.Name)
+		if check.Name == "Go" {
+			t.Fatalf("rust-tool recipe must not probe Go: %#v", result.Checks)
+		}
+	}
+	if !reflect.DeepEqual(names, []string{"Cargo", "Git"}) {
+		t.Fatalf("unexpected rust-tool checks: %v", names)
+	}
+	result = Run(context.Background(), m, fakeProber{missing: map[string]bool{"cargo": true}})
+	if result.Ready {
+		t.Fatalf("missing cargo must make the rust-tool doctor unready: %#v", result)
+	}
+}
+
 func TestRunSwiftAndElixirToolchainsAreOptional(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

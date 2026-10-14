@@ -51,15 +51,15 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `rust-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Three kinds of recipe are embedded: `go-agent-tool@6`, documented below;
-`files@1`, a plain file-tree recipe documented in its own section further
-down; and the stack hygiene recipes (`ts-app@2`, `js-app@2`, `vue-app@2`,
-`nuxt-app@2`, `deno-app@2`, `python-app@2`, `php-app@2`, `ruby-app@2`,
-`lua-lib@2`, `rust-cli@2`, `java-app@2`, `kotlin-app@2`, `dotnet-app@2`,
-`cpp-cmake@2`, `swift-package@2`, `elixir-app@2`, `static-web@2`, and
-`go-hygiene@2`),
+Four kinds of recipe are embedded: `go-agent-tool@6` and `rust-tool@1`, the two
+factory recipes documented below; `files@1`, a plain file-tree recipe
+documented in its own section further down; and the stack hygiene recipes
+(`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
+`python-app@2`, `php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
+`java-app@2`, `kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `swift-package@2`,
+`elixir-app@2`, `static-web@2`, and `go-hygiene@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
 guessing.
@@ -138,6 +138,41 @@ ownership:
 
 Everything above this line is specific to `recipe: go-agent-tool`. It does not
 apply to `recipe: files`, described next.
+
+## The `rust-tool` recipe
+
+`recipe: rust-tool` is the Rust analogue of `go-agent-tool`: a public-ready
+Rust CLI scaffold that owns a complete, reviewable repository. It renders a
+thin `src/main.rs` binary over a tested `src/lib.rs` core, an integration test
+in `tests/cli.rs` that runs the built binary, Rust tooling configuration
+(`rustfmt.toml`, `clippy.toml`, `rust-toolchain.toml`), repository hygiene,
+`docs/index.md`, a `Taskfile.yml`, and `.github/workflows/ci.yml` plus a
+release workflow.
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity — the same shape rules
+  as a Go module path when present, but it is not a Cargo path and is never
+  written into `Cargo.toml`.
+- `product.visibility` must be `public` or `private`, and `product.license`
+  must be `MIT`.
+- `runtime.language` must be `rust` and `runtime.kind` must be `cli`.
+- `surfaces.cli` and `surfaces.json` must both be `true`.
+- `integrations` and `distribution` are unused and must stay zero-valued; the
+  recipe always renders its CI and release workflows.
+- `vars` and `files` are unsupported; `ownership.release` works as on
+  `go-agent-tool`.
+
+`rust-tool@1` creates `Cargo.toml`, `README.md`, `AGENTS.md`, and
+`CHANGELOG.md` once and never lock-owns them: adding a dependency to
+`Cargo.toml` is a normal human edit that stays clean. Everything else the
+recipe renders — including `src/main.rs`, `src/lib.rs`, `tests/cli.rs`, and the
+workflows — remains Bob-owned.
+
+`bob new <name> --recipe rust-tool --module <repo> --write` scaffolds a fresh
+repository; `bob init --recipe rust-tool` previews a manifest for an existing
+directory. `--module` is optional repository identity for this recipe, and
+`rust-tool` is never auto-detected: it must be selected explicitly.
 
 ## The `files` recipe
 

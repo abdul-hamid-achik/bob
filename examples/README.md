@@ -8,6 +8,10 @@ conflict-free plan.
   while retaining the public repository foundation.
 - [`integrated/bob.yaml`](integrated/bob.yaml) selects the local intelligence
   stack used by Bob's default manifest.
+- [`rust-tool-minimal/bob.yaml`](rust-tool-minimal/bob.yaml) uses the `rust-tool`
+  factory recipe: a public-ready Rust CLI scaffold with a thin binary over a
+  tested library core, where `Cargo.toml`, `README.md`, `AGENTS.md`, and
+  `CHANGELOG.md` are seeded once and left in human hands.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.

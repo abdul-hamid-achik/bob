@@ -1,0 +1,14 @@
+schema_version: 1
+recipe: rust-tool
+product:
+  name: rust-tool-demo
+  module: github.com/example/rust-tool-demo
+  description: A small Rust command-line tool
+  visibility: public
+  license: MIT
+runtime:
+  language: rust
+  kind: cli
+surfaces:
+  cli: true
+  json: true
