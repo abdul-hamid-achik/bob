@@ -7,6 +7,8 @@ and the project uses semantic versioning after the first tagged release.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-14
+
 ### Fixed
 
 - `bob init` and stack detection: when `bob.yaml` already declares a recipe,
