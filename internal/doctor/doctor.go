@@ -119,6 +119,12 @@ func selectedTools(m manifest.Manifest) []tool {
 	if manifest.IsStackRecipe(m.Recipe) || m.Recipe == manifest.RecipeFiles {
 		return stackTools(m)
 	}
+	if m.Recipe == manifest.RecipeRustTool {
+		return []tool{
+			{name: "Cargo", command: "cargo", args: []string{"--version"}, required: true, note: "builds the generated project"},
+			{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
+		}
+	}
 	tools := []tool{
 		{name: "Go", command: "go", args: []string{"version"}, required: true, note: "builds the generated project", minMajor: 1, minMinor: 26, minPatch: 5},
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},

@@ -151,6 +151,8 @@ func ResolveMetadata(m manifest.Manifest) (Metadata, error) {
 	switch {
 	case m.Recipe == manifest.RecipeGoAgentTool:
 		metadata = resolveGoAgentMetadata(m, artifacts)
+	case m.Recipe == manifest.RecipeRustTool:
+		metadata = resolveRustToolMetadata(m, artifacts)
 	case m.Recipe == manifest.RecipeFiles:
 		metadata = resolveFilesMetadata(m, artifacts)
 	case manifest.IsStackRecipe(m.Recipe):
@@ -231,6 +233,108 @@ func resolveGoAgentMetadata(m manifest.Manifest, artifacts []Artifact) Metadata 
 		})
 	}
 	return metadata
+}
+
+func resolveRustToolMetadata(m manifest.Manifest, artifacts []Artifact) Metadata {
+	metadata := Metadata{
+		SchemaVersion: MetadataSchemaVersion,
+		Recipe:        MetadataRecipeRef{ID: m.Recipe, Version: rustToolRecipeVersion},
+		Summary:       "Rust CLI repository scaffold with whole-file ownership, documentation, CI, a release workflow, and a thin binary over a tested library core.",
+		Capabilities: []CapabilityDefinition{
+			capability("repository.scaffold", "repository", "required", "Public-ready Rust CLI repository scaffold", []string{"recipe"}, ""),
+			capability("surface.cli", "surface", "required", "Rust command-line entry point", []string{"surfaces.cli"}, ""),
+			capability("surface.json", "surface", "required", "Machine-readable command output surface", []string{"surfaces.json"}, ""),
+		},
+		Invariants: []InvariantDefinition{
+			{ID: "cli.stdout.machine_clean", Statement: "Machine-readable stdout remains valid JSON; diagnostics belong on stderr."},
+			{ID: "repository.no_unmanaged_overwrite", Statement: "Bob never overwrites an unmanaged differing file."},
+			{ID: "repository.whole_file_updates", Statement: "A managed file updates only while its current hash matches bob.lock."},
+			{ID: "verification.not_implied", Statement: "Selection, materialization, and binary availability do not prove application behavior."},
+		},
+		ExtensionPoints: []ExtensionPointDefinition{},
+		Playbooks:       rustToolPlaybooks(),
+	}
+	byID := make(map[string]*CapabilityDefinition, len(metadata.Capabilities))
+	for i := range metadata.Capabilities {
+		byID[metadata.Capabilities[i].ID] = &metadata.Capabilities[i]
+	}
+	for _, artifact := range artifacts {
+		descriptor := describeRustToolArtifact(artifact)
+		metadata.Artifacts = append(metadata.Artifacts, descriptor)
+		for _, capabilityID := range descriptor.CapabilityIDs {
+			definition := byID[capabilityID]
+			definition.ArtifactIDs = append(definition.ArtifactIDs, descriptor.ID)
+		}
+	}
+	return metadata
+}
+
+func describeRustToolArtifact(artifact Artifact) ArtifactDescriptor {
+	path := artifact.Path
+	id := rustToolArtifactID(path)
+	roles := []string{"repository_support"}
+	capabilities := []string{"repository.scaffold"}
+	switch path {
+	case "AGENTS.md":
+		roles = []string{"agent_guidance"}
+	case "README.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "SECURITY.md":
+		roles = []string{"public_hygiene"}
+	case ".github/workflows/ci.yml":
+		roles = []string{"ci_workflow"}
+	case ".github/workflows/release.yml":
+		roles = []string{"release_workflow"}
+	case "docs/index.md":
+		roles = []string{"documentation"}
+	case "src/main.rs":
+		roles = []string{"entrypoint"}
+		capabilities = append(capabilities, "surface.cli")
+	case "src/lib.rs":
+		roles = []string{"library", "core"}
+		capabilities = append(capabilities, "surface.cli")
+	case "tests/cli.rs":
+		roles = []string{"cli_test"}
+		capabilities = append(capabilities, "surface.cli")
+	}
+	ownership := "bob_whole_file"
+	if artifact.Seed {
+		ownership = "bob_seed_once"
+	}
+	return ArtifactDescriptor{ID: id, Path: path, Roles: uniqueSorted(roles), Ownership: ownership, CapabilityIDs: uniqueSorted(capabilities)}
+}
+
+func rustToolArtifactID(path string) string {
+	known := map[string]string{
+		".editorconfig":                 "repo.editorconfig",
+		".github/workflows/ci.yml":      "ci.workflow",
+		".github/workflows/release.yml": "release.workflow",
+		".gitignore":                    "repo.gitignore",
+		"AGENTS.md":                     "repo.agents",
+		"CHANGELOG.md":                  "repo.changelog",
+		"CODE_OF_CONDUCT.md":            "repo.code_of_conduct",
+		"CONTRIBUTING.md":               "repo.contributing",
+		"Cargo.toml":                    "rust.manifest",
+		"LICENSE":                       "repo.license",
+		"README.md":                     "repo.readme",
+		"SECURITY.md":                   "repo.security",
+		"Taskfile.yml":                  "repo.taskfile",
+		"clippy.toml":                   "rust.clippy",
+		"docs/index.md":                 "docs.index",
+		"rust-toolchain.toml":           "rust.toolchain",
+		"rustfmt.toml":                  "rust.rustfmt",
+		"src/lib.rs":                    "cli.library",
+		"src/main.rs":                   "cli.entrypoint",
+		"tests/cli.rs":                  "cli.integration_tests",
+	}
+	if id, ok := known[path]; ok {
+		return id
+	}
+	return "artifact:" + path
+}
+
+func rustToolPlaybooks() []PlaybookDefinition {
+	definitions := []PlaybookDefinition{conflictPlaybook(), upgradePlaybook()}
+	definitions[1].CapabilityIDs = []string{"repository.scaffold"}
+	return definitions
 }
 
 func resolveFilesMetadata(m manifest.Manifest, artifacts []Artifact) Metadata {

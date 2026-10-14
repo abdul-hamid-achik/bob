@@ -400,6 +400,13 @@ func recipeDescription(id string, version int) *RecipeDescription {
 			Surfaces:    []string{"cli", "json"},
 		}
 	}
+	if id == "rust-tool" {
+		return &RecipeDescription{
+			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+			Description: "Public-ready Rust CLI scaffold: a thin binary over a tested library core, with docs, CI, a release workflow, and Rust tooling configuration. Cargo.toml, README.md, AGENTS.md, and CHANGELOG.md are seeded once and left in human hands.",
+			Surfaces:    []string{"cli", "json"},
+		}
+	}
 	return &RecipeDescription{
 		ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
 		Description: "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",

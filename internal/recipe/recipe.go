@@ -29,11 +29,16 @@ type Artifact struct {
 // compatibility alias; recipe.Version is the source of truth.
 const goAgentToolRecipeVersion = 6
 
+// rustToolRecipeVersion is the current rust-tool recipe contract version.
+const rustToolRecipeVersion = 1
+
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
 	switch {
 	case recipeID == "go-agent-tool":
 		return goAgentToolRecipeVersion, nil
+	case recipeID == "rust-tool":
+		return rustToolRecipeVersion, nil
 	case recipeID == "files":
 		return FilesRecipeVersion, nil
 	case manifest.IsStackRecipe(recipeID):
@@ -45,7 +50,7 @@ func Version(recipeID string) (int, error) {
 
 // IDs returns the sorted set of built-in recipe identifiers.
 func IDs() []string {
-	ids := append([]string{"files", "go-agent-tool"}, manifest.StackRecipeIDs()...)
+	ids := append([]string{"files", "go-agent-tool", "rust-tool"}, manifest.StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }
@@ -100,6 +105,11 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 			return nil, fmt.Errorf("unsupported go-agent-tool recipe version %d", version)
 		}
 		artifacts, err = renderGoAgentTool(m, version)
+	case m.Recipe == "rust-tool":
+		if version != rustToolRecipeVersion {
+			return nil, fmt.Errorf("unsupported rust-tool recipe version %d", version)
+		}
+		artifacts, err = renderRustTool(m, version)
 	case m.Recipe == "files":
 		if version != FilesRecipeVersion {
 			return nil, fmt.Errorf("unsupported files recipe version %d", version)

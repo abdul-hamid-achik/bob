@@ -25,6 +25,9 @@ const (
 
 	// RecipeGoAgentTool scaffolds a public-ready Go and Cobra CLI.
 	RecipeGoAgentTool = "go-agent-tool"
+	// RecipeRustTool scaffolds a public-ready Rust CLI: a thin binary over a
+	// tested library core, with docs, CI, and a release workflow.
+	RecipeRustTool = "rust-tool"
 	// RecipeFiles declares an arbitrary file tree inline.
 	RecipeFiles = "files"
 
@@ -117,7 +120,7 @@ var (
 // sync with recipe.IDs(); manifest cannot import recipe (recipe imports
 // manifest), so this list is the schema-side source of truth for the id set.
 var recipeIDs = func() []string {
-	ids := append([]string{RecipeFiles, RecipeGoAgentTool}, StackRecipeIDs()...)
+	ids := append([]string{RecipeFiles, RecipeGoAgentTool, RecipeRustTool}, StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }()
@@ -220,6 +223,29 @@ func Default(name, module, description string) Manifest {
 	}
 }
 
+// DefaultRustTool builds the default manifest for the rust-tool factory
+// recipe: a public-ready Rust CLI scaffold. The module is optional repository
+// identity (not a Cargo path); the recipe always renders its CI and release
+// workflows, so no distribution toggle is selected.
+func DefaultRustTool(name, module, description string) Manifest {
+	if description == "" {
+		description = "A local-first, agent-ready Rust command-line tool."
+	}
+	return Manifest{
+		SchemaVersion: SchemaVersion,
+		Recipe:        RecipeRustTool,
+		Product: Product{
+			Name:        name,
+			Module:      module,
+			Description: description,
+			Visibility:  "public",
+			License:     "MIT",
+		},
+		Runtime:  Runtime{Language: "rust", Kind: "cli"},
+		Surfaces: Surfaces{CLI: true, JSON: true},
+	}
+}
+
 // describeValue renders the offending value for a validation problem string.
 // Empty values are named explicitly rather than rendered as `""`, since a
 // bare pair of quotes reads as noise to a weak model scanning error text.
@@ -245,7 +271,7 @@ func (m Manifest) Validate() error {
 	if m.SchemaVersion != SchemaVersion {
 		problems = append(problems, fmt.Sprintf("schema_version must be %d (got %d)", SchemaVersion, m.SchemaVersion))
 	}
-	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
+	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeRustTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
 		problems = append(problems, fmt.Sprintf("recipe must be one of %s (got %s)%s", strings.Join(recipeIDs, ", "), describeValue(m.Recipe), suggestionSuffix(m.Recipe, recipeIDs)))
 	}
 	if !projectNamePattern.MatchString(m.Product.Name) {
@@ -260,6 +286,8 @@ func (m Manifest) Validate() error {
 		problems = append(problems, m.validateFilesRecipe()...)
 	case m.Recipe == RecipeGoAgentTool:
 		problems = append(problems, m.validateGoAgentToolRecipe()...)
+	case m.Recipe == RecipeRustTool:
+		problems = append(problems, m.validateRustToolRecipe()...)
 	case IsStackRecipe(m.Recipe):
 		problems = append(problems, m.validateStackRecipe()...)
 	default:
@@ -330,6 +358,44 @@ func (m Manifest) validateGoAgentToolRecipe() []string {
 	}
 	if m.Distribution.Homebrew && m.Product.Visibility != "public" {
 		problems = append(problems, "distribution.homebrew requires product.visibility=public")
+	}
+	if len(m.Vars) > 0 {
+		problems = append(problems, "vars is only supported by recipe files")
+	}
+	if len(m.Files) > 0 {
+		problems = append(problems, "files is only supported by recipe files")
+	}
+	problems = append(problems, ownershipReleaseProblems(m.Ownership.Release)...)
+	return problems
+}
+
+// validateRustToolRecipe implements every rust-tool validation rule. Like
+// go-agent-tool it owns a complete repository, so it requires the same
+// product identity and surface declarations; the module is optional
+// repository identity rather than a Go module path.
+func (m Manifest) validateRustToolRecipe() []string {
+	var problems []string
+	problems = append(problems, optionalModuleProblems(m.Product.Module)...)
+	if m.Product.Visibility != "public" && m.Product.Visibility != "private" {
+		problems = append(problems, fmt.Sprintf("product.visibility must be public or private (got %s)%s", describeValue(m.Product.Visibility), suggestionSuffix(m.Product.Visibility, []string{"public", "private"})))
+	}
+	if m.Product.License != "MIT" {
+		problems = append(problems, fmt.Sprintf("product.license must be MIT in schema version 1 (got %s)", describeValue(m.Product.License)))
+	}
+	if m.Runtime.Language != "rust" || m.Runtime.Kind != "cli" {
+		problems = append(problems, fmt.Sprintf("rust-tool requires runtime.language=rust and runtime.kind=cli (got language=%s, kind=%s)", describeValue(m.Runtime.Language), describeValue(m.Runtime.Kind)))
+	}
+	if !m.Surfaces.CLI {
+		problems = append(problems, "rust-tool requires surfaces.cli=true")
+	}
+	if !m.Surfaces.JSON {
+		problems = append(problems, "rust-tool requires surfaces.json=true")
+	}
+	if m.Integrations != (Integrations{}) {
+		problems = append(problems, "integrations is not used by recipe rust-tool")
+	}
+	if m.Distribution != (Distribution{}) {
+		problems = append(problems, "distribution is not used by recipe rust-tool")
 	}
 	if len(m.Vars) > 0 {
 		problems = append(problems, "vars is only supported by recipe files")
