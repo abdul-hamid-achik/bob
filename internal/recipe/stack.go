@@ -305,6 +305,51 @@ var stackDefinitions = map[string]stackDefinition{
 		Gitignore:     stackGitignoreJava,
 		CIWorkflow:    stackCIJava,
 	},
+	manifest.RecipeDotnetApp: {
+		ID:            manifest.RecipeDotnetApp,
+		Description:   "Seed-once hygiene for a .NET application or library: docs, .gitignore, and a dotnet CI stub; never owns application source",
+		LanguageLabel: "C# / .NET",
+		Stacks:        []string{"dotnet"},
+		Commands:      []string{"dotnet restore", "dotnet build -warnaserror", "dotnet test"},
+		Gitignore:     stackGitignoreDotnet,
+		CIWorkflow:    stackCIDotnet,
+	},
+	manifest.RecipePhpApp: {
+		ID:            manifest.RecipePhpApp,
+		Description:   "Seed-once hygiene for a PHP project: docs, .gitignore, and a PHPUnit CI stub; never owns application source",
+		LanguageLabel: "PHP",
+		Stacks:        []string{"php"},
+		Commands:      []string{"composer install", "vendor/bin/phpunit"},
+		Gitignore:     stackGitignorePhp,
+		CIWorkflow:    stackCIPhp,
+	},
+	manifest.RecipeDenoApp: {
+		ID:            manifest.RecipeDenoApp,
+		Description:   "Seed-once hygiene for a Deno project: docs, .gitignore, and a Deno CI stub; never owns application source",
+		LanguageLabel: "Deno (TypeScript)",
+		Stacks:        []string{"deno"},
+		Commands:      []string{"deno lint", "deno check .", "deno test"},
+		Gitignore:     stackGitignoreDeno,
+		CIWorkflow:    stackCIDeno,
+	},
+	manifest.RecipeKotlinApp: {
+		ID:            manifest.RecipeKotlinApp,
+		Description:   "Seed-once hygiene for a Kotlin application or library: docs, .gitignore, and a Gradle CI stub; never owns application source",
+		LanguageLabel: "Kotlin (Gradle or Maven)",
+		Stacks:        []string{"kotlin"},
+		Commands:      []string{"gradle build", "gradle test"},
+		Gitignore:     stackGitignoreKotlin,
+		CIWorkflow:    stackCIKotlin,
+	},
+	manifest.RecipeCppCmake: {
+		ID:            manifest.RecipeCppCmake,
+		Description:   "Seed-once hygiene for a C/C++ project: docs, .gitignore, and a CMake CI stub; never owns application source",
+		LanguageLabel: "C/C++ (CMake)",
+		Stacks:        []string{"cpp"},
+		Commands:      []string{"cmake -S . -B build", "cmake --build build", "ctest --test-dir build --output-on-failure"},
+		Gitignore:     stackGitignoreCpp,
+		CIWorkflow:    stackCICpp,
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
@@ -1084,6 +1129,53 @@ const stackGitignoreJava = `/target/
 !.env.example
 `
 
+const stackGitignoreDotnet = `bin/
+obj/
+.vs/
+*.user
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignorePhp = `/vendor/
+.phpunit.result.cache
+.phpunit.cache/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreDeno = `/coverage/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreKotlin = `/build/
+/.gradle/
+/target/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreCpp = `/build/
+/cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
         with:
           go-version: stable
@@ -1102,6 +1194,42 @@ const stackCIJava = stackCIHeader + `      - uses: actions/setup-java@cf277c60eb
           distribution: temurin
           java-version: "21"
       - run: mvn -B verify
+`
+
+const stackCIDotnet = stackCIHeader + `      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet build --no-restore -warnaserror
+      - run: dotnet test --no-build
+`
+
+const stackCIPhp = stackCIHeader + `      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: "8.3"
+      - run: composer install --no-interaction --prefer-dist
+      # TODO: align with your test runner
+      - run: vendor/bin/phpunit
+`
+
+const stackCIDeno = stackCIHeader + `      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2
+        with:
+          deno-version: v2.x
+      - run: deno lint
+      - run: deno check .
+      - run: deno test
+`
+
+const stackCIKotlin = stackCIHeader + `      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      # TODO: use the Gradle wrapper
+      - run: gradle build
+`
+
+const stackCICpp = stackCIHeader + `      - run: cmake -S . -B build
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build --output-on-failure
 `
 
 const stackGolangciConfig = `run:

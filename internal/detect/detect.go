@@ -19,8 +19,9 @@ const maxDetectionFileBytes = 1 << 20
 
 // Stack is one detected language stack with the marker paths that proved it.
 type Stack struct {
-	// ID is a closed identifier: go, rust, swift, java, elixir, python, ruby,
-	// lua, nuxt, vue, typescript, javascript, or static-web.
+	// ID is a closed identifier: go, rust, cpp, swift, dotnet, kotlin, java,
+	// elixir, php, ruby, python, lua, nuxt, vue, deno, typescript, javascript,
+	// or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -87,7 +88,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue/nuxt outrank the generic typescript/javascript stacks they imply.
-var primaryPrecedence = []string{"go", "rust", "swift", "java", "elixir", "ruby", "python", "lua", "nuxt", "vue", "typescript", "javascript", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "cpp", "swift", "dotnet", "kotlin", "java", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -182,6 +183,26 @@ func Detect(root string) Result {
 		kindHints["swift"] = "package"
 	}
 
+	// C/C++ with CMake. CMakeLists.txt proves the CMake contract.
+	if names["CMakeLists.txt"] {
+		addStack("cpp", "CMakeLists.txt")
+	}
+
+	// .NET / C#. Any C#/F# project or solution file, or a global.json, marks it.
+	var dotnetMarkers []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(name, ".csproj") || strings.HasSuffix(name, ".fsproj") || strings.HasSuffix(name, ".sln") || name == "global.json" {
+			dotnetMarkers = append(dotnetMarkers, name)
+		}
+	}
+	if len(dotnetMarkers) > 0 {
+		addStack("dotnet", dotnetMarkers...)
+	}
+
 	// Java (Maven or Gradle).
 	var javaMarkers []string
 	for _, marker := range []string{"pom.xml", "build.gradle", "build.gradle.kts"} {
@@ -191,6 +212,13 @@ func Detect(root string) Result {
 	}
 	if len(javaMarkers) > 0 {
 		addStack("java", javaMarkers...)
+	}
+
+	// Kotlin. A Gradle/Maven project counts as Kotlin only when a Kotlin
+	// signal exists (Kotlin source, or Kotlin content in a build file), so a
+	// plain JVM build stays Java.
+	if markers := kotlinStackMarkers(root, entries, names); len(markers) > 0 {
+		addStack("kotlin", markers...)
 	}
 
 	// Elixir applications and umbrella projects.
@@ -217,6 +245,11 @@ func Detect(root string) Result {
 		if len(gemspecs) > 0 {
 			kindHints["ruby"] = "gem"
 		}
+	}
+
+	// PHP. composer.json is the marker.
+	if names["composer.json"] {
+		addStack("php", "composer.json")
 	}
 
 	// Python.
@@ -249,6 +282,18 @@ func Detect(root string) Result {
 		if neovimLayout && len(rockspecs) == 0 {
 			kindHints["lua"] = "plugin"
 		}
+	}
+
+	// Deno. deno.json / deno.jsonc mark a Deno TypeScript project; Deno wins
+	// over generic typescript/javascript, which stay listed after it.
+	var denoMarkers []string
+	for _, marker := range []string{"deno.json", "deno.jsonc"} {
+		if names[marker] {
+			denoMarkers = append(denoMarkers, marker)
+		}
+	}
+	if len(denoMarkers) > 0 {
+		addStack("deno", denoMarkers...)
 	}
 
 	// JavaScript family: package.json, lockfiles, tsconfig.
@@ -374,6 +419,52 @@ func (p packageJSON) hasDependency(name string) bool {
 func regularFileExists(path string) bool {
 	info, err := os.Lstat(path)
 	return err == nil && info.Mode().IsRegular()
+}
+
+// dirExists reports whether path names an existing directory (following
+// symlinks), used only by advisory detection.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// kotlinStackMarkers reports the Kotlin signals that prove a Gradle/Maven
+// project is Kotlin rather than Java. Without a signal it returns nil, so a
+// plain JVM build keeps its Java stack. Build scripts are checked for Kotlin
+// content; a Kotlin source layout (src/main/kotlin/) or a root .kt/.kts source
+// file is a signal on its own.
+func kotlinStackMarkers(root string, entries []os.DirEntry, names map[string]bool) []string {
+	buildFiles := make([]string, 0, 5)
+	for _, name := range []string{"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "pom.xml"} {
+		if names[name] {
+			buildFiles = append(buildFiles, name)
+		}
+	}
+	if len(buildFiles) == 0 {
+		return nil
+	}
+	var signals []string
+	if dirExists(filepath.Join(root, "src", "main", "kotlin")) {
+		signals = append(signals, "src/main/kotlin/")
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() {
+			continue
+		}
+		if name == "build.gradle.kts" || name == "settings.gradle.kts" {
+			continue
+		}
+		if strings.HasSuffix(name, ".kt") || strings.HasSuffix(name, ".kts") {
+			signals = append(signals, name)
+		}
+	}
+	for _, name := range buildFiles {
+		if containsBounded(filepath.Join(root, name), "kotlin") {
+			signals = append(signals, name)
+		}
+	}
+	return signals
 }
 
 // readPackageJSON parses a bounded package.json. Any read or parse failure

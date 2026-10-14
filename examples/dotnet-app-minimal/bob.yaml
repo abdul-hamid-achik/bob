@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: dotnet-app
+product:
+  name: dotnet-app-demo
+  description: A small .NET application
+runtime:
+  language: csharp
+  kind: app
+distribution:
+  github_actions: true

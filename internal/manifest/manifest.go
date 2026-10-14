@@ -46,6 +46,11 @@ const (
 	RecipeStaticWeb = "static-web"
 	RecipeGoHygiene = "go-hygiene"
 	RecipeJavaApp   = "java-app"
+	RecipeDotnetApp = "dotnet-app"
+	RecipePhpApp    = "php-app"
+	RecipeDenoApp   = "deno-app"
+	RecipeKotlinApp = "kotlin-app"
+	RecipeCppCmake  = "cpp-cmake"
 )
 
 // StackRuntime is the closed runtime contract of one stack hygiene recipe.
@@ -72,6 +77,11 @@ var stackRecipeRuntimes = map[string]StackRuntime{
 	RecipeStaticWeb: {Languages: []string{"html"}, Kinds: []string{"site"}},
 	RecipeGoHygiene: {Languages: []string{"go"}, Kinds: []string{"service", "lib", "app"}},
 	RecipeJavaApp:   {Languages: []string{"java"}, Kinds: []string{"app", "library"}},
+	RecipeDotnetApp: {Languages: []string{"csharp"}, Kinds: []string{"app", "library"}},
+	RecipePhpApp:    {Languages: []string{"php"}, Kinds: []string{"app", "library"}},
+	RecipeDenoApp:   {Languages: []string{"typescript"}, Kinds: []string{"app", "library"}},
+	RecipeKotlinApp: {Languages: []string{"kotlin"}, Kinds: []string{"app", "library"}},
+	RecipeCppCmake:  {Languages: []string{"cpp"}, Kinds: []string{"app", "library"}},
 }
 
 // StackRecipeRuntime reports the runtime contract for a stack hygiene recipe

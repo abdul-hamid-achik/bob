@@ -66,6 +66,14 @@ func TestDetectPrimaryStacks(t *testing.T) {
 		{"java maven", map[string]string{"pom.xml": "<project/>"}, "java"},
 		{"java gradle", map[string]string{"build.gradle": "plugins {}\n"}, "java"},
 		{"java gradle kotlin", map[string]string{"build.gradle.kts": "plugins {}\n"}, "java"},
+		{"dotnet project", map[string]string{"App.csproj": "<Project/>"}, "dotnet"},
+		{"dotnet solution", map[string]string{"App.sln": "Microsoft Visual Studio Solution File"}, "dotnet"},
+		{"dotnet global.json", map[string]string{"global.json": `{"sdk": {}}`}, "dotnet"},
+		{"php composer", map[string]string{"composer.json": "{}"}, "php"},
+		{"deno json", map[string]string{"deno.json": "{}"}, "deno"},
+		{"deno jsonc", map[string]string{"deno.jsonc": "{}"}, "deno"},
+		{"kotlin gradle plugin", map[string]string{"build.gradle": "plugins { id 'org.jetbrains.kotlin.jvm' }\n"}, "kotlin"},
+		{"cpp cmake", map[string]string{"CMakeLists.txt": "cmake_minimum_required(VERSION 3.20)\n"}, "cpp"},
 		{"python pyproject", map[string]string{"pyproject.toml": "[project]\nname = \"x\"\n"}, "python"},
 		{"python requirements", map[string]string{"requirements.txt": "requests\n"}, "python"},
 		{"ruby gemfile", map[string]string{"Gemfile": "source \"https://rubygems.org\"\n"}, "ruby"},
@@ -287,6 +295,33 @@ func TestDetectDescribeNamesPrimaryMarkers(t *testing.T) {
 	want := "typescript (bun.lock, package.json, tsconfig.json; monorepo)"
 	if got := result.Describe(); got != want {
 		t.Fatalf("describe = %q, want %q", got, want)
+	}
+}
+
+func TestDetectKotlinVersusJava(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		files   map[string]string
+		primary string
+	}{
+		{"plain gradle stays java", map[string]string{"build.gradle": "plugins { id 'java' }\n"}, "java"},
+		{"plain gradle kts stays java", map[string]string{"build.gradle.kts": "plugins { java }\n"}, "java"},
+		{"maven stays java", map[string]string{"pom.xml": "<project/>"}, "java"},
+		{"kotlin source dir wins", map[string]string{"pom.xml": "<project/>", "src/main/kotlin/": ""}, "kotlin"},
+		{"kotlin gradle plugin wins", map[string]string{"build.gradle": "plugins { id 'org.jetbrains.kotlin.jvm' }\n"}, "kotlin"},
+		{"kotlin dsl plugin wins", map[string]string{"build.gradle.kts": "plugins { kotlin(\"jvm\") }\n"}, "kotlin"},
+		{"kotlin pom dependency wins", map[string]string{"pom.xml": "<dependency><artifactId>kotlin-stdlib</artifactId></dependency>"}, "kotlin"},
+		{"root kt source wins", map[string]string{"build.gradle": "plugins {}\n", "App.kt": "fun main() {}\n"}, "kotlin"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			result := Detect(fixture(t, test.files))
+			if result.Primary != test.primary {
+				t.Fatalf("primary = %q (stacks %#v), want %q", result.Primary, result.Stacks, test.primary)
+			}
+		})
 	}
 }
 

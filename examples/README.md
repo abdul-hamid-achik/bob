@@ -30,6 +30,12 @@ conflict-free plan.
   [`static-web-minimal/bob.yaml`](static-web-minimal/bob.yaml) demonstrate the
   JavaScript app, Vue app, Nuxt app, Ruby app, Lua library, and static web
   stack hygiene contracts.
+- [`dotnet-app-minimal/bob.yaml`](dotnet-app-minimal/bob.yaml),
+  [`php-app-minimal/bob.yaml`](php-app-minimal/bob.yaml),
+  [`deno-app-minimal/bob.yaml`](deno-app-minimal/bob.yaml),
+  [`kotlin-app-minimal/bob.yaml`](kotlin-app-minimal/bob.yaml), and
+  [`cpp-cmake-minimal/bob.yaml`](cpp-cmake-minimal/bob.yaml) demonstrate the
+  .NET, PHP, Deno, Kotlin, and C/C++ (CMake) stack hygiene contracts.
 
 Preview any example in a temporary directory by copying it as `bob.yaml`, then
 running `bob plan`. Review and replace the example module path before using

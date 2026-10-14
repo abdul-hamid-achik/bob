@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: kotlin-app
+product:
+  name: kotlin-app-demo
+  description: A small Kotlin application
+runtime:
+  language: kotlin
+  kind: app
+distribution:
+  github_actions: true
