@@ -79,6 +79,14 @@ and the project uses semantic versioning after the first tagged release.
   + a flake-check CI stub) without owning application source. Detection
   recognizes `Dockerfile`/compose files, any root `*.tf`, and
   `flake.nix`/`shell.nix`/`default.nix`.
+- `dart-app@2`, `zig-app@2`, and `scala-app@2` stack hygiene recipes seed Dart,
+  Zig, and Scala (sbt) hygiene (docs, `.gitignore`, and an analyze/build/test CI
+  stub) without owning application source.
+- `bob context --allow-retire` previews the retire case (a dropped, lock-owned
+  path) so an agent can see the opt-in cleanup action before running it; the
+  default `bob context` output is unchanged.
+- A Glyphrun spec covering the `action_counts` JSON of `bob plan` and
+  `bob check`.
 - Glyphrun specs covering `bob context`'s retire guidance and the MCP
   `tools/list` surface (10 tools; an unauthorized `bob_apply` writes nothing).
 - `bob plan --json` and `bob check --json` now expose an `action_counts` object
