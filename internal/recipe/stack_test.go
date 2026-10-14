@@ -105,6 +105,9 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 		"docker":     manifest.RecipeDockerApp,
 		"terraform":  manifest.RecipeTerraformApp,
 		"nix":        manifest.RecipeNixApp,
+		"ansible":    manifest.RecipeAnsibleApp,
+		"helm":       manifest.RecipeHelmApp,
+		"kubernetes": manifest.RecipeKubernetesApp,
 		"dart":       manifest.RecipeDartApp,
 		"zig":        manifest.RecipeZigApp,
 		"scala":      manifest.RecipeScalaApp,
@@ -378,30 +381,33 @@ func artifactPathsOf(artifacts []Artifact) []string {
 // renderer tests assert against an independent expectation rather than the
 // table under test.
 var stackExtraSeeds = map[string][]string{
-	manifest.RecipeTSApp:        {".prettierrc", "tsconfig.json"},
-	manifest.RecipeJSApp:        {".prettierrc"},
-	manifest.RecipeVueApp:       {".prettierrc"},
-	manifest.RecipeNuxtApp:      {".prettierrc"},
-	manifest.RecipePythonApp:    {".python-version", "pyproject.toml"},
-	manifest.RecipeRubyApp:      {".rubocop.yml", ".ruby-version", "Gemfile"},
-	manifest.RecipeLuaLib:       {".lua-version", ".luacheckrc"},
-	manifest.RecipeRustCLI:      {"clippy.toml", "rust-toolchain.toml"},
-	manifest.RecipeSwiftPkg:     {},
-	manifest.RecipeElixirApp:    {".formatter.exs"},
-	manifest.RecipeStaticWeb:    {".htmlhintrc"},
-	manifest.RecipeGoHygiene:    {".golangci.yml"},
-	manifest.RecipeJavaApp:      {},
-	manifest.RecipeDotnetApp:    {},
-	manifest.RecipePhpApp:       {},
-	manifest.RecipeDenoApp:      {},
-	manifest.RecipeKotlinApp:    {},
-	manifest.RecipeCppCmake:     {},
-	manifest.RecipeDockerApp:    {".dockerignore"},
-	manifest.RecipeTerraformApp: {},
-	manifest.RecipeNixApp:       {},
-	manifest.RecipeDartApp:      {},
-	manifest.RecipeZigApp:       {},
-	manifest.RecipeScalaApp:     {},
+	manifest.RecipeTSApp:         {".prettierrc", "tsconfig.json"},
+	manifest.RecipeJSApp:         {".prettierrc"},
+	manifest.RecipeVueApp:        {".prettierrc"},
+	manifest.RecipeNuxtApp:       {".prettierrc"},
+	manifest.RecipePythonApp:     {".python-version", "pyproject.toml"},
+	manifest.RecipeRubyApp:       {".rubocop.yml", ".ruby-version", "Gemfile"},
+	manifest.RecipeLuaLib:        {".lua-version", ".luacheckrc"},
+	manifest.RecipeRustCLI:       {"clippy.toml", "rust-toolchain.toml"},
+	manifest.RecipeSwiftPkg:      {},
+	manifest.RecipeElixirApp:     {".formatter.exs"},
+	manifest.RecipeStaticWeb:     {".htmlhintrc"},
+	manifest.RecipeGoHygiene:     {".golangci.yml"},
+	manifest.RecipeJavaApp:       {},
+	manifest.RecipeDotnetApp:     {},
+	manifest.RecipePhpApp:        {},
+	manifest.RecipeDenoApp:       {},
+	manifest.RecipeKotlinApp:     {},
+	manifest.RecipeCppCmake:      {},
+	manifest.RecipeDockerApp:     {".dockerignore"},
+	manifest.RecipeTerraformApp:  {},
+	manifest.RecipeNixApp:        {},
+	manifest.RecipeDartApp:       {},
+	manifest.RecipeZigApp:        {},
+	manifest.RecipeScalaApp:      {},
+	manifest.RecipeAnsibleApp:    {},
+	manifest.RecipeHelmApp:       {},
+	manifest.RecipeKubernetesApp: {},
 }
 
 func TestStackVersionOneBytesRemainImmutable(t *testing.T) {
@@ -435,7 +441,7 @@ func TestStackVersionOneBytesRemainImmutable(t *testing.T) {
 			t.Fatalf("%s@1 digest = %s, want %s", id, got, wantDigest)
 		}
 	}
-	for _, id := range []string{manifest.RecipeSwiftPkg, manifest.RecipeElixirApp, manifest.RecipeDockerApp, manifest.RecipeTerraformApp, manifest.RecipeNixApp, manifest.RecipeDartApp, manifest.RecipeZigApp, manifest.RecipeScalaApp} {
+	for _, id := range []string{manifest.RecipeSwiftPkg, manifest.RecipeElixirApp, manifest.RecipeDockerApp, manifest.RecipeTerraformApp, manifest.RecipeNixApp, manifest.RecipeDartApp, manifest.RecipeZigApp, manifest.RecipeScalaApp, manifest.RecipeAnsibleApp, manifest.RecipeHelmApp, manifest.RecipeKubernetesApp} {
 		m, err := manifest.DefaultStack(id, "demo", "", "", "")
 		if err != nil {
 			t.Fatal(err)

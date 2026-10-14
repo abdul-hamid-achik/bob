@@ -70,6 +70,11 @@ var publishedGoldens = map[string]string{
 	"vue-app@2/pm-yarn":                        "11da8d2491c8d4c51fb5357ee632c75cfdb851aa3d3da275e0d07e43e5f22be8",
 	"zig-app@2/default":                        "0ca68236a2c50fc3cd4861f6c7a13084f1000af542469cafcf49772d26eb82d0",
 	"zig-app@2/kind-library":                   "0ca68236a2c50fc3cd4861f6c7a13084f1000af542469cafcf49772d26eb82d0",
+	"ansible-app@2/default":                    "b781404a845960f39e226f5db75fb88d05662dd8db760c1f08e7d75e53137732",
+	"ansible-app@2/kind-role":                  "b781404a845960f39e226f5db75fb88d05662dd8db760c1f08e7d75e53137732",
+	"helm-app@2/default":                       "946537d3d09ccdcc70de45c4eb80c942449f7a1af4ee116d557895eb16515b49",
+	"kubernetes-app@2/default":                 "f67287170935b3abe414c0ec6e05eda9193ee585371a95fe5a7040cea3a631e1",
+	"kubernetes-app@2/kind-kustomize":          "f67287170935b3abe414c0ec6e05eda9193ee585371a95fe5a7040cea3a631e1",
 }
 
 type publishedFixture struct {

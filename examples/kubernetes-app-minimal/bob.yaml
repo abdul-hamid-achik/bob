@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: kubernetes-app
+product:
+  name: kubernetes-app-demo
+  description: A small set of Kubernetes manifests
+runtime:
+  language: kubernetes
+  kind: manifests
+distribution:
+  github_actions: true

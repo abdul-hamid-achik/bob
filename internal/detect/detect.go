@@ -21,7 +21,8 @@ const maxDetectionFileBytes = 1 << 20
 type Stack struct {
 	// ID is a closed identifier: go, rust, cpp, zig, swift, dart, dotnet,
 	// kotlin, java, scala, elixir, php, ruby, python, lua, nuxt, vue, deno,
-	// typescript, javascript, docker, terraform, nix, or static-web.
+	// typescript, javascript, docker, terraform, nix, ansible, helm,
+	// kubernetes, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -88,7 +89,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue/nuxt outrank the generic typescript/javascript stacks they imply.
-var primaryPrecedence = []string{"go", "rust", "cpp", "zig", "swift", "dart", "dotnet", "kotlin", "java", "scala", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "docker", "terraform", "nix", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "cpp", "zig", "swift", "dart", "dotnet", "kotlin", "java", "scala", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "docker", "terraform", "nix", "ansible", "helm", "kubernetes", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -236,6 +237,38 @@ func Detect(root string) Result {
 	}
 	if len(nixMarkers) > 0 {
 		addStack("nix", nixMarkers...)
+	}
+
+	// Ansible. ansible.cfg, a root playbook.yml/playbook.yaml, or a roles/
+	// directory proves the playbook/role contract.
+	var ansibleMarkers []string
+	for _, marker := range []string{"ansible.cfg", "playbook.yml", "playbook.yaml"} {
+		if names[marker] {
+			ansibleMarkers = append(ansibleMarkers, marker)
+		}
+	}
+	if dirs["roles"] {
+		ansibleMarkers = append(ansibleMarkers, "roles/")
+	}
+	if len(ansibleMarkers) > 0 {
+		addStack("ansible", ansibleMarkers...)
+	}
+
+	// Helm chart. Chart.yaml proves the chart contract.
+	if names["Chart.yaml"] {
+		addStack("helm", "Chart.yaml")
+	}
+
+	// Kubernetes manifests/Kustomize. kustomization.yaml or kustomization.yml
+	// proves the Kustomize contract.
+	var kubernetesMarkers []string
+	for _, marker := range []string{"kustomization.yaml", "kustomization.yml"} {
+		if names[marker] {
+			kubernetesMarkers = append(kubernetesMarkers, marker)
+		}
+	}
+	if len(kubernetesMarkers) > 0 {
+		addStack("kubernetes", kubernetesMarkers...)
 	}
 
 	// .NET / C#. Any C#/F# project or solution file, or a global.json, marks it.
