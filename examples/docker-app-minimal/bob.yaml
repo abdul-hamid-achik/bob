@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: docker-app
+product:
+  name: docker-app-demo
+  description: A small Docker image
+runtime:
+  language: docker
+  kind: image
+distribution:
+  github_actions: true

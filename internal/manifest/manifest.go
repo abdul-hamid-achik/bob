@@ -44,24 +44,27 @@ const (
 	// language stack. Seeded files are created once when missing and are
 	// never updated or overwritten afterwards; application source is never
 	// owned by these recipes.
-	RecipeTSApp     = "ts-app"
-	RecipeJSApp     = "js-app"
-	RecipeVueApp    = "vue-app"
-	RecipeNuxtApp   = "nuxt-app"
-	RecipePythonApp = "python-app"
-	RecipeRubyApp   = "ruby-app"
-	RecipeLuaLib    = "lua-lib"
-	RecipeRustCLI   = "rust-cli"
-	RecipeSwiftPkg  = "swift-package"
-	RecipeElixirApp = "elixir-app"
-	RecipeStaticWeb = "static-web"
-	RecipeGoHygiene = "go-hygiene"
-	RecipeJavaApp   = "java-app"
-	RecipeDotnetApp = "dotnet-app"
-	RecipePhpApp    = "php-app"
-	RecipeDenoApp   = "deno-app"
-	RecipeKotlinApp = "kotlin-app"
-	RecipeCppCmake  = "cpp-cmake"
+	RecipeTSApp        = "ts-app"
+	RecipeJSApp        = "js-app"
+	RecipeVueApp       = "vue-app"
+	RecipeNuxtApp      = "nuxt-app"
+	RecipePythonApp    = "python-app"
+	RecipeRubyApp      = "ruby-app"
+	RecipeLuaLib       = "lua-lib"
+	RecipeRustCLI      = "rust-cli"
+	RecipeSwiftPkg     = "swift-package"
+	RecipeElixirApp    = "elixir-app"
+	RecipeStaticWeb    = "static-web"
+	RecipeGoHygiene    = "go-hygiene"
+	RecipeJavaApp      = "java-app"
+	RecipeDotnetApp    = "dotnet-app"
+	RecipePhpApp       = "php-app"
+	RecipeDenoApp      = "deno-app"
+	RecipeKotlinApp    = "kotlin-app"
+	RecipeCppCmake     = "cpp-cmake"
+	RecipeDockerApp    = "docker-app"
+	RecipeTerraformApp = "terraform-app"
+	RecipeNixApp       = "nix-app"
 )
 
 // StackRuntime is the closed runtime contract of one stack hygiene recipe.
@@ -75,24 +78,27 @@ type StackRuntime struct {
 // runtime contracts. recipe/stack.go must declare a renderer for every id in
 // this map; a recipe-package test asserts the two stay in sync.
 var stackRecipeRuntimes = map[string]StackRuntime{
-	RecipeTSApp:     {Languages: []string{"typescript"}, Kinds: []string{"app", "monorepo"}},
-	RecipeJSApp:     {Languages: []string{"javascript"}, Kinds: []string{"app", "monorepo"}},
-	RecipeVueApp:    {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
-	RecipeNuxtApp:   {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
-	RecipePythonApp: {Languages: []string{"python"}, Kinds: []string{"app"}},
-	RecipeRubyApp:   {Languages: []string{"ruby"}, Kinds: []string{"app", "gem"}},
-	RecipeLuaLib:    {Languages: []string{"lua"}, Kinds: []string{"lib", "plugin"}},
-	RecipeRustCLI:   {Languages: []string{"rust"}, Kinds: []string{"cli", "lib", "workspace"}},
-	RecipeSwiftPkg:  {Languages: []string{"swift"}, Kinds: []string{"package"}},
-	RecipeElixirApp: {Languages: []string{"elixir"}, Kinds: []string{"app", "umbrella"}},
-	RecipeStaticWeb: {Languages: []string{"html"}, Kinds: []string{"site"}},
-	RecipeGoHygiene: {Languages: []string{"go"}, Kinds: []string{"service", "lib", "app"}},
-	RecipeJavaApp:   {Languages: []string{"java"}, Kinds: []string{"app", "library"}},
-	RecipeDotnetApp: {Languages: []string{"csharp"}, Kinds: []string{"app", "library"}},
-	RecipePhpApp:    {Languages: []string{"php"}, Kinds: []string{"app", "library"}},
-	RecipeDenoApp:   {Languages: []string{"typescript"}, Kinds: []string{"app", "library"}},
-	RecipeKotlinApp: {Languages: []string{"kotlin"}, Kinds: []string{"app", "library"}},
-	RecipeCppCmake:  {Languages: []string{"cpp"}, Kinds: []string{"app", "library"}},
+	RecipeTSApp:        {Languages: []string{"typescript"}, Kinds: []string{"app", "monorepo"}},
+	RecipeJSApp:        {Languages: []string{"javascript"}, Kinds: []string{"app", "monorepo"}},
+	RecipeVueApp:       {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
+	RecipeNuxtApp:      {Languages: []string{"typescript", "javascript"}, Kinds: []string{"web-app"}},
+	RecipePythonApp:    {Languages: []string{"python"}, Kinds: []string{"app"}},
+	RecipeRubyApp:      {Languages: []string{"ruby"}, Kinds: []string{"app", "gem"}},
+	RecipeLuaLib:       {Languages: []string{"lua"}, Kinds: []string{"lib", "plugin"}},
+	RecipeRustCLI:      {Languages: []string{"rust"}, Kinds: []string{"cli", "lib", "workspace"}},
+	RecipeSwiftPkg:     {Languages: []string{"swift"}, Kinds: []string{"package"}},
+	RecipeElixirApp:    {Languages: []string{"elixir"}, Kinds: []string{"app", "umbrella"}},
+	RecipeStaticWeb:    {Languages: []string{"html"}, Kinds: []string{"site"}},
+	RecipeGoHygiene:    {Languages: []string{"go"}, Kinds: []string{"service", "lib", "app"}},
+	RecipeJavaApp:      {Languages: []string{"java"}, Kinds: []string{"app", "library"}},
+	RecipeDotnetApp:    {Languages: []string{"csharp"}, Kinds: []string{"app", "library"}},
+	RecipePhpApp:       {Languages: []string{"php"}, Kinds: []string{"app", "library"}},
+	RecipeDenoApp:      {Languages: []string{"typescript"}, Kinds: []string{"app", "library"}},
+	RecipeKotlinApp:    {Languages: []string{"kotlin"}, Kinds: []string{"app", "library"}},
+	RecipeCppCmake:     {Languages: []string{"cpp"}, Kinds: []string{"app", "library"}},
+	RecipeDockerApp:    {Languages: []string{"docker"}, Kinds: []string{"image"}},
+	RecipeTerraformApp: {Languages: []string{"hcl"}, Kinds: []string{"module", "stack"}},
+	RecipeNixApp:       {Languages: []string{"nix"}, Kinds: []string{"flake", "package"}},
 }
 
 // StackRecipeRuntime reports the runtime contract for a stack hygiene recipe

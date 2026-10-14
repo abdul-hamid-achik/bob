@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: terraform-app
+product:
+  name: terraform-app-demo
+  description: A small Terraform module
+runtime:
+  language: hcl
+  kind: module
+distribution:
+  github_actions: true

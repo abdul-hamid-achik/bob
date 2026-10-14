@@ -127,7 +127,8 @@ become a task runner.
 Three recipe kinds are embedded. Stack hygiene recipes (`ts-app`, `js-app`,
 `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`, `ruby-app`,
 `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`, `cpp-cmake`,
-`swift-package`, `elixir-app`, `static-web`, `go-hygiene`) seed
+`docker-app`, `terraform-app`, `nix-app`, `swift-package`, `elixir-app`,
+`static-web`, `go-hygiene`) seed
 docs, ignore
 files, and optional CI once onto an existing language repository and never
 own application source. `files` materializes a tree declared in `bob.yaml`.

@@ -224,6 +224,15 @@ func stackTools(m manifest.Manifest) []tool {
 		"cpp": {
 			{name: "CMake", command: "cmake", args: []string{"--version"}, note: "builds the C/C++ project"},
 		},
+		"docker": {
+			{name: "Docker", command: "docker", args: []string{"--version"}, note: "builds the Docker image"},
+		},
+		"hcl": {
+			{name: "Terraform", command: "terraform", args: []string{"--version"}, note: "validates the Terraform configuration"},
+		},
+		"nix": {
+			{name: "Nix", command: "nix", args: []string{"--version"}, note: "checks the Nix flake"},
+		},
 	}
 	var optional []tool
 	switch {
