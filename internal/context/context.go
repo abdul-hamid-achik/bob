@@ -289,8 +289,73 @@ func compose(root string, m manifest.Manifest, plan engine.PlanResult, metadata 
 	case "drifted":
 		result.Actions = append(result.Actions, commandAction(root, "review_plan", "repository_drift"))
 	}
+	// Retire guidance: a lock-owned path the recipe dropped is either a
+	// planned removal (a retire action, already authorized with --allow-retire
+	// at plan time) or a blocking retired_owned conflict. Both need a typed,
+	// machine-branchable instruction, not just the drifted/conflicted verdict.
+	if retired := retiredPaths(plan); len(retired) > 0 {
+		result.Notices = append(result.Notices, Notice{
+			ID: "retired_owned", Severity: "info", Code: "retired_owned",
+			Message: retiredRemovalMessage(len(retired)),
+			Paths:   retired,
+		})
+		result.Actions = append(result.Actions, Action{
+			ID: "apply_retire", Kind: "command", Effect: "repository_mutation", CWD: root,
+			Argv: []string{"bob", "apply", root, "--allow-retire", "--json"}, ReasonCode: "retired_owned",
+			RequiresExplicitAuthority: true, BlockedBy: []string{},
+		})
+	}
+	if conflicted := retiredOwnedConflictPaths(plan); len(conflicted) > 0 {
+		result.Notices = append(result.Notices, Notice{
+			ID: "retired_owned_conflict", Severity: "warning", Code: "retired_owned",
+			Message: retiredConflictMessage(len(conflicted)),
+			Paths:   conflicted,
+		})
+	}
 	sort.Slice(result.Notices, func(i, j int) bool { return result.Notices[i].ID < result.Notices[j].ID })
 	return result
+}
+
+// retiredPaths returns the plan's retire actions in path order: lock-owned
+// regular files the recipe no longer declares whose content still matches
+// bob.lock, so applying with --allow-retire deletes them and drops them from
+// the lock.
+func retiredPaths(plan engine.PlanResult) []string {
+	var paths []string
+	for _, action := range plan.Actions {
+		if action.Kind == engine.ActionRetire {
+			paths = append(paths, action.Path)
+		}
+	}
+	return paths
+}
+
+// retiredOwnedConflictPaths returns the plan's retired_owned conflicts in path
+// order: lock-owned files the recipe dropped that block apply because the
+// caller did not authorize --allow-retire.
+func retiredOwnedConflictPaths(plan engine.PlanResult) []string {
+	var paths []string
+	for _, action := range plan.Actions {
+		if action.Kind == engine.ActionConflict && action.Code == engine.CodeRetiredOwned {
+			paths = append(paths, action.Path)
+		}
+	}
+	return paths
+}
+
+func retiredRemovalMessage(count int) string {
+	return fmt.Sprintf("bob.lock owns %d %s the recipe no longer declares; apply with --allow-retire to delete and drop them from the lock", count, retiredPathNoun(count))
+}
+
+func retiredConflictMessage(count int) string {
+	return fmt.Sprintf("bob.lock owns %d %s the recipe no longer declares; clean them up with --allow-retire or remove them by hand before applying the lock update", count, retiredPathNoun(count))
+}
+
+func retiredPathNoun(count int) string {
+	if count == 1 {
+		return "path"
+	}
+	return "paths"
 }
 
 func topConflicts(plan engine.PlanResult, limit int) []ConflictPreview {
