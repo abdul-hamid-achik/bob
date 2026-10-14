@@ -294,8 +294,10 @@ by the reviewed plan digest, then check or plan again.
 
 Normal non-interactive commands support a global `--json` flag. Structured
 stdout uses a versioned envelope containing command data, warnings, and next
-actions. Studio is interactive-only; MCP reserves stdout for JSON-RPC. The CLI
-does not persist plans or receipts.
+actions. `bob plan` and `bob check` additionally render `--sarif` (SARIF 2.1.0
+for code scanning) and `--junit` (JUnit XML for CI reporting); the three formats
+are mutually exclusive. Studio is interactive-only; MCP reserves stdout for
+JSON-RPC. The CLI does not persist plans or receipts.
 
 ## Implemented package boundaries
 

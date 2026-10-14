@@ -7,7 +7,7 @@ type Row = { text: string; cls: string; pause?: number }
  * apply cleanly, converge. Deterministic — it loops identically. */
 const transcript: Row[] = [
   { text: '$ bob plan ./payments-cli', cls: 'cmd', pause: 500 },
-  { text: 'recipe go-agent-tool · 14 desired files', cls: 'meta', pause: 300 },
+  { text: 'recipe go-agent-tool · 30 desired files', cls: 'meta', pause: 300 },
   { text: '', cls: 'meta' },
   { text: '  + create   .github/workflows/ci.yml', cls: 'create' },
   { text: '  + create   cmd/payments-cli/main.go', cls: 'create' },
@@ -112,7 +112,7 @@ const ledger = [
     tag: 'DRIFT',
     kind: 'read',
     title: 'Drift detection for CI',
-    body: 'bob check exits non-zero the moment generated infrastructure wanders from the contract. Your pipeline finds out before your users do.',
+    body: 'bob check exits non-zero the moment generated infrastructure wanders from the contract — and emits --sarif for code scanning or --junit for CI reporting. Your pipeline finds out before your users do.',
   },
   {
     tag: 'AGENT',
@@ -151,10 +151,10 @@ const refusals = [
           </h1>
           <p class="lede">
             Turn a small <code>bob.yaml</code> into a reviewable repository (early alpha) —
-            a packaged Go/Cobra CLI, seed-once hygiene on an existing
-            TypeScript, Python, Rust, Go, or HTML repo, or a file tree you declare.
-            Bob plans before it writes, proves it owns every file it touches,
-            and refuses to guess. No model. No magic. A ledger.
+            a packaged CLI scaffold (Go, Rust, Python, TypeScript, Java, or C#),
+            seed-once hygiene on 20+ existing language and infrastructure repos,
+            or a file tree you declare. Bob plans before it writes, proves it owns
+            every file it touches, and refuses to guess. No model. No magic. A ledger.
           </p>
           <div class="cta-row">
             <a class="btn btn-safety" href="/getting-started">Get started</a>
@@ -222,7 +222,7 @@ const refusals = [
     <!-- THREE PATHS ------------------------------------------------------ -->
     <section class="grid-section paths">
       <div class="wrap">
-        <h2 class="h2">Three recipes. Same ledger.</h2>
+        <h2 class="h2">Three paths. Same ledger.</h2>
         <p class="body-copy paths-lede">
           Bob does not generate your application. It makes the repository
           contract visible and refuses to smash living files.
@@ -232,8 +232,9 @@ const refusals = [
             <span class="card-tag">STACK</span>
             <h3>Existing repo</h3>
             <p>
-              TypeScript, Python, Rust, Go, HTML, and the rest. Seed docs and
-              ignore files once. Never own <code>src/</code>.
+              Go, TypeScript, Python, Rust, Java, C#/.NET, PHP, Ruby, and 20+
+              more stacks — plus Docker, Terraform, Nix, Helm, and Kubernetes.
+              Seed docs and ignores once. Never own <code>src/</code>.
             </p>
           </a>
           <a class="card write path-card" href="/guides/any-repository">
@@ -246,10 +247,11 @@ const refusals = [
           </a>
           <a class="card read path-card" href="/getting-started">
             <span class="card-tag">FACTORY</span>
-            <h3>Go/Cobra CLI</h3>
+            <h3>Six CLI scaffolds</h3>
             <p>
-              The deep recipe. Public-ready command structure, CI, and
-              release plumbing — living files stay in human hands after seed.
+              Go/Cobra, Rust, Python, TypeScript, Java, and C#. Public-ready
+              command structure, tests, CI, and release plumbing — living files
+              stay in human hands after seed.
             </p>
           </a>
         </div>

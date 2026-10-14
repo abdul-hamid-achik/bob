@@ -1,5 +1,5 @@
 ---
-description: Install Bob, scaffold a Go/Cobra CLI, or bring seed-once hygiene to an existing TypeScript, Python, Rust, or Go repository.
+description: Install Bob, scaffold a public-ready CLI (Go, Rust, Python, TypeScript, Java, C#), or bring seed-once hygiene to an existing language or infrastructure repository.
 ---
 
 # Getting Started
@@ -7,8 +7,10 @@ description: Install Bob, scaffold a Go/Cobra CLI, or bring seed-once hygiene to
 Bob does not brainstorm. Give it a name and a recipe, and it hands back a
 plan. Approve the plan, and it writes only what it can prove it owns.
 
-The walkthrough below builds a new Go/Cobra CLI — the deepest recipe. If the
-application already exists, use
+The walkthrough below builds a new Go/Cobra CLI. Bob ships six such factory
+recipes — `go-agent-tool`, `rust-tool`, `python-tool`, `ts-tool`, `java-tool`,
+and `csharp-tool` — alongside 27 seed-once hygiene recipes and the `files`
+recipe. If the application already exists, use
 [Existing Repository](./guides/existing-repository.md) instead.
 
 ## Prerequisites

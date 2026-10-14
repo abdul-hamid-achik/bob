@@ -183,8 +183,9 @@ unmanaged differing file or a managed file changed by a person. Read the full
 [CLI reference](docs/reference/cli.md) before initializing Bob in an existing
 repository.
 
-Use `--json` for versioned machine output. JSON goes to stdout; diagnostics and
-errors go to stderr.
+Use `--json` for versioned machine output. `bob plan` and `bob check` also emit
+`--sarif` (code scanning) and `--junit` (CI test reporting). Machine output goes
+to stdout; diagnostics and errors go to stderr.
 
 ## Intelligence-stack integration
 
