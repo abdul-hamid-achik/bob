@@ -54,6 +54,10 @@ conflict-free plan.
   [`terraform-app-minimal/bob.yaml`](terraform-app-minimal/bob.yaml), and
   [`nix-app-minimal/bob.yaml`](nix-app-minimal/bob.yaml) demonstrate the
   Docker image, Terraform/HCL, and Nix flake stack hygiene contracts.
+- [`dart-app-minimal/bob.yaml`](dart-app-minimal/bob.yaml),
+  [`zig-app-minimal/bob.yaml`](zig-app-minimal/bob.yaml), and
+  [`scala-app-minimal/bob.yaml`](scala-app-minimal/bob.yaml) demonstrate the
+  Dart/Flutter, Zig, and Scala sbt stack hygiene contracts.
 
 Preview any example in a temporary directory by copying it as `bob.yaml`, then
 running `bob plan`. Review and replace the example module path before using

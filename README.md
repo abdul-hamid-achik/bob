@@ -21,12 +21,12 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds twenty-six recipes —
-> `go-agent-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, and twenty-one stack hygiene recipes (`ts-app`,
+> **Status: early alpha.** The current contract embeds twenty-nine recipes —
+> `go-agent-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, and twenty-four stack hygiene recipes (`ts-app`,
 > `js-app`, `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`,
 > `ruby-app`, `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`,
 > `cpp-cmake`, `docker-app`, `terraform-app`, `nix-app`, `swift-package`,
-> `elixir-app`, `static-web`, `go-hygiene`) —
+> `elixir-app`, `static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`) —
 > plus a read-only Studio, nine typed read-only MCP tools, and one opt-in,
 > digest-gated MCP apply tool. Review every plan and
 > resulting diff before publishing.
@@ -94,8 +94,8 @@ bob check
 To initialize Bob in an empty or existing directory, write only the human-owned
 manifest first. `bob init` detects the repository's stack (Go, TypeScript,
 JavaScript, Vue, Nuxt, Deno, Python, PHP, Ruby, Lua, Rust, Java, Kotlin, .NET,
-C/C++ with CMake, SwiftPM, Elixir/Mix, Docker, Terraform, Nix, or a static web
-site) and defaults to
+C/C++ with CMake, SwiftPM, Elixir/Mix, Dart, Zig, Scala, Docker, Terraform,
+Nix, or a static web site) and defaults to
 the matching recipe — the seed-once stack
 hygiene recipes never own application source. A plain Go module selects
 `go-hygiene`; only a Cobra `cmd/` + `internal/cli` layout (or an existing

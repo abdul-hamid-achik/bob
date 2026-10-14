@@ -105,6 +105,9 @@ func TestForStackMapsEveryDetectedStackToOneRecipe(t *testing.T) {
 		"docker":     manifest.RecipeDockerApp,
 		"terraform":  manifest.RecipeTerraformApp,
 		"nix":        manifest.RecipeNixApp,
+		"dart":       manifest.RecipeDartApp,
+		"zig":        manifest.RecipeZigApp,
+		"scala":      manifest.RecipeScalaApp,
 	}
 	for stack, wantRecipe := range wantByStack {
 		id, ok := ForStack(stack)
@@ -396,6 +399,9 @@ var stackExtraSeeds = map[string][]string{
 	manifest.RecipeDockerApp:    {".dockerignore"},
 	manifest.RecipeTerraformApp: {},
 	manifest.RecipeNixApp:       {},
+	manifest.RecipeDartApp:      {},
+	manifest.RecipeZigApp:       {},
+	manifest.RecipeScalaApp:     {},
 }
 
 func TestStackVersionOneBytesRemainImmutable(t *testing.T) {
@@ -429,7 +435,7 @@ func TestStackVersionOneBytesRemainImmutable(t *testing.T) {
 			t.Fatalf("%s@1 digest = %s, want %s", id, got, wantDigest)
 		}
 	}
-	for _, id := range []string{manifest.RecipeSwiftPkg, manifest.RecipeElixirApp, manifest.RecipeDockerApp, manifest.RecipeTerraformApp, manifest.RecipeNixApp} {
+	for _, id := range []string{manifest.RecipeSwiftPkg, manifest.RecipeElixirApp, manifest.RecipeDockerApp, manifest.RecipeTerraformApp, manifest.RecipeNixApp, manifest.RecipeDartApp, manifest.RecipeZigApp, manifest.RecipeScalaApp} {
 		m, err := manifest.DefaultStack(id, "demo", "", "", "")
 		if err != nil {
 			t.Fatal(err)

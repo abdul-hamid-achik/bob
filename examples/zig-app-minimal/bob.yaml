@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: zig-app
+product:
+  name: zig-app-demo
+  description: A small Zig library
+runtime:
+  language: zig
+  kind: library
+distribution:
+  github_actions: true

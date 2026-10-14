@@ -43,6 +43,7 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 ```text
 $ bob recipe list
 cpp-cmake@2  Seed-once hygiene for a C/C++ project: docs, .gitignore, and a CMake CI stub; never owns application source
+dart-app@2  Seed-once hygiene for a Dart/Flutter project: docs, .gitignore, and an analyze/test CI stub; never owns application source
 deno-app@2  Seed-once hygiene for a Deno project: docs, .gitignore, and a Deno CI stub; never owns application source
 docker-app@2  Seed-once hygiene for a Docker image: docs, .dockerignore, and a build CI stub; never owns application source
 dotnet-app@2  Seed-once hygiene for a .NET application or library: docs, .gitignore, and a dotnet CI stub; never owns application source
@@ -62,12 +63,14 @@ python-tool@1  Public-ready Python CLI scaffold with docs, CI, and an argparse e
 ruby-app@2  Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source
 rust-cli@2  Seed-once hygiene for a Rust CLI, library, or workspace: Cargo checks and CI; never owns application source
 rust-tool@1  Public-ready Rust CLI scaffold with docs, CI, and a thin binary over a tested library core
+scala-app@2  Seed-once hygiene for a Scala sbt project: docs, .gitignore, and a test CI stub; never owns application source
 static-web@2  Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content
 swift-package@2  Seed-once hygiene for a Swift package: SwiftPM commands, ignores, and CI; never owns package source
 terraform-app@2  Seed-once hygiene for Terraform/IaC: docs, .gitignore, and a validate CI stub; never owns application source
 ts-app@2  Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source
 ts-tool@1  Public-ready TypeScript (Node) CLI scaffold with docs, CI, and a process.argv entry point over a tested pure function
 vue-app@2  Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source
+zig-app@2  Seed-once hygiene for a Zig project: docs, .gitignore, and a build/test CI stub; never owns application source
 ```
 
 `bob recipe show <id>` describes one recipe: `files` prints its manifest
@@ -88,7 +91,8 @@ does not match the target's detected stack warns on preview and refuses
 identity for `python-tool`, `rust-tool`, and `ts-tool`, and rejected by every other recipe.
 `bob init` detects the repository's stack (Go, TypeScript, JavaScript,
 Vue, Nuxt, Deno, Python, PHP, Ruby, Lua, Rust, Java, Kotlin, .NET, C/C++ with
-CMake, SwiftPM, Elixir/Mix, Docker, Terraform, Nix, or a static web site) and defaults to the
+CMake, SwiftPM, Elixir/Mix, Dart, Zig, Scala, Docker, Terraform, Nix, or a
+static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. For Go, a
 `recipe:` already declared in an existing `bob.yaml` wins; otherwise a Cobra
 layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool` only when

@@ -233,6 +233,16 @@ func stackTools(m manifest.Manifest) []tool {
 		"nix": {
 			{name: "Nix", command: "nix", args: []string{"--version"}, note: "checks the Nix flake"},
 		},
+		"dart": {
+			{name: "Dart", command: "dart", args: []string{"--version"}, note: "runs the Dart toolchain"},
+		},
+		"zig": {
+			{name: "Zig", command: "zig", args: []string{"version"}, note: "builds the Zig project"},
+		},
+		"scala": {
+			{name: "Java", command: "java", args: []string{"-version"}, note: "runs the JVM toolchain"},
+			{name: "sbt", command: "sbt", args: []string{"--version"}, note: "builds and tests the Scala project"},
+		},
 	}
 	var optional []tool
 	switch {
