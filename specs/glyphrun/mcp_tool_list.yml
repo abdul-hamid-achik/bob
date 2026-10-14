@@ -1,0 +1,99 @@
+version: 1
+name: bob_mcp_tool_list
+intent: |
+    The MCP surface over stdio exposes ten tools. tools/list reports exactly ten
+    tools: the nine repository-read-only tools annotated readOnlyHint=true plus
+    bob_apply, annotated readOnlyHint=false and destructiveHint=true. A tools/call
+    for bob_apply without --allow-apply-workspace is an apply_unauthorized failure
+    (isError=true) that writes nothing to the workspace.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-mcp.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'BOBEOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: mcp-demo
+            description: MCP tool list spec
+          files:
+            - path: notes.txt
+              content: hello
+          BOBEOF
+          ./bin/bob apply "$root" >/dev/null
+          lock_before="$(shasum -a 256 "$root/bob.lock" | awk '{print $1}')"
+          {
+            cat <<'RPC'
+          {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"bob-spec-client","version":"0"}}}
+          {"jsonrpc":"2.0","method":"notifications/initialized"}
+          {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+          {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"bob_apply","arguments":{"expect_plan_digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}}}
+          RPC
+            sleep 2
+          } | ./bin/bob mcp serve --workspace "$root" > "$root/mcp.jsonl" 2> "$root/mcp.err"
+          lock_after="$(shasum -a 256 "$root/bob.lock" | awk '{print $1}')"
+          printf 'tool_count=%s\n' "$(jq -sr '.[] | select(.id == 2) | .result.tools | length' "$root/mcp.jsonl")"
+          printf 'has_apply=%s\n' "$(jq -sr '.[] | select(.id == 2) | [.result.tools[] | select(.name == "bob_apply")] | length' "$root/mcp.jsonl")"
+          printf 'apply_read_only=%s\n' "$(jq -sr '.[] | select(.id == 2) | .result.tools[] | select(.name == "bob_apply") | .annotations.readOnlyHint' "$root/mcp.jsonl")"
+          printf 'apply_destructive=%s\n' "$(jq -sr '.[] | select(.id == 2) | .result.tools[] | select(.name == "bob_apply") | .annotations.destructiveHint' "$root/mcp.jsonl")"
+          printf 'readonly_tool_count=%s\n' "$(jq -sr '.[] | select(.id == 2) | [.result.tools[] | select(.name != "bob_apply") | select(.annotations.readOnlyHint == true)] | length' "$root/mcp.jsonl")"
+          printf 'apply_outcome=%s\n' "$(jq -sr '.[] | select(.id == 3) | .result.structuredContent.error.code' "$root/mcp.jsonl")"
+          printf 'apply_is_error=%s\n' "$(jq -sr '.[] | select(.id == 3) | .result.isError' "$root/mcp.jsonl")"
+          if [ "$lock_before" = "$lock_after" ]; then printf 'lock_unchanged=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: mcp_tool_list
+outcomes:
+    - id: lists_ten_tools
+      description: tools/list returns exactly ten tools
+      verify:
+        screen:
+            contains: tool_count=10
+    - id: includes_bob_apply
+      description: the ten tools include bob_apply
+      verify:
+        screen:
+            contains: has_apply=1
+    - id: apply_not_read_only
+      description: bob_apply is annotated readOnlyHint=false
+      verify:
+        screen:
+            contains: apply_read_only=false
+    - id: apply_destructive_hint
+      description: bob_apply is annotated destructiveHint=true
+      verify:
+        screen:
+            contains: apply_destructive=true
+    - id: nine_read_only_tools
+      description: the other nine tools are annotated readOnlyHint=true
+      verify:
+        screen:
+            contains: readonly_tool_count=9
+    - id: unauthorized_apply_fails
+      description: tools/call bob_apply without --allow-apply-workspace fails apply_unauthorized
+      verify:
+        screen:
+            contains: apply_outcome=apply_unauthorized
+    - id: unauthorized_apply_is_error
+      description: the unauthorized apply is reported as a tool error
+      verify:
+        screen:
+            contains: apply_is_error=true
+    - id: unauthorized_apply_writes_nothing
+      description: the unauthorized apply leaves bob.lock untouched
+      verify:
+        screen:
+            contains: lock_unchanged=true
+contractHash: sha256:e28510af7e7db61185b23cabaf0db5b6300fea5342a0b1fa0b282fa35160bed0
