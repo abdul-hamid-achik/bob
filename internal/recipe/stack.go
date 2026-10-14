@@ -350,6 +350,36 @@ var stackDefinitions = map[string]stackDefinition{
 		Gitignore:     stackGitignoreCpp,
 		CIWorkflow:    stackCICpp,
 	},
+	manifest.RecipeDockerApp: {
+		ID:            manifest.RecipeDockerApp,
+		Description:   "Seed-once hygiene for a Docker image: docs, .dockerignore, and a build CI stub; never owns application source",
+		LanguageLabel: "Docker",
+		Stacks:        []string{"docker"},
+		Commands:      []string{"docker build -t app ."},
+		Gitignore:     stackGitignoreDocker,
+		CIWorkflow:    stackCIDocker,
+		ExtraSeeds: []stackSeed{
+			{Path: ".dockerignore", Source: stackDockerignore},
+		},
+	},
+	manifest.RecipeTerraformApp: {
+		ID:            manifest.RecipeTerraformApp,
+		Description:   "Seed-once hygiene for Terraform/IaC: docs, .gitignore, and a validate CI stub; never owns application source",
+		LanguageLabel: "Terraform (HCL)",
+		Stacks:        []string{"terraform"},
+		Commands:      []string{"terraform init", "terraform fmt -check -recursive", "terraform validate"},
+		Gitignore:     stackGitignoreTerraform,
+		CIWorkflow:    stackCITerraform,
+	},
+	manifest.RecipeNixApp: {
+		ID:            manifest.RecipeNixApp,
+		Description:   "Seed-once hygiene for a Nix flake or package: docs, .gitignore, and a flake-check CI stub; never owns application source",
+		LanguageLabel: "Nix (flake)",
+		Stacks:        []string{"nix"},
+		Commands:      []string{"nix flake check", "nix develop -c true"},
+		Gitignore:     stackGitignoreNix,
+		CIWorkflow:    stackCINix,
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
@@ -1176,6 +1206,32 @@ const stackGitignoreCpp = `/build/
 !.env.example
 `
 
+const stackGitignoreDocker = `.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreTerraform = `.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.tfvars
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreNix = `/result
+/result-*
+.direnv/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
         with:
           go-version: stable
@@ -1230,6 +1286,33 @@ const stackCIKotlin = stackCIHeader + `      - uses: actions/setup-java@cf277c60
 const stackCICpp = stackCIHeader + `      - run: cmake -S . -B build
       - run: cmake --build build --config Release
       - run: ctest --test-dir build --output-on-failure
+`
+
+const stackCIDocker = stackCIHeader + `      # TODO: point at your build context.
+      - run: docker build -t app .
+`
+
+const stackCITerraform = stackCIHeader + `      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: latest
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+`
+
+const stackCINix = stackCIHeader + `      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix flake check
+`
+
+const stackDockerignore = `.git
+.github
+node_modules
+target
+dist
+*.log
+.env
 `
 
 const stackGolangciConfig = `run:

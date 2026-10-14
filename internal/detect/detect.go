@@ -21,7 +21,7 @@ const maxDetectionFileBytes = 1 << 20
 type Stack struct {
 	// ID is a closed identifier: go, rust, cpp, swift, dotnet, kotlin, java,
 	// elixir, php, ruby, python, lua, nuxt, vue, deno, typescript, javascript,
-	// or static-web.
+	// docker, terraform, nix, or static-web.
 	ID      string   `json:"id"`
 	Markers []string `json:"markers"`
 }
@@ -88,7 +88,7 @@ func (r Result) Describe() string {
 // and scripting language markers outrank JavaScript-family markers because a
 // package.json frequently exists only for tooling in those repositories, and
 // vue/nuxt outrank the generic typescript/javascript stacks they imply.
-var primaryPrecedence = []string{"go", "rust", "cpp", "swift", "dotnet", "kotlin", "java", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "static-web"}
+var primaryPrecedence = []string{"go", "rust", "cpp", "swift", "dotnet", "kotlin", "java", "elixir", "ruby", "php", "python", "lua", "nuxt", "vue", "deno", "typescript", "javascript", "docker", "terraform", "nix", "static-web"}
 
 // Detect inspects root and reports every recognized stack. A missing or
 // unreadable root yields an empty result rather than an error: detection is
@@ -186,6 +186,40 @@ func Detect(root string) Result {
 	// C/C++ with CMake. CMakeLists.txt proves the CMake contract.
 	if names["CMakeLists.txt"] {
 		addStack("cpp", "CMakeLists.txt")
+	}
+
+	// Docker image. A Dockerfile or a Compose file proves the image contract.
+	var dockerMarkers []string
+	for _, marker := range []string{"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "compose.yaml"} {
+		if names[marker] {
+			dockerMarkers = append(dockerMarkers, marker)
+		}
+	}
+	if len(dockerMarkers) > 0 {
+		addStack("docker", dockerMarkers...)
+	}
+
+	// Terraform. Any root *.tf file proves the HCL/IaC contract.
+	var terraformMarkers []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() && strings.HasSuffix(name, ".tf") {
+			terraformMarkers = append(terraformMarkers, name)
+		}
+	}
+	if len(terraformMarkers) > 0 {
+		addStack("terraform", terraformMarkers...)
+	}
+
+	// Nix. A flake.nix, shell.nix, or default.nix proves the Nix contract.
+	var nixMarkers []string
+	for _, marker := range []string{"flake.nix", "shell.nix", "default.nix"} {
+		if names[marker] {
+			nixMarkers = append(nixMarkers, marker)
+		}
+	}
+	if len(nixMarkers) > 0 {
+		addStack("nix", nixMarkers...)
 	}
 
 	// .NET / C#. Any C#/F# project or solution file, or a global.json, marks it.

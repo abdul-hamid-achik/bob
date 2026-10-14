@@ -59,8 +59,9 @@ factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes
 (`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
 `python-app@2`, `php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
-`java-app@2`, `kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `swift-package@2`,
-`elixir-app@2`, `static-web@2`, and `go-hygiene@2`),
+`java-app@2`, `kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `docker-app@2`,
+`terraform-app@2`, `nix-app@2`, `swift-package@2`, `elixir-app@2`,
+`static-web@2`, and `go-hygiene@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
 guessing.
@@ -354,8 +355,9 @@ watching Bob report `content_update` on the next plan.
 
 `ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`, `python-app@2`,
 `php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`, `java-app@2`,
-`kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `swift-package@2`,
-`elixir-app@2`, `static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
+`kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `docker-app@2`,
+`terraform-app@2`, `nix-app@2`, `swift-package@2`, `elixir-app@2`,
+`static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
 **seed-once** artifacts `README.md`, `AGENTS.md`, `SECURITY.md`, `.gitignore`,
 and `.editorconfig`, plus stack-specific formatter, linter, or runtime
@@ -407,6 +409,9 @@ Schema, relative to `go-agent-tool`:
   | `kotlin-app` | `kotlin` | `app` or `library` |
   | `dotnet-app` | `csharp` | `app` or `library` |
   | `cpp-cmake` | `cpp` | `app` or `library` |
+  | `docker-app` | `docker` | `image` |
+  | `terraform-app` | `hcl` | `module` or `stack` |
+  | `nix-app` | `nix` | `flake` or `package` |
   | `swift-package` | `swift` | `package` |
   | `elixir-app` | `elixir` | `app` or `umbrella` |
   | `static-web` | `html` | `site` |
@@ -426,8 +431,9 @@ Schema, relative to `go-agent-tool`:
 `package.json`/`tsconfig.json`/lockfiles, a `nuxt` dependency or `nuxt.config.*`,
 a `vue` dependency or `.vue` files, `pyproject.toml`, `Gemfile`/`*.gemspec`,
 `*.rockspec`/`init.lua`/`lua/`, `Cargo.toml`, `Package.swift`, `mix.exs`,
-`pom.xml`/`build.gradle`/`build.gradle.kts`, or a bare `index.html`) and
-defaults to the matching recipe.
+`pom.xml`/`build.gradle`/`build.gradle.kts`, a `Dockerfile`/Compose file,
+a root `*.tf` file, a `flake.nix`/`shell.nix`/`default.nix`, or a bare
+`index.html`) and defaults to the matching recipe.
 When the chosen recipe's stack does not match the detected one, the preview
 warns and `--write` refuses without `--force`.
 

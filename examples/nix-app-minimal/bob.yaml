@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: nix-app
+product:
+  name: nix-app-demo
+  description: A small Nix flake
+runtime:
+  language: nix
+  kind: flake
+distribution:
+  github_actions: true
