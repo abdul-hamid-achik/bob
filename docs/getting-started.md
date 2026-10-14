@@ -17,7 +17,7 @@ recipe. If the application already exists, use
 
 - macOS or Linux
 - Git
-- Go 1.26.6 or newer if you install from source or scaffold `go-agent-tool`.
+- Go 1.27.2 or newer if you install from source or scaffold `go-agent-tool`.
   The Homebrew cask does not need a local Go toolchain to run `bob init` on
   an existing TypeScript, Python, or Rust repository.
 - Task is optional; direct Go commands work too

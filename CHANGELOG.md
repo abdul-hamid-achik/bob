@@ -25,6 +25,10 @@ and the project uses semantic versioning after the first tagged release.
 - `bob studio`, `bob context`, and `bob path` now handle the `retire` action
   kind (previously it fell through to an unknown/blank rendering).
 
+- Require Go 1.27.2. The Go 1.26.x standard library carries `net/http`,
+  `crypto/tls`, and `net/textproto` advisories that `govulncheck` reports as
+  reachable through the dependency tree; 1.27.x is clean.
+
 ### Changed
 
 - Docs: `bob check --json` on drift and a not-ready `bob doctor --json` keep
