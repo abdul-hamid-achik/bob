@@ -16,6 +16,7 @@ import (
 var publishedGoldens = map[string]string{
 	"files@1/default":                          "ef66e2736fed3d2558f0d6facac064a9377cf892fd8a0264782db0359d3d22b0",
 	"go-agent-tool@6/default":                  "13edacf3bbab2295521bb7b3a61f9d4f0493cea1ba29bf6b69f820092f14e325",
+	"python-tool@1/default":                    "d324f5ffd1c2967eb02f123e55e03c9f78a55b7359614a848aa09fa345cf33a4",
 	"rust-tool@1/default":                      "847db1457716c4dd626101b3d3b6464348ebb389a9b44cce8fe44c191ea9546b",
 	"go-agent-tool@6/full":                     "fb94326b50520ccf535a6dc61918a69031dbd377015a2dda11fcc269b1a706f5",
 	"go-agent-tool@6/no-actions-no-goreleaser": "507f22189d6d20c8feac650690339d7f7c8def9408da93d29bf7ea6a8270cd9d",
@@ -87,6 +88,9 @@ func publishedFixtures() []publishedFixture {
 		}},
 		{id: "rust-tool", variant: "default", build: func() (manifest.Manifest, error) {
 			return manifest.DefaultRustTool("acme-tool", "github.com/acme/acme-tool", "Build useful things."), nil
+		}},
+		{id: "python-tool", variant: "default", build: func() (manifest.Manifest, error) {
+			return manifest.DefaultPythonTool("acme-tool", "github.com/acme/acme-tool", "Build useful things."), nil
 		}},
 		{id: "go-agent-tool", variant: "full", build: func() (manifest.Manifest, error) {
 			m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")

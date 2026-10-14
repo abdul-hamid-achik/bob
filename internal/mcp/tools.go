@@ -407,6 +407,13 @@ func recipeDescription(id string, version int) *RecipeDescription {
 			Surfaces:    []string{"cli", "json"},
 		}
 	}
+	if id == "python-tool" {
+		return &RecipeDescription{
+			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+			Description: "Public-ready Python CLI scaffold: an argparse entry point over a tested pure function, with docs, CI, a release workflow, and Python tooling configuration. pyproject.toml, README.md, AGENTS.md, and CHANGELOG.md are seeded once and left in human hands.",
+			Surfaces:    []string{"cli", "json"},
+		}
+	}
 	return &RecipeDescription{
 		ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
 		Description: "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",

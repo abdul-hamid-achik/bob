@@ -51,9 +51,10 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `rust-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `python-tool`, `rust-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Four kinds of recipe are embedded: `go-agent-tool@6` and `rust-tool@1`, the two
+Five kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`, and
+`rust-tool@1`, the three
 factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes
 (`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
@@ -173,6 +174,43 @@ workflows — remains Bob-owned.
 repository; `bob init --recipe rust-tool` previews a manifest for an existing
 directory. `--module` is optional repository identity for this recipe, and
 `rust-tool` is never auto-detected: it must be selected explicitly.
+
+## The `python-tool` recipe
+
+`recipe: python-tool` is the Python analogue of `go-agent-tool`: a public-ready
+Python CLI scaffold that owns a complete, reviewable repository. It renders an
+argparse entry point in `src/<pkg>/cli.py` over a tested pure `greet` function,
+a `src/<pkg>/__main__.py` module entry point and `src/<pkg>/__init__.py`
+package initializer, a pytest suite in `tests/test_cli.py`, Python tooling
+configuration (`pyproject.toml`, `ruff.toml`), repository hygiene,
+`docs/index.md`, a `Taskfile.yml`, and `.github/workflows/ci.yml` plus a
+release workflow. `<pkg>` is the product name normalized to a valid Python
+identifier (lowercase, hyphens replaced with underscores).
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity — the same shape rules
+  as a Go module path when present, but it is not a Python import path and is
+  never written into `pyproject.toml`.
+- `product.visibility` must be `public` or `private`, and `product.license`
+  must be `MIT`.
+- `runtime.language` must be `python` and `runtime.kind` must be `cli`.
+- `surfaces.cli` and `surfaces.json` must both be `true`.
+- `integrations` and `distribution` are unused and must stay zero-valued; the
+  recipe always renders its CI and release workflows.
+- `vars` and `files` are unsupported; `ownership.release` works as on
+  `go-agent-tool`.
+
+`python-tool@1` creates `pyproject.toml`, `README.md`, `AGENTS.md`, and
+`CHANGELOG.md` once and never lock-owns them: adding a dependency to
+`pyproject.toml` is a normal human edit that stays clean. Everything else the
+recipe renders — including `src/<pkg>/cli.py`, `src/<pkg>/__main__.py`, and
+`tests/test_cli.py` — remains Bob-owned.
+
+`bob new <name> --recipe python-tool --module <repo> --write` scaffolds a fresh
+repository; `bob init --recipe python-tool` previews a manifest for an existing
+directory. `--module` is optional repository identity for this recipe, and
+`python-tool` is never auto-detected: it must be selected explicitly.
 
 ## The `files` recipe
 
