@@ -21,13 +21,16 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds thirty-four recipes —
-> `go-agent-tool`, `csharp-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, and twenty-seven stack hygiene recipes (`ts-app`,
-> `js-app`, `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`,
-> `ruby-app`, `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`,
-> `cpp-cmake`, `docker-app`, `terraform-app`, `nix-app`, `swift-package`,
-> `elixir-app`, `static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`,
-> `ansible-app`, `helm-app`, `kubernetes-app`) —
+> **Status: early alpha.** The current contract embeds thirty-four recipes in
+> three kinds — six **factory scaffolds** (`go-agent-tool@6`, `rust-tool@1`,
+> `python-tool@1`, `ts-tool@1`, `java-tool@1`, `csharp-tool@1`), the **`files`**
+> recipe for a declared tree, and **twenty-seven seed-once stack hygiene
+> recipes** (`ts-app`, `js-app`, `vue-app`, `nuxt-app`, `deno-app`,
+> `python-app`, `php-app`, `ruby-app`, `lua-lib`, `rust-cli`, `java-app`,
+> `kotlin-app`, `dotnet-app`, `cpp-cmake`, `docker-app`, `terraform-app`,
+> `nix-app`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`,
+> `dart-app`, `zig-app`, `scala-app`, `ansible-app`, `helm-app`,
+> `kubernetes-app`) —
 > plus a read-only Studio, nine typed read-only MCP tools, and one opt-in,
 > digest-gated MCP apply tool. Review every plan and
 > resulting diff before publishing.

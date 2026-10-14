@@ -51,8 +51,8 @@ product declarations; they do not generate or enable a server or UI.
 ### Embedded recipes
 
 Every recipe renders its complete desired artifact set in memory,
-deterministically and under a version. Eight kinds are embedded: the six factory
-recipes — `go-agent-tool@6` (a Go/Cobra CLI with a static human-owned command
+deterministically and under a version. Three recipe kinds are embedded: the six
+factory recipes — `go-agent-tool@6` (a Go/Cobra CLI with a static human-owned command
 extension contract and a generated regression test that keeps a blank scaffold
 lint-clean), `rust-tool@1` (a Rust CLI with a thin binary over a tested
 library core), `python-tool@1` (a Python CLI with an argparse entry point

@@ -7,23 +7,26 @@ type Row = { text: string; cls: string; pause?: number }
  * apply cleanly, converge. Deterministic — it loops identically. */
 const transcript: Row[] = [
   { text: '$ bob plan ./payments-cli', cls: 'cmd', pause: 500 },
-  { text: 'recipe go-agent-tool · 30 desired files', cls: 'meta', pause: 300 },
+  { text: 'recipe go-agent-tool@6 · 30 files', cls: 'meta', pause: 300 },
   { text: '', cls: 'meta' },
-  { text: '  + create   .github/workflows/ci.yml', cls: 'create' },
-  { text: '  + create   cmd/payments-cli/main.go', cls: 'create' },
-  { text: '  + create   Taskfile.yml', cls: 'create' },
-  { text: '  ~ update   internal/cli/root.go', cls: 'update' },
-  { text: '  ! conflict docs/index.md   unmanaged file differs', cls: 'conflict', pause: 700 },
+  { text: 'create     .github/workflows/ci.yml        [missing] scaffold', cls: 'create' },
+  { text: 'create     cmd/payments-cli/main.go        [missing] scaffold', cls: 'create' },
+  { text: 'create     Taskfile.yml                    [missing] scaffold', cls: 'create' },
+  { text: '… 27 more', cls: 'meta', pause: 300 },
   { text: '', cls: 'meta' },
-  { text: '3 create, 1 update, 0 adopt, 0 unchanged, 0 retire, 1 conflict', cls: 'meta', pause: 900 },
+  { text: '30 create, 0 update, 0 adopt, 0 unchanged, 0 retire, 0 conflict', cls: 'meta', pause: 900 },
   { text: '$ bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
-  { text: 'apply: refused — 1 conflict. nothing was written.', cls: 'conflict', pause: 500 },
-  { text: '(nothing is ever half-written.)', cls: 'meta', pause: 1100 },
-  { text: '$ mv docs/index.md docs/notes.md', cls: 'cmd', pause: 400 },
+  { text: 'applied: 30 written, 0 adopted, 0 unchanged; lock written: true', cls: 'create', pause: 1000 },
+  { text: '$ echo "// hand edit" >> docs/index.md', cls: 'cmd', pause: 500 },
+  { text: '$ bob plan ./payments-cli', cls: 'cmd', pause: 400 },
+  { text: 'conflict   docs/index.md                    [managed_hash_mismatch] contract_drift', cls: 'conflict', pause: 700 },
+  { text: '0 create, 0 update, 0 adopt, 29 unchanged, 0 retire, 1 conflict', cls: 'meta', pause: 700 },
   { text: '$ bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
-  { text: 'applied: 4 written, 0 adopted, 0 unchanged; lock written: true', cls: 'create', pause: 900 },
-  { text: '$ bob plan ./payments-cli', cls: 'cmd', pause: 500 },
-  { text: 'no changes. run it again if you like — same answer.', cls: 'converged', pause: 4200 },
+  { text: 'bob: apply: plan contains conflicts; run bob plan for details', cls: 'conflict', pause: 700 },
+  { text: '(exit 2 — the handled edit was not overwritten, nothing was written.)', cls: 'meta', pause: 1000 },
+  { text: '$ git checkout docs/index.md && bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
+  { text: 'applied: 0 written, 0 adopted, 30 unchanged; lock written: false', cls: 'converged', pause: 900 },
+  { text: 'run it again — same answer. that is the point.', cls: 'converged', pause: 3600 },
 ]
 
 const lines = ref<Row[]>([])
@@ -112,7 +115,13 @@ const ledger = [
     tag: 'DRIFT',
     kind: 'read',
     title: 'Drift detection for CI',
-    body: 'bob check exits non-zero the moment generated infrastructure wanders from the contract — and emits --sarif for code scanning or --junit for CI reporting. Your pipeline finds out before your users do.',
+    body: 'bob check exits non-zero the moment generated infrastructure wanders from the contract — and emits --sarif for code scanning or --junit for CI test reporting. Your pipeline finds out before your users do.',
+  },
+  {
+    tag: 'DIGEST',
+    kind: 'write',
+    title: 'Reviewed, then refused unless it matches',
+    body: 'bob apply and bob remove take an expect digest. Bob fresh-plans while holding the lock and writes nothing unless the fresh result equals the plan you reviewed. A removal digest never authorizes an apply, and a plan digest never authorizes a removal. One mutation per workspace; a second fails fast as workspace_busy.',
   },
   {
     tag: 'AGENT',
@@ -152,7 +161,7 @@ const refusals = [
           <p class="lede">
             Turn a small <code>bob.yaml</code> into a reviewable repository (early alpha) —
             a packaged CLI scaffold (Go, Rust, Python, TypeScript, Java, or C#),
-            seed-once hygiene on 20+ existing language and infrastructure repos,
+            seed-once hygiene on 27 existing language and infrastructure stacks,
             or a file tree you declare. Bob plans before it writes, proves it owns
             every file it touches, and refuses to guess. No model. No magic. A ledger.
           </p>
@@ -167,6 +176,8 @@ const refusals = [
           </button>
           <p class="badges">
             <span>Model-free</span><span>Local-first</span><span>MIT</span>
+            <span>Deterministic — the plan loops identically</span>
+            <span>Shipped with a Glyphrun behavior-spec suite</span>
             <span class="alpha">Early alpha — read the plan. Bob insists.</span>
           </p>
         </div>
@@ -206,6 +217,16 @@ const refusals = [
             <strong>Check</strong>
             <p>CI gate. Non-zero exit the moment anything drifts.</p>
           </li>
+          <li class="station write">
+            <span class="station-tag">bob remove</span>
+            <strong>Teardown</strong>
+            <p>Deletes only proven lock-owned files. <code>bob.yaml</code> survives.</p>
+          </li>
+          <li class="station write">
+            <span class="station-tag">bob upgrade</span>
+            <strong>Upgrade</strong>
+            <p>Migrates <code>bob.lock</code> to the current recipe version.</p>
+          </li>
           <li class="station converge">
             <span class="station-tag">no-op</span>
             <strong>Converge</strong>
@@ -215,6 +236,7 @@ const refusals = [
         <p class="legend">
           <span class="key read">blue — read-only authority</span>
           <span class="key write">orange — explicit mutation</span>
+          <span class="key">start: <code>bob new</code> / <code>bob init</code> · evolve: <code>bob upgrade</code> · teardown: <code>bob remove</code> · every command speaks <code>--json</code></span>
         </p>
       </div>
     </section>
@@ -258,6 +280,51 @@ const refusals = [
       </div>
     </section>
 
+    <!-- CATALOG ---------------------------------------------------------- -->
+    <section class="grid-section">
+      <div class="wrap">
+        <h2 class="h2">What you actually get</h2>
+        <p class="body-copy paths-lede">
+          Thirty-four recipes in three shapes. Pick one; Bob renders it under the
+          same plan, lock, and refusal rules.
+        </p>
+        <div class="cards">
+          <article class="card write">
+            <span class="card-tag">FACTORY · 6</span>
+            <h3>Public CLI scaffolds</h3>
+            <p>
+              <code>go-agent-tool</code>, <code>rust-tool</code>, <code>python-tool</code>,
+              <code>ts-tool</code>, <code>java-tool</code>, <code>csharp-tool</code>. A thin
+              entry point over a tested pure function, human and JSON output, tests, CI,
+              and release plumbing in one command. The living files (<code>README</code>,
+              <code>CHANGELOG</code>, the language manifest) seed once and stay yours.
+            </p>
+          </article>
+          <article class="card read">
+            <span class="card-tag">HYGIENE · 27</span>
+            <h3>Seed-once stack hygiene</h3>
+            <p>
+              Go, TypeScript, JavaScript, Vue, Nuxt, Deno, Python, Ruby, PHP, Java,
+              Kotlin, .NET, Rust, Swift, Elixir, Dart, Zig, Scala, Lua, C/C++, plus
+              Docker, Terraform, Nix, Ansible, Helm, Kubernetes, and static web. Seeds
+              <code>README</code>, <code>AGENTS</code>, <code>SECURITY</code>, ignores,
+              and a CI stub once — then never touches them again, and never owns
+              <code>src/</code>.
+            </p>
+          </article>
+          <article class="card read">
+            <span class="card-tag">FILES · 1</span>
+            <h3>A tree you declare</h3>
+            <p>
+              <code>recipe: files</code>. Write the paths in <code>bob.yaml</code>; Bob
+              materializes them under the same plan, apply, and lock rules — existence,
+              mode, and byte-for-byte convergence, not a template engine in disguise.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- LEDGER GRID ------------------------------------------------------ -->
     <section class="grid-section">
       <div class="wrap">
@@ -268,6 +335,66 @@ const refusals = [
             <h3>{{ c.title }}</h3>
             <p>{{ c.body }}</p>
           </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW SAFETY WORKS ------------------------------------------------- -->
+    <section class="grid-section">
+      <div class="wrap">
+        <h2 class="h2">The mechanism, not the motto.</h2>
+        <ol class="stations">
+          <li class="station read"><span class="station-tag">bob.yaml</span><strong>Intent</strong><p>Your recipe and product identity, in one small, strict file.</p></li>
+          <li class="station read"><span class="station-tag">bob.lock</span><strong>Ownership</strong><p>A SHA-256 digest of every whole file Bob manages.</p></li>
+          <li class="station write"><span class="station-tag">hash match</span><strong>Proof to update</strong><p>A managed file changes only while its current hash still matches the lock.</p></li>
+          <li class="station write"><span class="station-tag">atomic</span><strong>No half-write</strong><p>Staged as temp siblings, published by atomic rename, <code>bob.lock</code> written last.</p></li>
+        </ol>
+        <p class="legend">
+          <span class="key read">Hand-edit a managed file and it becomes a conflict, not a silent overwrite.</span>
+          <span class="key write">One conflict blocks the entire apply; symlinks and special files are always conflicts.</span>
+        </p>
+        <p class="body-copy">
+          Two ownership classes: <strong>seed-once</strong> files (created if missing,
+          never in the lock, never a conflict) and <strong>managed</strong> files
+          (hash-owned, so Bob can prove what is safe to change). Mark any path
+          <code>ownership.release</code> and Bob seeds it once and leaves it to you — your
+          hand-edit is never a permanent apply block. When a recipe stops declaring a file,
+          Bob calls it <strong>retired</strong>: delete it deliberately with
+          <code>--allow-retire</code>, or leave it as a conflict. It never silently discards
+          ownership. [More on ownership &amp; safety](/ownership-and-safety)
+        </p>
+      </div>
+    </section>
+
+    <!-- CI ---------------------------------------------------------------- -->
+    <section class="grid-section">
+      <div class="wrap agents-grid">
+        <div>
+          <h2 class="h2">Your pipeline finds out first.</h2>
+          <p class="body-copy">
+            <code>bob check</code> is the gate: it exits non-zero the moment generated
+            infrastructure drifts from the contract. The same plan also renders as a
+            SARIF 2.1.0 log for code scanning or a JUnit XML report for your test
+            reporter — no adapter, no wrapper.
+          </p>
+          <pre class="snippet"><code>exit 0   clean — plan always exits 0 (a report, not a gate)
+exit 2   an ownership conflict · apply would refuse
+exit 3   drift, no conflict · apply would proceed
+exit 4   invalid input or manifest
+exit 5   fresh plan ≠ reviewed digest · nothing written</code></pre>
+        </div>
+        <div>
+          <h2 class="h2">Two flags, done.</h2>
+          <pre class="snippet"><code><span class="c-cmd">$ bob check --sarif</span>    <span class="c-meta"># SARIF 2.1.0 → GitHub code scanning</span>
+<span class="c-cmd">$ bob check --junit</span>    <span class="c-meta"># JUnit XML → your CI test reporter</span>
+<span class="c-cmd">$ bob check --conflicts-only --json</span>  <span class="c-meta"># just the blockers</span></code></pre>
+          <p class="body-copy">
+            A code-scanning upload fails the build exactly as a plain
+            <code>bob check</code> would: same exit code, same answer. Local-only and
+            model-free — the sole exception is the opt-in
+            <code>bob inspect --probe-integrations</code>, which runs Codemap/Vecgrep
+            status commands you explicitly asked for.
+          </p>
         </div>
       </div>
     </section>
@@ -290,7 +417,7 @@ const refusals = [
   "schema_version": 1,
   "ok": true,
   "command": "learn",
-  "data": { "product": "deterministic repository factory", … }
+  "data": { "product": "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler", … }
 }</code></pre>
         </div>
         <div>
@@ -302,7 +429,21 @@ const refusals = [
             reviewed plan digest. Diagnostics go to stderr; stdout stays
             JSON-RPC-clean.
           </p>
-          <pre class="snippet"><code><span class="c-cmd">$ claude mcp add bob -- bob mcp serve .</span></code></pre>
+          <p class="body-copy">
+            The read side is the point. <code>bob context --json</code> describes
+            the one repository you are standing in — recipe, capabilities,
+            ownership, and the current plan digest — with a
+            <code>--profile</code> from <code>compact</code> to <code>full</code>.
+            Before editing, <code>bob path internal/cli/root.go</code> answers
+            <code>will_conflict</code> or <code>outside_bob_ownership</code>, and
+            <code>--batch</code> checks seven paths at once. Closed
+            <code>bob playbook</code> procedures (<code>add-cli-command</code>,
+            <code>resolve-ownership-conflict</code>, …) come with typed inputs,
+            never prose to parse.
+          </p>
+          <pre class="snippet"><code><span class="c-cmd">$ claude mcp add bob -- bob mcp serve .</span>
+<span class="c-meta"># the one write, only when you say so:</span>
+<span class="c-cmd">$ bob mcp serve . --allow-apply-workspace "$(pwd)"</span></code></pre>
           <ul class="tools">
             <li>bob_context</li><li>bob_path</li><li>bob_playbook</li>
             <li>bob_inspect</li><li>bob_plan</li><li>bob_check</li>
@@ -325,6 +466,30 @@ const refusals = [
       </div>
     </section>
 
+    <!-- WHY NOT A GENERATOR ---------------------------------------------- -->
+    <section class="grid-section">
+      <div class="wrap">
+        <h2 class="h2">Why not just a generator</h2>
+        <div class="cards">
+          <article class="card read">
+            <span class="card-tag">RECONCILE</span>
+            <h3>Generators spray. Bob reconciles.</h3>
+            <p>A generator writes a tree once and forgets. Bob records <code>bob.lock</code> and reports drift on every later run, for the life of the repo.</p>
+          </article>
+          <article class="card write">
+            <span class="card-tag">REFUSE</span>
+            <h3>Generators guess. Bob refuses.</h3>
+            <p>Where <code>cookiecutter</code> or <code>copier</code> overwrite whatever is in the way, Bob stops at the first file it cannot prove it owns.</p>
+          </article>
+          <article class="card read">
+            <span class="card-tag">CONVERGE</span>
+            <h3>Generators exit. Bob converges.</h3>
+            <p>Run <code>bob apply</code> twice; the second is a no-op. That is the contract, not a side effect.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- FINAL CTA ---------------------------------------------------------- -->
     <section class="final">
       <div class="wrap final-grid">
@@ -340,7 +505,12 @@ const refusals = [
           <pre class="snippet"><code><span class="c-cmd">$ brew tap abdul-hamid-achik/tap</span>
 <span class="c-cmd">$ brew install --cask bob</span>
 <span class="c-meta"># or</span>
-<span class="c-cmd">$ go install github.com/abdul-hamid-achik/bob/cmd/bob@latest</span></code></pre>
+<span class="c-cmd">$ go install github.com/abdul-hamid-achik/bob/cmd/bob@latest</span>
+<span class="c-meta"># then, in one motion:</span>
+<span class="c-cmd">$ bob new acme-tool --recipe go-agent-tool --module github.com/acme/acme-tool --write</span>
+<span class="c-cmd">$ bob check</span>
+<span class="c-meta"># existing repo instead:</span>
+<span class="c-cmd">$ bob init . --write</span></code></pre>
           <div class="cta-row">
             <a class="btn btn-safety" href="/getting-started">Build something reviewable</a>
             <a class="btn btn-draft" href="/guides/existing-repository">Bring Bob to an existing repo</a>
@@ -348,6 +518,7 @@ const refusals = [
         </div>
       </div>
       <p class="foot-line">Deterministic plans · Explicit authority · Honest integration boundaries</p>
+      <p class="foot-line">Proven, not asserted — CI runs the full Go test suite with <code>-race</code>, and the safety behavior is pinned by Glyphrun terminal-behavior specs.</p>
     </section>
   </div>
 </template>

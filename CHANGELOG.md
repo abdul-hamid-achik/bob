@@ -55,7 +55,7 @@ and the project uses semantic versioning after the first tagged release.
 - The human `plan` summary line now ends with `… unchanged, N retire, N conflict`,
   and Bob Console's watch-tally parser understands the new `retire` column.
 - Bob Console's captured demo envelopes were refreshed to the current recipe
-  catalog (32 recipes) and the ten-tool MCP surface.
+  catalog (34 recipes) and the ten-tool MCP surface.
 
 ### Added
 

@@ -14,7 +14,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob new <name>` | Preview by default; writes with `--write` | Create a repository contract and initial files; stack hygiene recipes require a target whose application stack already exists. |
 | `bob init [path]` | Preview by default; writes `bob.yaml` with `--write` | Initialize Bob in an existing directory without generating files yet. |
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection, `--allow-retire` previews the retire case. |
-| `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
+| `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path — or up to seven with `--batch` — through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, `--sarif` emits a SARIF 2.1.0 log for code scanning, `--junit` emits a JUnit XML report for CI test reporting, `--allow-retire` classifies dropped lock-owned files as retire actions, and `--watch` refreshes human output when `bob.yaml` changes. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan, `--allow-retire` deletes dropped lock-owned files. |
@@ -187,7 +187,15 @@ and does not claim an unmanaged path is globally safe.
 ```bash
 bob path internal/cli/root.go . --json
 bob path internal/domain/service.go --workspace .
+# classify up to seven paths in one recipe render and plan:
+bob --json path --batch --workspace . -- internal/cli/root.go internal/domain/service.go
 ```
+
+`--batch` classifies one to seven repository-relative paths in a single recipe
+render and plan: every input is validated, Bob renders the recipe and plans once,
+and the ordered results appear under `data.results`, each keeping its own 8 KiB
+bound. In batch mode the workspace comes from `--workspace` (or the default),
+and every argument after `--` is a path to classify.
 
 Absolute paths, parent traversal, empty paths, and invalid UTF-8 fail as
 `input_invalid`. `.git`, `bob.yaml`, `bob.lock`, and `.bob.apply.lock` are
@@ -412,6 +420,21 @@ complete action without previews or output filtering. The digest is lowercase
 hexadecimal with a `sha256:` prefix in CLI plan/check and workspace context.
 For wire compatibility, MCP keeps its original raw `plan_digest` and adds the
 directly consumable `plan_digest_qualified` field.
+
+### Action counts
+
+`plan --json` and `check --json` both carry `action_counts`, a per-kind tally of
+the complete plan (never the `--conflicts-only`-trimmed copy). All six keys are
+always present, so a consumer can read a value without testing for the key:
+
+```json
+"action_counts": { "create": 0, "update": 0, "adopt": 0, "unchanged": 30, "retire": 0, "conflict": 0 }
+```
+
+`check` nests the same object under `data.plan.action_counts`. `retire` is
+non-zero only when `--allow-retire` reclassifies a dropped lock-owned file.
+`bob context` exposes the equivalent under `data.repository.action_counts` (there
+`retire` is omitted when zero).
 
 ## Digest-gated apply
 

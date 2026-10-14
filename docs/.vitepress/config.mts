@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 const site = 'https://bobcli.dev'
 const ogImage = `${site}/og.png`
 const description =
-  'Bob is a deterministic repository factory. It plans before it writes, proves ownership of every file it touches, and seeds hygiene on existing TypeScript, Python, Rust, or Go repositories without owning application source. Model-free, local, MIT.'
+  'Bob is a deterministic repository factory. It plans before it writes, proves ownership of every file it touches, and seeds hygiene on 27 existing language and infrastructure stacks — or scaffolds six public CLI factory recipes — without owning application source. Model-free, local, MIT.'
 
 export default defineConfig({
   title: 'Bob',
@@ -92,6 +92,7 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'Recipes', link: '/reference/recipes' },
           { text: 'Manifest', link: '/reference/manifest' },
           { text: 'Workspace Context', link: '/reference/context' },
           { text: 'Path Classification', link: '/reference/path' },
@@ -135,6 +136,7 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'Recipes', link: '/reference/recipes' },
           { text: 'Manifest', link: '/reference/manifest' },
           { text: 'Workspace Context', link: '/reference/context' },
           { text: 'Path Classification', link: '/reference/path' },

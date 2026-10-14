@@ -53,7 +53,7 @@ distribution:
 | `schema_version` | `1` | Selects the strict manifest schema. |
 | `recipe` | `go-agent-tool`, `csharp-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Eight kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
+Three kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
 `rust-tool@1`, `ts-tool@1`, `java-tool@1`, and `csharp-tool@1`, the six
 factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes

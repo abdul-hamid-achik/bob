@@ -81,7 +81,7 @@ continuation action's `reason_code` is `conflict_` plus the dominant family
 
 Two further fields disambiguate the verdict without changing the state enum:
 `repository.action_counts` tallies actions by kind (create, update, adopt,
-unchanged, conflict) so the compact profile answers "how many entries are
+unchanged, retire, conflict) so the compact profile answers "how many entries are
 creates?" without a second `bob plan` round trip, and `repository.lock_exists`
 distinguishes "lock drifted" from "recipe never applied" —
 `lock_changed` is true for both. When every conflict is an
