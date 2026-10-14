@@ -16,11 +16,11 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection, `--allow-retire` previews the retire case. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
-| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, `--allow-retire` classifies dropped lock-owned files as retire actions, and `--watch` refreshes human output when `bob.yaml` changes. |
+| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, `--sarif` emits a SARIF 2.1.0 log for code scanning, `--allow-retire` classifies dropped lock-owned files as retire actions, and `--watch` refreshes human output when `bob.yaml` changes. |
 | `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan, `--allow-retire` deletes dropped lock-owned files. |
 | `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing and reports a removal digest, `--expect-removal-digest` binds removal to that reviewed decision. |
 | `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews (with `--json` it reports the `plan_digest` to review), `--expect-plan-digest` gates authority, `--allow-retire` deletes dropped lock-owned files. |
-| `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only` and `--allow-retire`. |
+| `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`, `--sarif`, and `--allow-retire`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |
 | `bob config show` | Read-only | Show effective settings and resolved XDG paths. |
@@ -352,6 +352,29 @@ previews to `create`, `update`, and `conflict` actions:
   "current_preview": "#!/usr/bin/env bash\necho \"listening on 8080\"\n"
 }
 ```
+
+## SARIF output
+
+`plan` and `check` both accept `--sarif`, which writes a SARIF 2.1.0 log to
+stdout instead of the human or JSON plan. It is a drop-in artifact for GitHub
+code scanning and other SARIF consumers:
+
+```bash
+bob plan --sarif
+bob check --sarif
+```
+
+The document reports one `result` per non-converged action — `conflict`,
+`update`, `retire`, and `create` — keyed by the action's stable `code` as the
+`ruleId`. `unchanged` and `adopt` actions are omitted. The `level` follows the
+action kind: `error` for conflicts, `warning` for updates and retires, and
+`note` for creates. Each result's message carries the action's human `reason`,
+and its location is the repository-relative path.
+
+`--sarif` and `--json` are mutually exclusive; combining them is invalid input
+(exit `4`). Exit codes are unchanged: `plan --sarif` always exits `0`, and
+`check --sarif` still exits `2` on an ownership conflict and `3` on drift, so a
+code-scanning upload fails the build exactly as a plain `check` would.
 
 ## Plan identity
 
