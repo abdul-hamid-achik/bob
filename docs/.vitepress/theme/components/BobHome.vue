@@ -275,9 +275,9 @@ const refusals = [
               command and library source — Go: <code>cmd/</code> and
               <code>internal/</code>; the others: <code>src/</code> — plus tests,
               CI, and release files, while its living files (<code>README</code>,
-              <code>CHANGELOG</code>, the language manifest, and for Go
-              <code>AGENTS.md</code>/<code>CLAUDE.md</code>/<code>go.sum</code>)
-              seed once and stay in human hands.
+              <code>AGENTS.md</code>, <code>CHANGELOG</code>, the language
+              manifest — and for Go also <code>CLAUDE.md</code> and
+              <code>go.sum</code>) seed once and stay in human hands.
             </p>
           </a>
         </div>

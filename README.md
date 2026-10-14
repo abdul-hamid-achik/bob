@@ -104,8 +104,9 @@ C/C++ with CMake, SwiftPM, Elixir/Mix, Dart, Zig, Scala, Docker, Terraform,
 Nix, Ansible, Helm, Kubernetes, or a static web site) and defaults to
 the matching recipe — the seed-once stack
 hygiene recipes never own application source. A plain Go module selects
-`go-hygiene`; only a Cobra `cmd/` + `internal/cli` layout (or an existing
-`recipe: go-agent-tool`) selects the factory. When a chosen recipe does not
+`go-hygiene`; only a Cobra `cmd/` + `internal/cli` layout whose `go.mod`
+requires `github.com/spf13/cobra` (or an existing `recipe: go-agent-tool`)
+selects the factory. When a chosen recipe does not
 match the detected stack, the preview warns and `--write` refuses without
 `--force`:
 

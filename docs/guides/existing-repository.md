@@ -43,7 +43,7 @@ to the matching recipe:
 | TypeScript / JS / Vue / Nuxt / Deno | `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `deno-app` | Seed-once hygiene. Package manager comes from the lockfile when present. |
 | Python / PHP / Ruby / Lua / Rust / Java / Kotlin / .NET / C/C++ (CMake) / Swift / Elixir / Dart / Zig / Scala / Docker / Terraform / Nix / Ansible / Helm / Kubernetes / static HTML | matching `@2` recipe | Same seed-once contract. Never owns application source. |
 | Plain Go (`go.mod` without a Cobra `cmd/` + `internal/cli` layout) | `go-hygiene` | Same seed-once contract, plus a golangci-lint CI stub when GitHub Actions is on. |
-| Go with `cmd/` + `internal/cli/root.go`, or an existing `recipe: go-agent-tool` | `go-agent-tool` | The deep factory. `--module` is required unless `go.mod` already has a module path. |
+| Go with `cmd/` + `internal/cli/root.go` **and** `github.com/spf13/cobra` in `go.mod`, or an existing `recipe: go-agent-tool` | `go-agent-tool` | The deep factory. `--module` is required unless `go.mod` already has a module path. |
 
 A stack recipe never conflicts with an existing file: any destination that
 already exists satisfies the seed, including a symlink or directory. Later

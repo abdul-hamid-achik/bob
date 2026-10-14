@@ -43,12 +43,15 @@ ordinary drift the next apply re-seeds.
 
 ## Files Bob refuses to own
 
-Recipe output cannot target:
+Recipe output that Bob would **own** cannot target:
 
 - absolute paths or parent traversal;
 - `.git` or anything beneath it;
 - `bob.yaml` or `bob.lock`;
 - a pre-existing symlink, directory, device, socket, or named pipe.
+
+(A **seed-once** artifact, by contrast, treats any existing destination —
+including a symlink or directory — as already satisfied: `seed_exists`.)
 
 Bob also refuses to overwrite an unmanaged differing file or a managed file
 whose current hash no longer matches `bob.lock`. If you hand-edited a
