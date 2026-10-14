@@ -36,6 +36,13 @@ const (
 type Options struct {
 	Profile  Profile
 	LookPath func(string) (string, error)
+	// AllowRetire opts the context plan into the retire action: a lock-owned
+	// regular file the recipe no longer declares is classified as a
+	// non-conflict retire instead of a retired_owned conflict, so the emitted
+	// context previews the apply_retire action and an info notice instead of a
+	// warning. The zero value is the historical default and keeps the plan
+	// byte-identical.
+	AllowRetire bool
 	// ByteLimit, when positive, is a caller override for the profile's
 	// projection budget: it replaces the profile's documented limit as the
 	// bound actually enforced by truncation, and the emitted
@@ -174,7 +181,7 @@ func Load(root string, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("render recipe: %w", err))
 	}
-	plan, err := engine.Plan(canonical, m, artifacts)
+	plan, err := engine.PlanWithOptions(canonical, m, artifacts, engine.PlanOptions{AllowRetire: options.AllowRetire})
 	if err != nil {
 		return Result{}, guidance.WithErrorCode("context_failed", fmt.Errorf("plan workspace: %w", err))
 	}

@@ -722,6 +722,47 @@ func TestContextGuidesRetireAction(t *testing.T) {
 	}
 }
 
+// TestContextAllowRetireOptionPlansRetireAction proves the Options.AllowRetire
+// opt-in flows through Load to the engine plan: on a dropped-path workspace the
+// retire case (info notice + explicitly-authorized apply action) is projected
+// instead of the default retired_owned conflict.
+func TestContextAllowRetireOptionPlansRetireAction(t *testing.T) {
+	t.Parallel()
+	root := retiredWorkspace(t)
+	lookPath := func(string) (string, error) { return "", errors.New("missing") }
+
+	result, err := Load(root, Options{Profile: ProfileCompact, AllowRetire: true, LookPath: lookPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Repository.State != "drifted" {
+		t.Fatalf("state = %q, want drifted", result.Repository.State)
+	}
+	notice := findNotice(t, result, "retired_owned")
+	if notice.ID != "retired_owned" || notice.Severity != "info" {
+		t.Fatalf("retire notice = %#v", notice)
+	}
+	action := findAction(t, result, "apply_retire")
+	if action.Effect != "repository_mutation" || !action.RequiresExplicitAuthority || action.ReasonCode != "retired_owned" {
+		t.Fatalf("apply action = %#v", action)
+	}
+
+	// The default (zero AllowRetire) is unchanged: the same workspace still
+	// projects a retired_owned conflict and never an apply action.
+	conflicted, err := Load(root, Options{Profile: ProfileCompact, LookPath: lookPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conflicted.Repository.State != "conflicted" {
+		t.Fatalf("default state = %q, want conflicted", conflicted.Repository.State)
+	}
+	for _, a := range conflicted.Actions {
+		if a.ID == "apply_retire" {
+			t.Fatalf("default plan emitted apply action: %#v", a)
+		}
+	}
+}
+
 // TestContextGuidesRetiredOwnedConflict proves the default plan (no
 // --allow-retire) turns a dropped lock-owned path into a retired_owned
 // conflict and emits a warning notice instead of an apply action, because

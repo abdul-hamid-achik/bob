@@ -13,7 +13,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 |---|---|---|
 | `bob new <name>` | Preview by default; writes with `--write` | Create a repository contract and initial files; stack hygiene recipes require a target whose application stack already exists. |
 | `bob init [path]` | Preview by default; writes `bob.yaml` with `--write` | Initialize Bob in an existing directory without generating files yet. |
-| `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
+| `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection, `--allow-retire` previews the retire case. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
 | `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, `--allow-retire` classifies dropped lock-owned files as retire actions, and `--watch` refreshes human output when `bob.yaml` changes. |
@@ -150,6 +150,7 @@ or contacting a network provider.
 bob context .
 bob context . --json
 bob context . --profile full --json
+bob context . --allow-retire --json
 ```
 
 Human output defaults to `standard`. JSON defaults to `compact`; an explicit
@@ -157,6 +158,13 @@ Human output defaults to `standard`. JSON defaults to `compact`; an explicit
 6,144-byte limit, standard 24 KiB, and full 64 KiB. Every result carries a
 `truncation` object and never truncates recipe identity, repository state,
 conflict count, digests, or continuation actions.
+
+`--allow-retire` opts the context plan into the retire action: a lock-owned
+regular file the recipe dropped is classified as a non-conflict `retire` action
+instead of a `retired_owned` conflict, so context previews the `apply_retire`
+action and an `info` notice rather than the default `warning`. It is a
+read-only preview — it changes the plan projection, not the repository. See
+[Retiring dropped files](#retiring-dropped-files).
 
 The command distinguishes capability `selection`, `materialization`, local
 binary `availability`, and `verification`. Verification is always
