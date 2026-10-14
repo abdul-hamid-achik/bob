@@ -89,6 +89,10 @@ and the project uses semantic versioning after the first tagged release.
   (render/validate) hygiene without owning their content.
 - `bob plan --sarif` and `bob check --sarif` emit a SARIF 2.1.0 log for code
   scanning (`--sarif` and `--json` are mutually exclusive; exit codes unchanged).
+- `java-tool@1`: a public-ready Java (Maven) CLI scaffold — a Maven project with
+  a JUnit 5 test, an executable jar, CI, a release workflow, docs, and a
+  Taskfile — the Java analogue of `go-agent-tool`.
+- Glyphrun specs covering `plan --sarif` and `bob context --allow-retire`.
 - `bob context --allow-retire` previews the retire case (a dropped, lock-owned
   path) so an agent can see the opt-in cleanup action before running it; the
   default `bob context` output is unchanged.
