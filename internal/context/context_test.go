@@ -638,6 +638,24 @@ func TestFilesContextDoesNotInferApplicationSemantics(t *testing.T) {
 	}
 }
 
+// TestMaterializationHandlesRetireAction proves the per-action switch maps a
+// retire action to the drifted materialization (a non-conflict change) rather
+// than the unknown fallback, so a context built over an opt-in retire plan
+// never mis-states a capability as unknown.
+func TestMaterializationHandlesRetireAction(t *testing.T) {
+	t.Parallel()
+	definition := recipe.CapabilityDefinition{Selection: "enabled", ArtifactIDs: []string{"files:legacy.txt"}}
+	artifacts := map[string]recipe.ArtifactDescriptor{
+		"files:legacy.txt": {ID: "files:legacy.txt", Path: "legacy.txt"},
+	}
+	actions := map[string]engine.Action{
+		"legacy.txt": {Kind: engine.ActionRetire, Code: engine.CodeRetiredUnchanged},
+	}
+	if got := materialization(definition, artifacts, actions); got != "drifted" {
+		t.Fatalf("retire materialization = %q, want %q", got, "drifted")
+	}
+}
+
 type snapshotEntry struct {
 	Data    string
 	Mode    os.FileMode
