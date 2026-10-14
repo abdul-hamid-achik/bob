@@ -92,6 +92,12 @@ and the project uses semantic versioning after the first tagged release.
 - `java-tool@1`: a public-ready Java (Maven) CLI scaffold — a Maven project with
   a JUnit 5 test, an executable jar, CI, a release workflow, docs, and a
   Taskfile — the Java analogue of `go-agent-tool`.
+- `csharp-tool@1`: a public-ready .NET (C#) CLI scaffold — a `net8.0` project
+  with an xUnit test, CI, a release workflow, docs, and a Taskfile — the C#
+  analogue of `go-agent-tool`.
+- `bob plan --junit` and `bob check --junit` emit a JUnit XML report for CI test
+  reporting (`--junit` is mutually exclusive with `--json` and `--sarif`; exit
+  codes unchanged).
 - Glyphrun specs covering `plan --sarif` and `bob context --allow-retire`.
 - `bob context --allow-retire` previews the retire case (a dropped, lock-owned
   path) so an agent can see the opt-in cleanup action before running it; the
