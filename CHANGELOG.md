@@ -54,6 +54,8 @@ and the project uses semantic versioning after the first tagged release.
   items as deliberately not planned.
 - The human `plan` summary line now ends with `… unchanged, N retire, N conflict`,
   and Bob Console's watch-tally parser understands the new `retire` column.
+- Bob Console's captured demo envelopes were refreshed to the current recipe
+  catalog (32 recipes) and the ten-tool MCP surface.
 
 ### Added
 
@@ -82,6 +84,11 @@ and the project uses semantic versioning after the first tagged release.
 - `dart-app@2`, `zig-app@2`, and `scala-app@2` stack hygiene recipes seed Dart,
   Zig, and Scala (sbt) hygiene (docs, `.gitignore`, and an analyze/build/test CI
   stub) without owning application source.
+- `ansible-app@2`, `helm-app@2`, and `kubernetes-app@2` stack hygiene recipes
+  seed Ansible (lint), Helm chart (lint/template), and Kubernetes/Kustomize
+  (render/validate) hygiene without owning their content.
+- `bob plan --sarif` and `bob check --sarif` emit a SARIF 2.1.0 log for code
+  scanning (`--sarif` and `--json` are mutually exclusive; exit codes unchanged).
 - `bob context --allow-retire` previews the retire case (a dropped, lock-owned
   path) so an agent can see the opt-in cleanup action before running it; the
   default `bob context` output is unchanged.
