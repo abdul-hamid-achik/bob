@@ -1,0 +1,66 @@
+version: 1
+name: bob_recipe_show_factories
+intent: |
+    The factory recipe catalog exposes three public scaffolding recipes with
+    stable, versioned identities. bob recipe show names each recipe's id and
+    version (go-agent-tool@6, rust-tool@1, python-tool@1), and bob recipe list
+    enumerates all three in the catalog.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          go_agent="$(./bin/bob recipe show go-agent-tool)"
+          rust="$(./bin/bob recipe show rust-tool)"
+          python="$(./bin/bob recipe show python-tool)"
+          printf 'go_agent=%s\n' "$(printf '%s' "$go_agent" | grep -o 'go-agent-tool@[0-9]*')"
+          printf 'rust=%s\n' "$(printf '%s' "$rust" | grep -o 'rust-tool@[0-9]*')"
+          printf 'python=%s\n' "$(printf '%s' "$python" | grep -o 'python-tool@[0-9]*')"
+          list="$(./bin/bob recipe list)"
+          printf 'list_go_agent=%s\n' "$(printf '%s' "$list" | grep -c 'go-agent-tool@6')"
+          printf 'list_rust=%s\n' "$(printf '%s' "$list" | grep -c 'rust-tool@1')"
+          printf 'list_python=%s\n' "$(printf '%s' "$list" | grep -c 'python-tool@1')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: recipe_show_factories
+outcomes:
+    - id: go_agent_named
+      description: recipe show go-agent-tool names go-agent-tool@6
+      verify:
+        screen:
+            contains: go_agent=go-agent-tool@6
+    - id: rust_named
+      description: recipe show rust-tool names rust-tool@1
+      verify:
+        screen:
+            contains: rust=rust-tool@1
+    - id: python_named
+      description: recipe show python-tool names python-tool@1
+      verify:
+        screen:
+            contains: python=python-tool@1
+    - id: list_includes_go_agent
+      description: recipe list includes go-agent-tool@6
+      verify:
+        screen:
+            contains: list_go_agent=1
+    - id: list_includes_rust
+      description: recipe list includes rust-tool@1
+      verify:
+        screen:
+            contains: list_rust=1
+    - id: list_includes_python
+      description: recipe list includes python-tool@1
+      verify:
+        screen:
+            contains: list_python=1
+contractHash: sha256:b924cbf2c206efc97c03302d2666fdf78bf32ae722519cffa9e2d5777c2fdc2d
