@@ -1,0 +1,14 @@
+schema_version: 1
+recipe: python-tool
+product:
+  name: python-tool-demo
+  module: github.com/example/python-tool-demo
+  description: A small Python command-line tool
+  visibility: public
+  license: MIT
+runtime:
+  language: python
+  kind: cli
+surfaces:
+  cli: true
+  json: true

@@ -28,6 +28,10 @@ const (
 	// RecipeRustTool scaffolds a public-ready Rust CLI: a thin binary over a
 	// tested library core, with docs, CI, and a release workflow.
 	RecipeRustTool = "rust-tool"
+	// RecipePythonTool scaffolds a public-ready Python CLI: an argparse entry
+	// point over a tested pure function, with docs, CI, and a release
+	// workflow.
+	RecipePythonTool = "python-tool"
 	// RecipeFiles declares an arbitrary file tree inline.
 	RecipeFiles = "files"
 
@@ -120,7 +124,7 @@ var (
 // sync with recipe.IDs(); manifest cannot import recipe (recipe imports
 // manifest), so this list is the schema-side source of truth for the id set.
 var recipeIDs = func() []string {
-	ids := append([]string{RecipeFiles, RecipeGoAgentTool, RecipeRustTool}, StackRecipeIDs()...)
+	ids := append([]string{RecipeFiles, RecipeGoAgentTool, RecipePythonTool, RecipeRustTool}, StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }()
@@ -246,6 +250,29 @@ func DefaultRustTool(name, module, description string) Manifest {
 	}
 }
 
+// DefaultPythonTool builds the default manifest for the python-tool factory
+// recipe: a public-ready Python CLI scaffold. The module is optional
+// repository identity (not a Python import path); the recipe always renders
+// its CI and release workflows, so no distribution toggle is selected.
+func DefaultPythonTool(name, module, description string) Manifest {
+	if description == "" {
+		description = "A local-first, agent-ready Python command-line tool."
+	}
+	return Manifest{
+		SchemaVersion: SchemaVersion,
+		Recipe:        RecipePythonTool,
+		Product: Product{
+			Name:        name,
+			Module:      module,
+			Description: description,
+			Visibility:  "public",
+			License:     "MIT",
+		},
+		Runtime:  Runtime{Language: "python", Kind: "cli"},
+		Surfaces: Surfaces{CLI: true, JSON: true},
+	}
+}
+
 // describeValue renders the offending value for a validation problem string.
 // Empty values are named explicitly rather than rendered as `""`, since a
 // bare pair of quotes reads as noise to a weak model scanning error text.
@@ -271,7 +298,7 @@ func (m Manifest) Validate() error {
 	if m.SchemaVersion != SchemaVersion {
 		problems = append(problems, fmt.Sprintf("schema_version must be %d (got %d)", SchemaVersion, m.SchemaVersion))
 	}
-	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeRustTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
+	if m.Recipe != RecipeGoAgentTool && m.Recipe != RecipeRustTool && m.Recipe != RecipePythonTool && m.Recipe != RecipeFiles && !IsStackRecipe(m.Recipe) {
 		problems = append(problems, fmt.Sprintf("recipe must be one of %s (got %s)%s", strings.Join(recipeIDs, ", "), describeValue(m.Recipe), suggestionSuffix(m.Recipe, recipeIDs)))
 	}
 	if !projectNamePattern.MatchString(m.Product.Name) {
@@ -288,6 +315,8 @@ func (m Manifest) Validate() error {
 		problems = append(problems, m.validateGoAgentToolRecipe()...)
 	case m.Recipe == RecipeRustTool:
 		problems = append(problems, m.validateRustToolRecipe()...)
+	case m.Recipe == RecipePythonTool:
+		problems = append(problems, m.validatePythonToolRecipe()...)
 	case IsStackRecipe(m.Recipe):
 		problems = append(problems, m.validateStackRecipe()...)
 	default:
@@ -396,6 +425,44 @@ func (m Manifest) validateRustToolRecipe() []string {
 	}
 	if m.Distribution != (Distribution{}) {
 		problems = append(problems, "distribution is not used by recipe rust-tool")
+	}
+	if len(m.Vars) > 0 {
+		problems = append(problems, "vars is only supported by recipe files")
+	}
+	if len(m.Files) > 0 {
+		problems = append(problems, "files is only supported by recipe files")
+	}
+	problems = append(problems, ownershipReleaseProblems(m.Ownership.Release)...)
+	return problems
+}
+
+// validatePythonToolRecipe implements every python-tool validation rule. Like
+// rust-tool it owns a complete repository, so it requires the same product
+// identity and surface declarations; the module is optional repository
+// identity rather than a Go module path.
+func (m Manifest) validatePythonToolRecipe() []string {
+	var problems []string
+	problems = append(problems, optionalModuleProblems(m.Product.Module)...)
+	if m.Product.Visibility != "public" && m.Product.Visibility != "private" {
+		problems = append(problems, fmt.Sprintf("product.visibility must be public or private (got %s)%s", describeValue(m.Product.Visibility), suggestionSuffix(m.Product.Visibility, []string{"public", "private"})))
+	}
+	if m.Product.License != "MIT" {
+		problems = append(problems, fmt.Sprintf("product.license must be MIT in schema version 1 (got %s)", describeValue(m.Product.License)))
+	}
+	if m.Runtime.Language != "python" || m.Runtime.Kind != "cli" {
+		problems = append(problems, fmt.Sprintf("python-tool requires runtime.language=python and runtime.kind=cli (got language=%s, kind=%s)", describeValue(m.Runtime.Language), describeValue(m.Runtime.Kind)))
+	}
+	if !m.Surfaces.CLI {
+		problems = append(problems, "python-tool requires surfaces.cli=true")
+	}
+	if !m.Surfaces.JSON {
+		problems = append(problems, "python-tool requires surfaces.json=true")
+	}
+	if m.Integrations != (Integrations{}) {
+		problems = append(problems, "integrations is not used by recipe python-tool")
+	}
+	if m.Distribution != (Distribution{}) {
+		problems = append(problems, "distribution is not used by recipe python-tool")
 	}
 	if len(m.Vars) > 0 {
 		problems = append(problems, "vars is only supported by recipe files")

@@ -12,6 +12,11 @@ conflict-free plan.
   factory recipe: a public-ready Rust CLI scaffold with a thin binary over a
   tested library core, where `Cargo.toml`, `README.md`, `AGENTS.md`, and
   `CHANGELOG.md` are seeded once and left in human hands.
+- [`python-tool-minimal/bob.yaml`](python-tool-minimal/bob.yaml) uses the
+  `python-tool` factory recipe: a public-ready Python CLI scaffold with an
+  argparse entry point over a tested pure function, where `pyproject.toml`,
+  `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
+  human hands.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.
