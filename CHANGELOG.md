@@ -73,6 +73,17 @@ and the project uses semantic versioning after the first tagged release.
   with a `process.argv` entry point over a tested pure function, tsc/eslint/vitest
   CI, an npm release workflow, docs, and a Taskfile — the TypeScript analogue of
   `go-agent-tool`.
+- `docker-app@2`, `terraform-app@2`, and `nix-app@2` stack hygiene recipes seed
+  Docker image hygiene (`.dockerignore` + a build CI stub), Terraform/IaC
+  hygiene (`.gitignore` + a validate CI stub), and Nix flake hygiene (`.gitignore`
+  + a flake-check CI stub) without owning application source. Detection
+  recognizes `Dockerfile`/compose files, any root `*.tf`, and
+  `flake.nix`/`shell.nix`/`default.nix`.
+- Glyphrun specs covering `bob context`'s retire guidance and the MCP
+  `tools/list` surface (10 tools; an unauthorized `bob_apply` writes nothing).
+- `bob plan --json` and `bob check --json` now expose an `action_counts` object
+  (create/update/adopt/unchanged/retire/conflict) computed from the complete
+  plan.
 - Glyphrun specs covering the `retire` JSON surface and the factory catalog
   (`recipe show` / `recipe list`).
 - `bob context` now emits typed guidance (a notice, and for the opt-in retire
