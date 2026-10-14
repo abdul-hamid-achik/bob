@@ -185,9 +185,11 @@ clipped contract.
 
 Actions are argv-shaped rather than shell strings. `effect` is one of
 `read_only`, `subprocess_probe`, `repository_mutation`, or
-`user_configuration_mutation`. Context currently emits only `read_only` plan
-review actions. `requires_explicit_authority` and `blocked_by` remain explicit
-so an agent does not infer authority from ordering.
+`user_configuration_mutation`. Context emits `read_only` plan review actions;
+with `--allow-retire` it also emits an `apply_retire` `repository_mutation`
+action that is explicitly authorized, never implied. `requires_explicit_authority`
+and `blocked_by` remain explicit so an agent does not infer authority from
+ordering.
 
 Notices carry stable `id`, `code`, and `severity` fields plus explanatory text.
 Consumers branch on codes, not messages. Current codes:
@@ -196,6 +198,13 @@ Consumers branch on codes, not messages. Current codes:
 |---|---|---|
 | `binary_unavailable` | warning | A selected capability's declared binary is not on `PATH`; Bob did not run or verify it. |
 | `surface_evidence_mismatch` | warning | A disabled descriptive surface (for example `surface.mcp`) has declared read-only repository evidence — conventional package paths, or a bounded literal match in the recipe-known entrypoint. Flip the manifest boolean to true or remove the surface. |
+| `retired_owned` | info | A lock-owned regular file the recipe no longer declares is classified as a retire action (`--allow-retire`); the `apply_retire` action removes it. |
+| `retired_owned` | warning | A lock-owned regular file the recipe no longer declares blocks apply by default; clean it up with `--allow-retire` or remove it by hand. |
+
+Both `retired_owned` notices share the same `code`; they differ by `id`
+(`retired_owned` info versus `retired_owned_conflict` warning) and `severity`.
+`bob context --allow-retire` previews the retire case — the info notice plus the
+`apply_retire` action — while the default projection reports the conflict.
 
 Surface-evidence rules are recipe metadata evaluated read-only and offline:
 existence rules stat resolved paths (with `<product>` resolved from the

@@ -85,6 +85,7 @@ func planJSONProjection(displayed, complete engine.PlanResult) planJSON {
 
 func newContextCommand(opts *options) *cobra.Command {
 	var profileName string
+	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "context [workspace]",
 		Short: "Describe the deterministic contract governing a workspace",
@@ -99,7 +100,7 @@ func newContextCommand(opts *options) *cobra.Command {
 					profile = contextpkg.ProfileCompact
 				}
 			}
-			result, err := contextpkg.Load(root, contextpkg.Options{Profile: profile})
+			result, err := contextpkg.Load(root, contextpkg.Options{Profile: profile, AllowRetire: allowRetire})
 			if err != nil {
 				return fmt.Errorf("context: %w", classifyInvalidInput(err))
 			}
@@ -111,6 +112,7 @@ func newContextCommand(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profileName, "profile", "", "output profile: compact, standard, or full (default: standard; compact with --json)")
+	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "classify a lock-owned regular file the recipe dropped as a retire action instead of a conflict")
 	return cmd
 }
 

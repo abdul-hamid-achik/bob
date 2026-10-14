@@ -113,6 +113,114 @@ func TestWriteCommandsRejectSymlinkWorkspaceWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestContextCLIAllowRetirePreviewsRetireCase(t *testing.T) {
+	t.Parallel()
+	target := t.TempDir()
+	writeManifest(t, target, `schema_version: 1
+recipe: files
+product:
+  name: retire
+  description: test
+files:
+  - path: keep.txt
+    content: "keep\n"
+  - path: retire.txt
+    content: "retire\n"
+`)
+	if _, _, err := executeForTest("apply", target); err != nil {
+		t.Fatalf("apply seed: %v", err)
+	}
+	writeManifest(t, target, `schema_version: 1
+recipe: files
+product:
+  name: retire
+  description: test
+files:
+  - path: keep.txt
+    content: "keep\n"
+`)
+
+	type noticeJSON struct {
+		ID       string `json:"id"`
+		Code     string `json:"code"`
+		Severity string `json:"severity"`
+	}
+	type actionJSON struct {
+		ID                        string `json:"id"`
+		Effect                    string `json:"effect"`
+		ReasonCode                string `json:"reason_code"`
+		RequiresExplicitAuthority bool   `json:"requires_explicit_authority"`
+	}
+	decode := func(stdout string) (state string, notices []noticeJSON, actions []actionJSON) {
+		t.Helper()
+		var got struct {
+			Data struct {
+				Repository struct {
+					State string `json:"state"`
+				} `json:"repository"`
+				Notices []noticeJSON `json:"notices"`
+				Actions []actionJSON `json:"actions"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+			t.Fatalf("decode JSON: %v\n%s", err, stdout)
+		}
+		return got.Data.Repository.State, got.Data.Notices, got.Data.Actions
+	}
+
+	// Default: the dropped lock-owned path is a retired_owned conflict.
+	stdout, _, err := executeForTest("--json", "context", target)
+	if err != nil {
+		t.Fatalf("context --json: %v\n%s", err, stdout)
+	}
+	state, notices, actions := decode(stdout)
+	if state != "conflicted" {
+		t.Fatalf("default state = %q, want conflicted", state)
+	}
+	var conflictNotice bool
+	for _, n := range notices {
+		if n.Code == "retired_owned" && n.ID == "retired_owned_conflict" && n.Severity == "warning" {
+			conflictNotice = true
+		}
+	}
+	if !conflictNotice {
+		t.Fatalf("missing retired_owned_conflict warning: %#v", notices)
+	}
+	for _, a := range actions {
+		if a.ID == "apply_retire" {
+			t.Fatalf("default context emitted apply action: %#v", a)
+		}
+	}
+
+	// --allow-retire previews the retire action and info notice.
+	stdout, _, err = executeForTest("--json", "context", target, "--allow-retire")
+	if err != nil {
+		t.Fatalf("context --json --allow-retire: %v\n%s", err, stdout)
+	}
+	state, notices, actions = decode(stdout)
+	if state != "drifted" {
+		t.Fatalf("allow-retire state = %q, want drifted", state)
+	}
+	var infoNotice bool
+	for _, n := range notices {
+		if n.Code == "retired_owned" && n.ID == "retired_owned" && n.Severity == "info" {
+			infoNotice = true
+		}
+	}
+	if !infoNotice {
+		t.Fatalf("missing retired_owned info notice: %#v", notices)
+	}
+	var applyRetire *actionJSON
+	for i := range actions {
+		if actions[i].ID == "apply_retire" {
+			applyRetire = &actions[i]
+		}
+	}
+	if applyRetire == nil || applyRetire.Effect != "repository_mutation" || applyRetire.ReasonCode != "retired_owned" || !applyRetire.RequiresExplicitAuthority {
+		t.Fatalf("apply_retire action = %#v", applyRetire)
+	}
+}
+
 func TestPlanJSONUsesVersionedEnvelope(t *testing.T) {
 	t.Parallel()
 	target := filepath.Join(t.TempDir(), "acme")
