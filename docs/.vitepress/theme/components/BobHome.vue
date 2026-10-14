@@ -300,8 +300,10 @@ const refusals = [
               <code>go-agent-tool</code>, <code>rust-tool</code>, <code>python-tool</code>,
               <code>ts-tool</code>, <code>java-tool</code>, <code>csharp-tool</code>. A thin
               entry point over a tested pure function, human and JSON output, tests, CI,
-              and release plumbing in one command. The living files (<code>README</code>,
-              <code>CHANGELOG</code>, the language manifest) seed once and stay yours.
+              and release plumbing in one command. The living files
+              (<code>README</code>, <code>AGENTS.md</code>, <code>CHANGELOG</code>, the
+              language manifest) seed once and stay yours — Go also seeds
+              <code>CLAUDE.md</code> and <code>go.sum</code>.
             </p>
           </article>
           <article class="card read">
@@ -356,7 +358,7 @@ const refusals = [
         </ol>
         <p class="legend">
           <span class="key read">Hand-edit a managed file and it becomes a conflict, not a silent overwrite.</span>
-          <span class="key write">One conflict blocks the entire apply; symlinks and special files are always conflicts.</span>
+          <span class="key write">One conflict blocks the entire apply; a symlink or special file at an <em>owned</em> destination is a conflict (a seed-once destination treats any existing path as satisfied).</span>
         </p>
         <p class="body-copy">
           Two ownership classes: <strong>seed-once</strong> files (created if missing,
