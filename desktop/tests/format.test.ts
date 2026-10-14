@@ -60,8 +60,8 @@ describe('family map', () => {
     expect(FAMILY_BY_CODE['not-a-code']).toBeUndefined()
   })
 
-  it('has display metadata for all five action kinds', () => {
-    expect(Object.keys(KIND_META).sort()).toEqual(['adopt', 'conflict', 'create', 'unchanged', 'update'])
+  it('has display metadata for all six action kinds', () => {
+    expect(Object.keys(KIND_META).sort()).toEqual(['adopt', 'conflict', 'create', 'retire', 'unchanged', 'update'])
   })
 })
 
@@ -94,9 +94,10 @@ describe('conflict classification', () => {
         action('update', 'content_update', 'b'),
         action('adopt', 'identical_content', 'c'),
         action('unchanged', 'in_sync', 'd'),
-        action('conflict', 'symlink', 'e')
+        action('conflict', 'symlink', 'e'),
+        action('retire', 'retired_unchanged', 'f')
       ])
-    ).toEqual({ create: 1, update: 1, adopt: 1, unchanged: 1, conflict: 1 })
+    ).toEqual({ create: 1, update: 1, adopt: 1, unchanged: 1, retire: 1, conflict: 1 })
   })
 })
 

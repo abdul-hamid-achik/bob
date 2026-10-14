@@ -21,10 +21,10 @@ export interface WatchTick {
   tally: Record<ActionKind, number> | null
 }
 
-const KINDS = new Set(['create', 'update', 'adopt', 'unchanged', 'conflict'])
-const ROW_RE = /^(create|update|adopt|unchanged|conflict)\s+(.+?)\s+\[([a-z_]+)\]\s*([a-z_]*)$/
+const KINDS = new Set(['create', 'update', 'adopt', 'unchanged', 'retire', 'conflict'])
+const ROW_RE = /^(create|update|adopt|unchanged|retire|conflict)\s+(.+?)\s+\[([a-z_]+)\]\s*([a-z_]*)$/
 const HEADER_RE = /^bob watch:\s*(.+?)\s*—/
-const TALLY_RE = /^(\d+) create, (\d+) update, (\d+) adopt, (\d+) unchanged, (\d+) conflict$/
+const TALLY_RE = /^(\d+) create, (\d+) update, (\d+) adopt, (\d+) unchanged(?:, (\d+) retire)?, (\d+) conflict$/
 
 export function parseWatchLine(line: string): { type: 'header'; timestamp: string } | { type: 'row'; row: WatchRow } | { type: 'tally'; tally: Record<ActionKind, number> } | { type: 'other' } {
   const header = line.match(HEADER_RE)
@@ -45,7 +45,8 @@ export function parseWatchLine(line: string): { type: 'header'; timestamp: strin
         update: Number(tally[2]),
         adopt: Number(tally[3]),
         unchanged: Number(tally[4]),
-        conflict: Number(tally[5])
+        retire: Number(tally[5] ?? 0),
+        conflict: Number(tally[6])
       }
     }
   }
