@@ -192,11 +192,28 @@ func stackTools(m manifest.Manifest) []tool {
 		"java": {
 			{name: "Java", command: "java", args: []string{"-version"}, note: "runs the Java toolchain"},
 		},
+		"csharp": {
+			{name: ".NET", command: "dotnet", args: []string{"--version"}, note: "runs the .NET toolchain"},
+		},
+		"php": {
+			{name: "PHP", command: "php", args: []string{"--version"}, note: "runs the PHP toolchain"},
+			{name: "Composer", command: "composer", args: []string{"--version"}, note: "installs PHP dependencies"},
+		},
+		"kotlin": {
+			{name: "Java", command: "java", args: []string{"-version"}, note: "runs the JVM toolchain"},
+			{name: "Gradle", command: "gradle", args: []string{"--version"}, note: "builds and tests the Kotlin project"},
+		},
+		"cpp": {
+			{name: "CMake", command: "cmake", args: []string{"--version"}, note: "builds the C/C++ project"},
+		},
 	}
 	var optional []tool
-	if m.Runtime.Language == "typescript" || m.Runtime.Language == "javascript" {
+	switch {
+	case m.Recipe == manifest.RecipeDenoApp:
+		optional = []tool{{name: "Deno", command: "deno", args: []string{"--version"}, note: "runs the Deno toolchain"}}
+	case m.Runtime.Language == "typescript" || m.Runtime.Language == "javascript":
 		optional = javascriptTools(m)
-	} else {
+	default:
 		optional = append([]tool(nil), byLanguage[m.Runtime.Language]...)
 	}
 	sort.SliceStable(optional, func(i, j int) bool { return optional[i].name < optional[j].name })

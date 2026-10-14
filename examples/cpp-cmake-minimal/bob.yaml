@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: cpp-cmake
+product:
+  name: cpp-cmake-demo
+  description: A small C/C++ application
+runtime:
+  language: cpp
+  kind: app
+distribution:
+  github_actions: true

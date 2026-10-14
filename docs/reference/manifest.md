@@ -56,8 +56,9 @@ distribution:
 Three kinds of recipe are embedded: `go-agent-tool@6`, documented below;
 `files@1`, a plain file-tree recipe documented in its own section further
 down; and the stack hygiene recipes (`ts-app@2`, `js-app@2`, `vue-app@2`,
-`nuxt-app@2`, `python-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
-`java-app@2`, `swift-package@2`, `elixir-app@2`, `static-web@2`, and
+`nuxt-app@2`, `deno-app@2`, `python-app@2`, `php-app@2`, `ruby-app@2`,
+`lua-lib@2`, `rust-cli@2`, `java-app@2`, `kotlin-app@2`, `dotnet-app@2`,
+`cpp-cmake@2`, `swift-package@2`, `elixir-app@2`, `static-web@2`, and
 `go-hygiene@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
@@ -243,9 +244,10 @@ watching Bob report `content_update` on the next plan.
 
 ## The stack hygiene recipes
 
-`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `python-app@2`, `ruby-app@2`,
-`lua-lib@2`, `rust-cli@2`, `java-app@2`, `swift-package@2`, `elixir-app@2`,
-`static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
+`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`, `python-app@2`,
+`php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`, `java-app@2`,
+`kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `swift-package@2`,
+`elixir-app@2`, `static-web@2`, and `go-hygiene@2` share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
 **seed-once** artifacts `README.md`, `AGENTS.md`, `SECURITY.md`, `.gitignore`,
 and `.editorconfig`, plus stack-specific formatter, linter, or runtime
@@ -287,11 +289,16 @@ Schema, relative to `go-agent-tool`:
   | `js-app` | `javascript` | `app` or `monorepo` |
   | `vue-app` | `typescript` or `javascript` | `web-app` |
   | `nuxt-app` | `typescript` or `javascript` | `web-app` |
+  | `deno-app` | `typescript` | `app` or `library` |
   | `python-app` | `python` | `app` |
+  | `php-app` | `php` | `app` or `library` |
   | `ruby-app` | `ruby` | `app` or `gem` |
   | `lua-lib` | `lua` | `lib` or `plugin` |
   | `rust-cli` | `rust` | `cli`, `lib`, or `workspace` |
   | `java-app` | `java` | `app` or `library` |
+  | `kotlin-app` | `kotlin` | `app` or `library` |
+  | `dotnet-app` | `csharp` | `app` or `library` |
+  | `cpp-cmake` | `cpp` | `app` or `library` |
   | `swift-package` | `swift` | `package` |
   | `elixir-app` | `elixir` | `app` or `umbrella` |
   | `static-web` | `html` | `site` |

@@ -55,6 +55,14 @@ and the project uses semantic versioning after the first tagged release.
 
 - A new `java-app@2` stack hygiene recipe seeds Java repository hygiene (docs,
   `.gitignore`, and a Maven CI stub) without owning application source.
+- Five new `@2` stack hygiene recipes — `dotnet-app` (.NET/C#), `php-app`,
+  `deno-app`, `kotlin-app`, and `cpp-cmake` (C/C++ with CMake) — seed docs,
+  `.gitignore`, and a CI stub without owning application source. Detection
+  recognizes `*.csproj`/`*.fsproj`/`*.sln`/`global.json`, `composer.json`,
+  `deno.json`/`deno.jsonc`, Kotlin signals (Kotlin source or Kotlin content in
+  a Gradle/Maven build file), and `CMakeLists.txt`. Kotlin outranks Java only
+  when a Kotlin signal is present, and `deno-app` probes `deno` (not Node) in
+  `bob doctor`.
 - `bob mcp serve` gains an opt-in `bob_apply` tool: digest-gated mutation,
   disabled unless `--allow-apply-workspace <path>` is set (never implied by
   `--allow-workspace` or `--allow-any-workspace`). It requires the exact
