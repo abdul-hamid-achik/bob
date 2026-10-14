@@ -1,0 +1,126 @@
+version: 1
+name: bob_context_profiles
+intent: |
+    bob context --json --profile compact, standard, and full each exit 0 with
+    ok=true, report their own profile name, and share the same sha256-qualified
+    contract_digest and context_digest across profiles.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-ctxprof.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'EOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: acme
+            description: Context profiles fixture.
+          files:
+            - path: notes.txt
+              content: |
+                hello
+          EOF
+          ./bin/bob apply "$root" >/dev/null
+
+          for profile in compact standard full; do
+            set +e
+            ./bin/bob context "$root" --profile "$profile" --json >"$root/$profile.json" 2>/dev/null
+            code=$?
+            set -e
+            printf '%s_exit=%s\n' "$profile" "$code"
+            printf '%s_ok=%s\n' "$profile" "$(jq -r '.ok' "$root/$profile.json")"
+            printf '%s_profile=%s\n' "$profile" "$(jq -r '.data.profile' "$root/$profile.json")"
+          done
+
+          cc="$(jq -r '.data.contract_digest' "$root/compact.json")"
+          sc="$(jq -r '.data.contract_digest' "$root/standard.json")"
+          fc="$(jq -r '.data.contract_digest' "$root/full.json")"
+          cx="$(jq -r '.data.context_digest' "$root/compact.json")"
+          sx="$(jq -r '.data.context_digest' "$root/standard.json")"
+          fx="$(jq -r '.data.context_digest' "$root/full.json")"
+
+          case "$cc" in sha256:*) printf 'contract_qualified=true\n' ;; esac
+          case "$cx" in sha256:*) printf 'context_qualified=true\n' ;; esac
+          if [ "$cc" = "$sc" ] && [ "$sc" = "$fc" ]; then printf 'contract_consistent=true\n'; fi
+          if [ "$cx" = "$sx" ] && [ "$sx" = "$fx" ]; then printf 'context_consistent=true\n'; fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: context_profiles
+outcomes:
+    - id: compact_exits_zero
+      description: the compact profile exits 0
+      verify:
+        screen:
+            contains: compact_exit=0
+    - id: standard_exits_zero
+      description: the standard profile exits 0
+      verify:
+        screen:
+            contains: standard_exit=0
+    - id: full_exits_zero
+      description: the full profile exits 0
+      verify:
+        screen:
+            contains: full_exit=0
+    - id: compact_ok_true
+      description: the compact profile reports ok=true
+      verify:
+        screen:
+            contains: compact_ok=true
+    - id: standard_ok_true
+      description: the standard profile reports ok=true
+      verify:
+        screen:
+            contains: standard_ok=true
+    - id: full_ok_true
+      description: the full profile reports ok=true
+      verify:
+        screen:
+            contains: full_ok=true
+    - id: compact_profile_name
+      description: the compact profile reports its own name
+      verify:
+        screen:
+            contains: compact_profile=compact
+    - id: standard_profile_name
+      description: the standard profile reports its own name
+      verify:
+        screen:
+            contains: standard_profile=standard
+    - id: full_profile_name
+      description: the full profile reports its own name
+      verify:
+        screen:
+            contains: full_profile=full
+    - id: contract_digest_qualified
+      description: the shared contract digest is sha256-qualified
+      verify:
+        screen:
+            contains: contract_qualified=true
+    - id: context_digest_qualified
+      description: the shared context digest is sha256-qualified
+      verify:
+        screen:
+            contains: context_qualified=true
+    - id: contract_digest_consistent
+      description: the contract digest is identical across all three profiles
+      verify:
+        screen:
+            contains: contract_consistent=true
+    - id: context_digest_consistent
+      description: the context digest is identical across all three profiles
+      verify:
+        screen:
+            contains: context_consistent=true
+contractHash: sha256:bac0d893b224d6ee4e9d8d41006c957228f5f86fbc78cc4d58888bab5c64d193

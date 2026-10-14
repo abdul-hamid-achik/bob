@@ -1,0 +1,97 @@
+version: 1
+name: bob_path_batch
+intent: |
+    bob path --batch classifies several repository paths in one workspace plan,
+    exiting 0 and returning exactly one result per requested path in order.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-pathbatch.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'EOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: acme
+            description: Path batch fixture.
+          files:
+            - path: notes.txt
+              content: |
+                hello
+          EOF
+          ./bin/bob apply "$root" >/dev/null
+
+          set +e
+          out="$(./bin/bob path --batch notes.txt bob.yaml bob.lock --workspace "$root" --json 2>/dev/null)"
+          code=$?
+          set -e
+          printf 'exit_code=%s\n' "$code"
+          printf 'ok=%s\n' "$(printf '%s' "$out" | jq -r '.ok')"
+          printf 'result_count=%s\n' "$(printf '%s' "$out" | jq -r '.data.results | length')"
+          printf 'first_path=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[0].path')"
+          printf 'second_path=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[1].path')"
+          printf 'third_path=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[2].path')"
+          printf 'first_classification=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[0].classification')"
+          printf 'second_classification=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[1].classification')"
+          printf 'third_classification=%s\n' "$(printf '%s' "$out" | jq -r '.data.results[2].classification')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: path_batch
+outcomes:
+    - id: batch_exits_zero
+      description: path --batch completes successfully
+      verify:
+        screen:
+            contains: exit_code=0
+    - id: batch_ok_true
+      description: the JSON envelope reports ok=true
+      verify:
+        screen:
+            contains: ok=true
+    - id: one_result_per_path
+      description: three requested paths yield three results
+      verify:
+        screen:
+            contains: result_count=3
+    - id: first_path_in_order
+      description: the first result preserves the first requested path
+      verify:
+        screen:
+            contains: first_path=notes.txt
+    - id: second_path_in_order
+      description: the second result preserves the second requested path
+      verify:
+        screen:
+            contains: second_path=bob.yaml
+    - id: third_path_in_order
+      description: the third result preserves the third requested path
+      verify:
+        screen:
+            contains: third_path=bob.lock
+    - id: managed_file_classified
+      description: the declared file is classified as managed
+      verify:
+        screen:
+            contains: first_classification=managed
+    - id: manifest_classified_reserved
+      description: bob.yaml is classified as reserved
+      verify:
+        screen:
+            contains: second_classification=reserved
+    - id: lock_classified_reserved
+      description: bob.lock is classified as reserved
+      verify:
+        screen:
+            contains: third_classification=reserved
+contractHash: sha256:ce48b20c4481a013abea97bc685316883715b594402af55783bc066c956b660c
