@@ -20,6 +20,8 @@ and the project uses semantic versioning after the first tagged release.
   exiting `4` (`input_invalid`, previously `1` / `command_failed`) with a message
   that names `bob plan` and leaving the file untouched; the preview warns and
   points at `bob plan` instead of suggesting `--write`.
+- `bob studio`, `bob context`, and `bob path` now handle the `retire` action
+  kind (previously it fell through to an unknown/blank rendering).
 
 ### Changed
 
@@ -63,6 +65,12 @@ and the project uses semantic versioning after the first tagged release.
 - `rust-tool@1`: a public-ready Rust CLI scaffold — a Cargo project with a thin
   binary over a tested library core, rustfmt/clippy tooling config, CI, a release
   workflow, docs, and a Taskfile — the Rust analogue of `go-agent-tool`.
+- `python-tool@1`: a public-ready Python CLI scaffold — a PEP 621 project with a
+  `src/` layout, an argparse entry point over a tested pure function, ruff +
+  pytest CI, a release workflow, docs, and a Taskfile — the Python analogue of
+  `go-agent-tool`.
+- Glyphrun specs covering `bob new --recipe rust-tool` and `bob init` against an
+  existing `bob.yaml` (the `input_invalid` refusal).
 - Glyphrun specs covering `bob remove --force`, the `bob context` profiles, and
   `bob path --batch`.
 - A new `java-app@2` stack hygiene recipe seeds Java repository hygiene (docs,
