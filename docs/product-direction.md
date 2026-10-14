@@ -128,7 +128,8 @@ Three recipe kinds are embedded. Stack hygiene recipes (`ts-app`, `js-app`,
 `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`, `ruby-app`,
 `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`, `cpp-cmake`,
 `docker-app`, `terraform-app`, `nix-app`, `swift-package`, `elixir-app`,
-`static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`) seed
+`static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`,
+`ansible-app`, `helm-app`, `kubernetes-app`) seed
 docs, ignore
 files, and optional CI once onto an existing language repository and never
 own application source. `files` materializes a tree declared in `bob.yaml`.

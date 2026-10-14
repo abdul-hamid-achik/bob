@@ -54,6 +54,10 @@ conflict-free plan.
   [`terraform-app-minimal/bob.yaml`](terraform-app-minimal/bob.yaml), and
   [`nix-app-minimal/bob.yaml`](nix-app-minimal/bob.yaml) demonstrate the
   Docker image, Terraform/HCL, and Nix flake stack hygiene contracts.
+- [`ansible-app-minimal/bob.yaml`](ansible-app-minimal/bob.yaml),
+  [`helm-app-minimal/bob.yaml`](helm-app-minimal/bob.yaml), and
+  [`kubernetes-app-minimal/bob.yaml`](kubernetes-app-minimal/bob.yaml) demonstrate the
+  Ansible playbook, Helm chart, and Kubernetes (Kustomize) stack hygiene contracts.
 - [`dart-app-minimal/bob.yaml`](dart-app-minimal/bob.yaml),
   [`zig-app-minimal/bob.yaml`](zig-app-minimal/bob.yaml), and
   [`scala-app-minimal/bob.yaml`](scala-app-minimal/bob.yaml) demonstrate the

@@ -243,6 +243,17 @@ func stackTools(m manifest.Manifest) []tool {
 			{name: "Java", command: "java", args: []string{"-version"}, note: "runs the JVM toolchain"},
 			{name: "sbt", command: "sbt", args: []string{"--version"}, note: "builds and tests the Scala project"},
 		},
+		"ansible": {
+			{name: "Ansible", command: "ansible", args: []string{"--version"}, note: "runs the Ansible toolchain"},
+			{name: "Ansible Lint", command: "ansible-lint", args: []string{"--version"}, note: "lints Ansible playbooks and roles"},
+		},
+		"helm": {
+			{name: "Helm", command: "helm", args: []string{"version"}, note: "lints and templates the Helm chart"},
+		},
+		"kubernetes": {
+			{name: "kubectl", command: "kubectl", args: []string{"version", "--client"}, note: "renders the Kubernetes manifests"},
+			{name: "Kubeconform", command: "kubeconform", args: []string{"-v"}, note: "validates Kubernetes manifests"},
+		},
 	}
 	var optional []tool
 	switch {

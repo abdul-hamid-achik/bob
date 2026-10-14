@@ -61,7 +61,8 @@ documented in its own section further down; and the stack hygiene recipes
 `python-app@2`, `php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`,
 `java-app@2`, `kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `docker-app@2`,
 `terraform-app@2`, `nix-app@2`, `swift-package@2`, `elixir-app@2`,
-`static-web@2`, `go-hygiene@2`, `dart-app@2`, `zig-app@2`, and `scala-app@2`),
+`static-web@2`, `go-hygiene@2`, `dart-app@2`, `zig-app@2`, `scala-app@2`,
+`ansible-app@2`, `helm-app@2`, and `kubernetes-app@2`),
 documented last. `bob recipe list` prints all of them; an unrecognized recipe
 id fails manifest validation and suggests the nearest match rather than
 guessing.
@@ -357,7 +358,8 @@ watching Bob report `content_update` on the next plan.
 `php-app@2`, `ruby-app@2`, `lua-lib@2`, `rust-cli@2`, `java-app@2`,
 `kotlin-app@2`, `dotnet-app@2`, `cpp-cmake@2`, `docker-app@2`,
 `terraform-app@2`, `nix-app@2`, `swift-package@2`, `elixir-app@2`,
-`static-web@2`, `go-hygiene@2`, `dart-app@2`, `zig-app@2`, and `scala-app@2`
+`static-web@2`, `go-hygiene@2`, `dart-app@2`, `zig-app@2`, `scala-app@2`,
+`ansible-app@2`, `helm-app@2`, and `kubernetes-app@2`
 share one deliberately small contract for repositories whose
 application source Bob must never own. Each renders the universal
 **seed-once** artifacts `README.md`, `AGENTS.md`, `SECURITY.md`, `.gitignore`,
@@ -420,6 +422,9 @@ Schema, relative to `go-agent-tool`:
   | `elixir-app` | `elixir` | `app` or `umbrella` |
   | `static-web` | `html` | `site` |
   | `go-hygiene` | `go` | `service`, `lib`, or `app` |
+  | `ansible-app` | `ansible` | `playbook` or `role` |
+  | `helm-app` | `helm` | `chart` |
+  | `kubernetes-app` | `kubernetes` | `manifests` or `kustomize` |
 
   `bob init` picks the kind from detection where the recipe supports the
   detected hint (a Node workspace selects `monorepo`, a `.gemspec` selects
@@ -437,7 +442,9 @@ a `vue` dependency or `.vue` files, `pyproject.toml`, `Gemfile`/`*.gemspec`,
 `*.rockspec`/`init.lua`/`lua/`, `Cargo.toml`, `Package.swift`, `mix.exs`,
 `pom.xml`/`build.gradle`/`build.gradle.kts`, `pubspec.yaml`/`pubspec.yml`,
 `build.zig`, `build.sbt`/`project/build.properties`, a `Dockerfile`/Compose file,
-a root `*.tf` file, a `flake.nix`/`shell.nix`/`default.nix`, or a bare
+a root `*.tf` file, a `flake.nix`/`shell.nix`/`default.nix`, an
+`ansible.cfg`/`playbook.yml`/`roles/` layout, a `Chart.yaml`, a
+`kustomization.yaml`/`kustomization.yml`, or a bare
 `index.html`) and defaults to the matching recipe.
 When the chosen recipe's stack does not match the detected one, the preview
 warns and `--write` refuses without `--force`.

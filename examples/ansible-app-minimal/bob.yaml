@@ -1,0 +1,10 @@
+schema_version: 1
+recipe: ansible-app
+product:
+  name: ansible-app-demo
+  description: A small Ansible playbook
+runtime:
+  language: ansible
+  kind: playbook
+distribution:
+  github_actions: true

@@ -407,6 +407,33 @@ var stackDefinitions = map[string]stackDefinition{
 		Gitignore:     stackGitignoreScala,
 		CIWorkflow:    stackCIScala,
 	},
+	manifest.RecipeAnsibleApp: {
+		ID:            manifest.RecipeAnsibleApp,
+		Description:   "Seed-once hygiene for Ansible playbooks/roles: docs, .gitignore, and a lint CI stub; never owns playbook content",
+		LanguageLabel: "Ansible",
+		Stacks:        []string{"ansible"},
+		Commands:      []string{"ansible-lint"},
+		Gitignore:     stackGitignoreAnsible,
+		CIWorkflow:    stackCIAnsible,
+	},
+	manifest.RecipeHelmApp: {
+		ID:            manifest.RecipeHelmApp,
+		Description:   "Seed-once hygiene for a Helm chart: docs, .gitignore, and a lint/template CI stub; never owns chart content",
+		LanguageLabel: "Helm chart",
+		Stacks:        []string{"helm"},
+		Commands:      []string{"helm lint .", "helm template ."},
+		Gitignore:     stackGitignoreHelm,
+		CIWorkflow:    stackCIHelm,
+	},
+	manifest.RecipeKubernetesApp: {
+		ID:            manifest.RecipeKubernetesApp,
+		Description:   "Seed-once hygiene for Kubernetes manifests: docs, .gitignore, and a render/validate CI stub; never owns manifest content",
+		LanguageLabel: "Kubernetes (Kustomize)",
+		Stacks:        []string{"kubernetes"},
+		Commands:      []string{"kubectl kustomize ."},
+		Gitignore:     stackGitignoreKubernetes,
+		CIWorkflow:    stackCIKubernetes,
+	},
 }
 
 // recipeByStack maps a detected stack id to the recipe that serves it, and
@@ -1286,6 +1313,28 @@ const stackGitignoreScala = `/target/
 !.env.example
 `
 
+const stackGitignoreAnsible = `*.retry
+.ansible/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreHelm = `*.tgz
+/charts/
+.DS_Store
+.env
+.env.*
+!.env.example
+`
+
+const stackGitignoreKubernetes = `.DS_Store
+.env
+.env.*
+!.env.example
+`
+
 const stackCIGo = stackCIHeader + `      - uses: actions/setup-go@7c29491ab8ac28ff5c98225a6f92c0e42a1c5d93 # v6.0.0
         with:
           go-version: stable
@@ -1377,6 +1426,26 @@ const stackCIScala = stackCIHeader + `      - uses: actions/setup-java@cf277c60e
           java-version: "21"
       - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1
       - run: sbt test
+`
+
+const stackCIAnsible = stackCIHeader + `      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install ansible-lint
+      # TODO: align lint rules with your playbooks and roles.
+      - run: ansible-lint
+`
+
+const stackCIHelm = stackCIHeader + `      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - run: helm lint .
+      - run: helm template .
+`
+
+const stackCIKubernetes = stackCIHeader + `      - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
+      - uses: bmuschko/setup-kubeconform@e5d264ec1eafe2314e750c429a9da7639dd5a003 # v1.1.0
+      - run: kubectl kustomize .
+      # TODO: align validation with your manifest layout and schema sources.
+      - run: kubeconform -summary .
 `
 
 const stackDockerignore = `.git

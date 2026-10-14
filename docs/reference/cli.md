@@ -42,6 +42,7 @@ See [Ownership & Safety](../ownership-and-safety.md#commands-and-authority).
 
 ```text
 $ bob recipe list
+ansible-app@2  Seed-once hygiene for Ansible playbooks/roles: docs, .gitignore, and a lint CI stub; never owns playbook content
 cpp-cmake@2  Seed-once hygiene for a C/C++ project: docs, .gitignore, and a CMake CI stub; never owns application source
 dart-app@2  Seed-once hygiene for a Dart/Flutter project: docs, .gitignore, and an analyze/test CI stub; never owns application source
 deno-app@2  Seed-once hygiene for a Deno project: docs, .gitignore, and a Deno CI stub; never owns application source
@@ -51,9 +52,11 @@ elixir-app@2  Seed-once hygiene for an Elixir application or umbrella: Mix forma
 files@1  declare any file tree inline; bob materializes it with plan/apply safety
 go-agent-tool@6  Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams
 go-hygiene@2  Seed-once hygiene for an existing Go repository: docs, .gitignore, and golangci-lint CI; never owns application source
+helm-app@2  Seed-once hygiene for a Helm chart: docs, .gitignore, and a lint/template CI stub; never owns chart content
 java-app@2  Seed-once hygiene for a Java application or library: docs, .gitignore, and a Maven CI stub; never owns application source
 js-app@2  Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source
 kotlin-app@2  Seed-once hygiene for a Kotlin application or library: docs, .gitignore, and a Gradle CI stub; never owns application source
+kubernetes-app@2  Seed-once hygiene for Kubernetes manifests: docs, .gitignore, and a render/validate CI stub; never owns manifest content
 lua-lib@2  Seed-once hygiene for a Lua library or Neovim plugin with kind-aligned runtime configuration; never owns application source
 nix-app@2  Seed-once hygiene for a Nix flake or package: docs, .gitignore, and a flake-check CI stub; never owns application source
 nuxt-app@2  Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source
@@ -91,8 +94,8 @@ does not match the target's detected stack warns on preview and refuses
 identity for `python-tool`, `rust-tool`, and `ts-tool`, and rejected by every other recipe.
 `bob init` detects the repository's stack (Go, TypeScript, JavaScript,
 Vue, Nuxt, Deno, Python, PHP, Ruby, Lua, Rust, Java, Kotlin, .NET, C/C++ with
-CMake, SwiftPM, Elixir/Mix, Dart, Zig, Scala, Docker, Terraform, Nix, or a
-static web site) and defaults to the
+CMake, SwiftPM, Elixir/Mix, Dart, Zig, Scala, Docker, Terraform, Nix, Ansible,
+Helm, Kubernetes, or a static web site) and defaults to the
 matching recipe; pass `--recipe <id>` to choose explicitly. For Go, a
 `recipe:` already declared in an existing `bob.yaml` wins; otherwise a Cobra
 layout (`cmd/` plus `internal/cli/root.go`) hints `go-agent-tool` only when
