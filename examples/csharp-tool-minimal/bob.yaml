@@ -1,0 +1,14 @@
+schema_version: 1
+recipe: csharp-tool
+product:
+  name: csharp-tool-demo
+  module: github.com/example/csharp-tool-demo
+  description: A small .NET command-line tool
+  visibility: public
+  license: MIT
+runtime:
+  language: csharp
+  kind: cli
+surfaces:
+  cli: true
+  json: true

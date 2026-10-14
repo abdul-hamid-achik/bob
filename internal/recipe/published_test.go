@@ -20,6 +20,7 @@ var publishedGoldens = map[string]string{
 	"rust-tool@1/default":                      "847db1457716c4dd626101b3d3b6464348ebb389a9b44cce8fe44c191ea9546b",
 	"ts-tool@1/default":                        "6095b3c7a5e7590c57062f9badd6af35bc667b9e23fca24a12a0cc53db3458e2",
 	"java-tool@1/default":                      "492ac47b99fd6dafd40489ab6e8321e8f508f4de1f852a2300ad1820f24fb26b",
+	"csharp-tool@1/default":                    "3a18f89c8dc4ee824eabfbee016ba1265ced771424f87f7321e1ef66bab4fc1d",
 	"go-agent-tool@6/full":                     "fb94326b50520ccf535a6dc61918a69031dbd377015a2dda11fcc269b1a706f5",
 	"go-agent-tool@6/no-actions-no-goreleaser": "507f22189d6d20c8feac650690339d7f7c8def9408da93d29bf7ea6a8270cd9d",
 	"go-agent-tool@6/no-actions-goreleaser":    "f5c1be4b7705f7e9791f8e44647885f5efa13937479e5634ab47cbc7b30d5180",
@@ -115,6 +116,9 @@ func publishedFixtures() []publishedFixture {
 		}},
 		{id: "java-tool", variant: "default", build: func() (manifest.Manifest, error) {
 			return manifest.DefaultJavaTool("acme-tool", "github.com/acme/acme-tool", "Build useful things."), nil
+		}},
+		{id: "csharp-tool", variant: "default", build: func() (manifest.Manifest, error) {
+			return manifest.DefaultCSharpTool("acme-tool", "github.com/acme/acme-tool", "Build useful things."), nil
 		}},
 		{id: "go-agent-tool", variant: "full", build: func() (manifest.Manifest, error) {
 			m := manifest.Default("acme-tool", "github.com/acme/acme-tool", "Build useful things.")

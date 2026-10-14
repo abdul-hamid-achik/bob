@@ -159,6 +159,8 @@ func ResolveMetadata(m manifest.Manifest) (Metadata, error) {
 		metadata = resolveTSToolMetadata(m, artifacts)
 	case m.Recipe == manifest.RecipeJavaTool:
 		metadata = resolveJavaToolMetadata(m, artifacts)
+	case m.Recipe == manifest.RecipeCSharpTool:
+		metadata = resolveCSharpToolMetadata(m, artifacts)
 	case m.Recipe == manifest.RecipeFiles:
 		metadata = resolveFilesMetadata(m, artifacts)
 	case manifest.IsStackRecipe(m.Recipe):
@@ -672,6 +674,122 @@ func javaToolArtifactID(path string) string {
 }
 
 func javaToolPlaybooks() []PlaybookDefinition {
+	definitions := []PlaybookDefinition{conflictPlaybook(), upgradePlaybook()}
+	definitions[1].CapabilityIDs = []string{"repository.scaffold"}
+	return definitions
+}
+
+func resolveCSharpToolMetadata(m manifest.Manifest, artifacts []Artifact) Metadata {
+	metadata := Metadata{
+		SchemaVersion: MetadataSchemaVersion,
+		Recipe:        MetadataRecipeRef{ID: m.Recipe, Version: csharpToolRecipeVersion},
+		Summary:       ".NET (C#) CLI repository scaffold with whole-file ownership, documentation, CI, a release workflow, and a thin top-level entry point over a tested pure function.",
+		Capabilities: []CapabilityDefinition{
+			capability("repository.scaffold", "repository", "required", "Public-ready .NET (C#) CLI repository scaffold", []string{"recipe"}, ""),
+			capability("surface.cli", "surface", "required", "C# command-line entry point", []string{"surfaces.cli"}, ""),
+			capability("surface.json", "surface", "required", "Machine-readable command output surface", []string{"surfaces.json"}, ""),
+		},
+		Invariants: []InvariantDefinition{
+			{ID: "cli.stdout.machine_clean", Statement: "Machine-readable stdout remains valid JSON; diagnostics belong on stderr."},
+			{ID: "repository.no_unmanaged_overwrite", Statement: "Bob never overwrites an unmanaged differing file."},
+			{ID: "repository.whole_file_updates", Statement: "A managed file updates only while its current hash matches bob.lock."},
+			{ID: "verification.not_implied", Statement: "Selection, materialization, and binary availability do not prove application behavior."},
+		},
+		ExtensionPoints: []ExtensionPointDefinition{},
+		Playbooks:       csharpToolPlaybooks(),
+	}
+	byID := make(map[string]*CapabilityDefinition, len(metadata.Capabilities))
+	for i := range metadata.Capabilities {
+		byID[metadata.Capabilities[i].ID] = &metadata.Capabilities[i]
+	}
+	for _, artifact := range artifacts {
+		descriptor := describeCSharpToolArtifact(artifact)
+		metadata.Artifacts = append(metadata.Artifacts, descriptor)
+		for _, capabilityID := range descriptor.CapabilityIDs {
+			definition := byID[capabilityID]
+			definition.ArtifactIDs = append(definition.ArtifactIDs, descriptor.ID)
+		}
+	}
+	return metadata
+}
+
+func describeCSharpToolArtifact(artifact Artifact) ArtifactDescriptor {
+	path := artifact.Path
+	id := csharpToolArtifactID(path)
+	roles := []string{"repository_support"}
+	capabilities := []string{"repository.scaffold"}
+	switch path {
+	case "AGENTS.md":
+		roles = []string{"agent_guidance"}
+	case "README.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "SECURITY.md":
+		roles = []string{"public_hygiene"}
+	case ".github/workflows/ci.yml":
+		roles = []string{"ci_workflow"}
+	case ".github/workflows/release.yml":
+		roles = []string{"release_workflow"}
+	case "docs/index.md":
+		roles = []string{"documentation"}
+	case "global.json":
+		roles = []string{"toolchain_config"}
+	default:
+		switch {
+		case strings.HasSuffix(path, "/Program.cs"):
+			roles = []string{"entrypoint"}
+			capabilities = append(capabilities, "surface.cli")
+		case strings.HasSuffix(path, "/Cli.cs"):
+			roles = []string{"cli", "module"}
+			capabilities = append(capabilities, "surface.cli")
+		case strings.HasSuffix(path, "/CliTests.cs"):
+			roles = []string{"cli_test"}
+			capabilities = append(capabilities, "surface.cli")
+		case strings.HasSuffix(path, ".csproj"):
+			roles = []string{"manifest"}
+			capabilities = append(capabilities, "surface.cli")
+		}
+	}
+	ownership := "bob_whole_file"
+	if artifact.Seed {
+		ownership = "bob_seed_once"
+	}
+	return ArtifactDescriptor{ID: id, Path: path, Roles: uniqueSorted(roles), Ownership: ownership, CapabilityIDs: uniqueSorted(capabilities)}
+}
+
+func csharpToolArtifactID(path string) string {
+	known := map[string]string{
+		".editorconfig":                 "repo.editorconfig",
+		".github/workflows/ci.yml":      "ci.workflow",
+		".github/workflows/release.yml": "release.workflow",
+		".gitignore":                    "repo.gitignore",
+		"AGENTS.md":                     "repo.agents",
+		"CHANGELOG.md":                  "repo.changelog",
+		"CODE_OF_CONDUCT.md":            "repo.code_of_conduct",
+		"CONTRIBUTING.md":               "repo.contributing",
+		"LICENSE":                       "repo.license",
+		"README.md":                     "repo.readme",
+		"SECURITY.md":                   "repo.security",
+		"Taskfile.yml":                  "repo.taskfile",
+		"docs/index.md":                 "docs.index",
+		"global.json":                   "csharp.global_json",
+	}
+	if id, ok := known[path]; ok {
+		return id
+	}
+	switch {
+	case strings.HasSuffix(path, "/Program.cs"):
+		return "cli.entrypoint"
+	case strings.HasSuffix(path, "/Cli.cs"):
+		return "cli.module"
+	case strings.HasSuffix(path, "/CliTests.cs"):
+		return "cli.tests"
+	case strings.HasSuffix(path, ".Tests.csproj"):
+		return "csharp.tests_project"
+	case strings.HasSuffix(path, ".csproj"):
+		return "csharp.project"
+	}
+	return "artifact:" + path
+}
+
+func csharpToolPlaybooks() []PlaybookDefinition {
 	definitions := []PlaybookDefinition{conflictPlaybook(), upgradePlaybook()}
 	definitions[1].CapabilityIDs = []string{"repository.scaffold"}
 	return definitions

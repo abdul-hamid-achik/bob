@@ -21,8 +21,8 @@ bob.yaml + embedded recipe + bob.lock + working tree
                public-ready repository
 ```
 
-> **Status: early alpha.** The current contract embeds thirty-three recipes —
-> `go-agent-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, and twenty-seven stack hygiene recipes (`ts-app`,
+> **Status: early alpha.** The current contract embeds thirty-four recipes —
+> `go-agent-tool`, `csharp-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, and twenty-seven stack hygiene recipes (`ts-app`,
 > `js-app`, `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`,
 > `ruby-app`, `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`,
 > `cpp-cmake`, `docker-app`, `terraform-app`, `nix-app`, `swift-package`,

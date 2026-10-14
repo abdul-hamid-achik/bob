@@ -50,7 +50,7 @@ bob learn --json
 | `invariants` | The safety guarantees an agent can rely on without re-deriving them. |
 | `mcp` | The `bob mcp serve` command, its nine read-only tools, and the opt-in, digest-gated `bob_apply` mutation tool. |
 | `boundaries` | What Bob explicitly refuses to own — see [Non-goals](#what-bob-refuses-to-own). |
-| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@6`, `java-tool@1`, `python-tool@1`, `rust-tool@1`, `ts-tool@1`, and the twenty-seven stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`, `ruby-app`, `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`, `cpp-cmake`, `docker-app`, `terraform-app`, `nix-app`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`, `ansible-app`, `helm-app`, and `kubernetes-app`). |
+| `recipes` | The embedded recipe catalog: id, version, and description for each (`files@1`, `go-agent-tool@6`, `csharp-tool@1`, `java-tool@1`, `python-tool@1`, `rust-tool@1`, `ts-tool@1`, and the twenty-seven stack hygiene recipes at version 2: `ts-app`, `js-app`, `vue-app`, `nuxt-app`, `deno-app`, `python-app`, `php-app`, `ruby-app`, `lua-lib`, `rust-cli`, `java-app`, `kotlin-app`, `dotnet-app`, `cpp-cmake`, `docker-app`, `terraform-app`, `nix-app`, `swift-package`, `elixir-app`, `static-web`, `go-hygiene`, `dart-app`, `zig-app`, `scala-app`, `ansible-app`, `helm-app`, and `kubernetes-app`). |
 | `exit_codes` | The same table as [Exit codes](#exit-codes), keyed by code. |
 | `error_codes` | The same table as [Error codes](#error-codes), keyed by code. |
 | `docs` | Canonical documentation URLs: `https://bobcli.dev` and `https://bobcli.dev/agents`. |

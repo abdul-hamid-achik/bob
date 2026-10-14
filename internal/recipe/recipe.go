@@ -41,6 +41,9 @@ const tsToolRecipeVersion = 1
 // javaToolRecipeVersion is the current java-tool recipe contract version.
 const javaToolRecipeVersion = 1
 
+// csharpToolRecipeVersion is the current csharp-tool recipe contract version.
+const csharpToolRecipeVersion = 1
+
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
 	switch {
@@ -54,6 +57,8 @@ func Version(recipeID string) (int, error) {
 		return tsToolRecipeVersion, nil
 	case recipeID == "java-tool":
 		return javaToolRecipeVersion, nil
+	case recipeID == "csharp-tool":
+		return csharpToolRecipeVersion, nil
 	case recipeID == "files":
 		return FilesRecipeVersion, nil
 	case manifest.IsStackRecipe(recipeID):
@@ -65,7 +70,7 @@ func Version(recipeID string) (int, error) {
 
 // IDs returns the sorted set of built-in recipe identifiers.
 func IDs() []string {
-	ids := append([]string{"files", "go-agent-tool", "java-tool", "python-tool", "rust-tool", "ts-tool"}, manifest.StackRecipeIDs()...)
+	ids := append([]string{"files", "go-agent-tool", "java-tool", "python-tool", "rust-tool", "ts-tool", "csharp-tool"}, manifest.StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }
@@ -140,6 +145,11 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 			return nil, fmt.Errorf("unsupported java-tool recipe version %d", version)
 		}
 		artifacts, err = renderJavaTool(m, version)
+	case m.Recipe == "csharp-tool":
+		if version != csharpToolRecipeVersion {
+			return nil, fmt.Errorf("unsupported csharp-tool recipe version %d", version)
+		}
+		artifacts, err = renderCSharpTool(m, version)
 	case m.Recipe == "files":
 		if version != FilesRecipeVersion {
 			return nil, fmt.Errorf("unsupported files recipe version %d", version)
