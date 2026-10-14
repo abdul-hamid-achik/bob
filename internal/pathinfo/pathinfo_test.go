@@ -13,6 +13,7 @@ import (
 	"github.com/abdul-hamid-achik/bob/internal/guidance"
 	"github.com/abdul-hamid-achik/bob/internal/manifest"
 	"github.com/abdul-hamid-achik/bob/internal/recipe"
+	"github.com/abdul-hamid-achik/bob/internal/workspace"
 )
 
 func TestLoadClassifiesManagedExtensionReservedAndUnmanagedPaths(t *testing.T) {
@@ -217,5 +218,79 @@ func TestLoadBatchMatchesIndividualPaths(t *testing.T) {
 	}
 	if _, err := LoadBatch(root, make([]string, MaxBatchPaths+1)); err == nil {
 		t.Fatal("accepted oversized batch")
+	}
+}
+
+// TestRetireActionClassifiesAsManagedRetiredOwned proves pathinfo projects an
+// opt-in retire action (a lock-owned path the recipe no longer declares,
+// planned with --allow-retire) as Bob-owned pending removal rather than as an
+// ownership conflict: classification managed, state retired_owned, and no
+// resolve-ownership-conflict playbook (a retire is not a conflict).
+func TestRetireActionClassifiesAsManagedRetiredOwned(t *testing.T) {
+	root := t.TempDir()
+	withFile := manifest.Manifest{
+		SchemaVersion: manifest.SchemaVersion, Recipe: manifest.RecipeFiles,
+		Product: manifest.Product{Name: "files", Description: "retire fixture"},
+		Files: []manifest.FileDecl{
+			{Path: "legacy.txt", Content: "legacy\n"},
+			{Path: "keep.txt", Content: "keep\n"},
+		},
+	}
+	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), withFile, false); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := recipe.Render(withFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Apply(root, withFile, artifacts); err != nil {
+		t.Fatal(err)
+	}
+
+	withoutFile := withFile
+	withoutFile.Files = []manifest.FileDecl{{Path: "keep.txt", Content: "keep\n"}}
+	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), withoutFile, true); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err = recipe.Render(withoutFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := workspace.Resolve(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := engine.PlanWithOptions(canonical, withoutFile, artifacts, engine.PlanOptions{AllowRetire: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retire *engine.Action
+	for i := range plan.Actions {
+		if plan.Actions[i].Kind == engine.ActionRetire {
+			retire = &plan.Actions[i]
+		}
+	}
+	if retire == nil || retire.Code != engine.CodeRetiredUnchanged {
+		t.Fatalf("expected a retire action with code %q, got %#v", engine.CodeRetiredUnchanged, plan.Actions)
+	}
+
+	metadata, err := recipe.ResolveMetadata(withoutFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := classify(canonical, plan, metadata, "legacy.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Classification != "managed" || result.State != "retired_owned" || result.HumanEditEffect != "reserved_for_bob" {
+		t.Fatalf("retire classification = %#v", result)
+	}
+	if result.PlanAction == nil || result.PlanAction.Kind != engine.ActionRetire || result.PlanAction.Code != engine.CodeRetiredUnchanged {
+		t.Fatalf("retire plan action = %#v", result.PlanAction)
+	}
+	for _, id := range result.RelatedPlaybooks {
+		if id == "resolve-ownership-conflict" {
+			t.Fatalf("retire action incorrectly linked resolve-ownership-conflict: %#v", result.RelatedPlaybooks)
+		}
 	}
 }

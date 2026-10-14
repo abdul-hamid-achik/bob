@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/abdul-hamid-achik/bob/internal/engine"
+	inspectpkg "github.com/abdul-hamid-achik/bob/internal/inspect"
 )
 
 var (
@@ -176,7 +177,7 @@ func (m Model) repositoryLines() []string {
 		fmt.Sprintf("lock change %t", repo.LockChanged),
 		fmt.Sprintf("managed     %d", repo.ManagedFiles),
 		fmt.Sprintf("conflicts   %d", repo.ConflictCount),
-		fmt.Sprintf("actions     +%d  ~%d  =%d  ·%d  !%d", repo.Actions.Create, repo.Actions.Update, repo.Actions.Adopt, repo.Actions.Unchanged, repo.Actions.Conflict),
+		actionsLine(repo.Actions),
 	}
 	if repo.Error != "" {
 		lines = append(lines, "", "error: "+safeSingleLine(repo.Error))
@@ -427,9 +428,22 @@ func actionMarker(kind engine.ActionKind) string {
 		return "="
 	case engine.ActionConflict:
 		return "!"
+	case engine.ActionRetire:
+		return "-"
 	default:
 		return "·"
 	}
+}
+
+// actionsLine renders the overview action tally. The retire marker is appended
+// only when a retire action is present so plans without retire actions keep
+// their historical byte-identical rendering.
+func actionsLine(counts inspectpkg.ActionCounts) string {
+	line := fmt.Sprintf("actions     +%d  ~%d  =%d  ·%d  !%d", counts.Create, counts.Update, counts.Adopt, counts.Unchanged, counts.Conflict)
+	if counts.Retire > 0 {
+		line += fmt.Sprintf("  -%d", counts.Retire)
+	}
+	return line
 }
 
 func modeString(mode fmt.Stringer) string {

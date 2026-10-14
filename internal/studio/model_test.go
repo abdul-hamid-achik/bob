@@ -292,3 +292,67 @@ func TestModeString(t *testing.T) {
 		t.Fatalf("0644 mode = %q", got)
 	}
 }
+
+func TestActionMarkerRetireIsDistinct(t *testing.T) {
+	if got := actionMarker(engine.ActionRetire); got != "-" {
+		t.Fatalf("retire marker = %q, want %q", got, "-")
+	}
+	seen := map[string]bool{}
+	for _, kind := range []engine.ActionKind{engine.ActionCreate, engine.ActionUpdate, engine.ActionAdopt, engine.ActionUnchanged, engine.ActionConflict, engine.ActionRetire} {
+		marker := actionMarker(kind)
+		if seen[marker] {
+			t.Fatalf("marker %q reused across kinds", marker)
+		}
+		seen[marker] = true
+	}
+}
+
+func TestActionsLineAppendsRetireOnlyWhenPresent(t *testing.T) {
+	base := inspectpkg.ActionCounts{Create: 1, Update: 2, Adopt: 3, Unchanged: 4, Conflict: 5}
+	if got := actionsLine(base); got != "actions     +1  ~2  =3  ·4  !5" {
+		t.Fatalf("base actions line = %q", got)
+	}
+	base.Retire = 2
+	if got := actionsLine(base); got != "actions     +1  ~2  =3  ·4  !5  -2" {
+		t.Fatalf("retire actions line = %q", got)
+	}
+}
+
+func TestRetireActionRendersMarkerTallyAndDetailWithoutPanic(t *testing.T) {
+	snapshot := fixtureSnapshot()
+	retire := engine.Action{
+		Path: "legacy.txt", Kind: engine.ActionRetire, Code: engine.CodeRetiredUnchanged,
+		CurrentSHA256: strings.Repeat("e", 64), LockedSHA256: strings.Repeat("e", 64),
+		CurrentMode: 0o644, Reason: "bob.lock owns this file but the recipe no longer declares it",
+	}
+	snapshot.Plan.Actions = append(snapshot.Plan.Actions, retire)
+	snapshot.Report.Repository.Actions.Retire = 1
+
+	m := NewModel(snapshot.Report.Workspace, fakeSource{load: func(context.Context, string) (Snapshot, error) { return snapshot, nil }}, false)
+	updated, _ := m.Update(snapshotLoadedMsg{request: 1, snapshot: snapshot})
+	m = updated.(Model)
+
+	// A retire action is not unchanged, so attention mode keeps it visible.
+	if got := len(m.visibleActions()); got != 3 {
+		t.Fatalf("attention actions = %d, want 3", got)
+	}
+
+	// Overview must surface the retire tally.
+	overview := m.render()
+	if !strings.Contains(overview, "  -1") {
+		t.Fatalf("overview missing retire tally:\n%s", overview)
+	}
+
+	// Plan view must render the retire action with its distinct marker and
+	// its detail without panicking.
+	m.active = viewPlan
+	m.width, m.height = 100, 30
+	plan := m.render()
+	if !strings.Contains(plan, "retire") || !strings.Contains(plan, "legacy.txt") {
+		t.Fatalf("plan view missing retire action:\n%s", plan)
+	}
+	for _, size := range [][2]int{{100, 30}, {80, 20}, {50, 12}} {
+		m.width, m.height = size[0], size[1]
+		assertGrid(t, m.render(), size[0], size[1])
+	}
+}

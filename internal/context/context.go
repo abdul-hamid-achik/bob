@@ -433,7 +433,7 @@ func materialization(definition recipe.CapabilityDefinition, artifacts map[strin
 			if state == "in_sync" {
 				state = "missing"
 			}
-		case engine.ActionUpdate, engine.ActionAdopt:
+		case engine.ActionUpdate, engine.ActionAdopt, engine.ActionRetire:
 			if state == "in_sync" {
 				state = "drifted"
 			}
