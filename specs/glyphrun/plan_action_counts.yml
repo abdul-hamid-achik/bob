@@ -1,0 +1,127 @@
+version: 1
+name: bob_plan_action_counts
+intent: |
+    The action_counts JSON object projected on both bob plan --json and
+    bob check --json. A fresh files workspace with two declared files reports
+    create: 2 with every other key zero. After apply the same plan reports
+    unchanged: 2 and check --json reports ok=true with the nested
+    data.plan.action_counts.unchanged equal to 2. A hand-edited managed file
+    then reports conflict: 1. All six keys — create, update, adopt, unchanged,
+    retire, and conflict — are always present, including a zero retire.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-actioncounts.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          cat > "$root/bob.yaml" <<'BOBEOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: action-counts-demo
+            description: action_counts JSON surface spec
+          files:
+            - path: a.txt
+              content: alpha
+            - path: b.txt
+              content: beta
+          BOBEOF
+          fresh="$(./bin/bob plan "$root" --json)"
+          printf 'fresh_create=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.create')"
+          printf 'fresh_update=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.update')"
+          printf 'fresh_adopt=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.adopt')"
+          printf 'fresh_unchanged=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.unchanged')"
+          printf 'fresh_retire=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.retire')"
+          printf 'fresh_conflict=%s\n' "$(printf '%s' "$fresh" | jq -r '.data.action_counts.conflict')"
+          ./bin/bob apply "$root" >/dev/null
+          converged="$(./bin/bob plan "$root" --json)"
+          printf 'converged_unchanged=%s\n' "$(printf '%s' "$converged" | jq -r '.data.action_counts.unchanged')"
+          printf 'converged_create=%s\n' "$(printf '%s' "$converged" | jq -r '.data.action_counts.create')"
+          printf 'converged_retire=%s\n' "$(printf '%s' "$converged" | jq -r '.data.action_counts.retire')"
+          check="$(./bin/bob check "$root" --json)"
+          printf 'check_ok=%s\n' "$(printf '%s' "$check" | jq -r '.ok')"
+          printf 'check_plan_unchanged=%s\n' "$(printf '%s' "$check" | jq -r '.data.plan.action_counts.unchanged')"
+          printf 'edited by hand\n' > "$root/a.txt"
+          conflicted="$(./bin/bob plan "$root" --json)"
+          printf 'conflict_count=%s\n' "$(printf '%s' "$conflicted" | jq -r '.data.action_counts.conflict')"
+          printf 'conflict_retire=%s\n' "$(printf '%s' "$conflicted" | jq -r '.data.action_counts.retire')"
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: plan_action_counts
+outcomes:
+    - id: fresh_create_two
+      description: "a fresh two-file plan reports create: 2"
+      verify:
+        screen:
+            contains: fresh_create=2
+    - id: fresh_update_zero
+      description: "a fresh plan reports update: 0"
+      verify:
+        screen:
+            contains: fresh_update=0
+    - id: fresh_adopt_zero
+      description: "a fresh plan reports adopt: 0"
+      verify:
+        screen:
+            contains: fresh_adopt=0
+    - id: fresh_unchanged_zero
+      description: "a fresh plan reports unchanged: 0"
+      verify:
+        screen:
+            contains: fresh_unchanged=0
+    - id: fresh_retire_zero
+      description: the retire key is present and zero on a fresh plan
+      verify:
+        screen:
+            contains: fresh_retire=0
+    - id: fresh_conflict_zero
+      description: "a fresh plan reports conflict: 0"
+      verify:
+        screen:
+            contains: fresh_conflict=0
+    - id: converged_unchanged_two
+      description: "after apply the plan reports unchanged: 2"
+      verify:
+        screen:
+            contains: converged_unchanged=2
+    - id: converged_create_zero
+      description: "after apply the plan reports create: 0"
+      verify:
+        screen:
+            contains: converged_create=0
+    - id: converged_retire_zero
+      description: the retire key stays present and zero after apply
+      verify:
+        screen:
+            contains: converged_retire=0
+    - id: check_ok_true
+      description: a converged workspace makes check --json report ok=true
+      verify:
+        screen:
+            contains: check_ok=true
+    - id: check_plan_unchanged_two
+      description: "check --json nests action_counts under data.plan with unchanged: 2"
+      verify:
+        screen:
+            contains: check_plan_unchanged=2
+    - id: conflict_count_one
+      description: "a hand-edited managed file reports conflict: 1"
+      verify:
+        screen:
+            contains: conflict_count=1
+    - id: conflict_retire_zero
+      description: the retire key stays present and zero on a conflicted plan
+      verify:
+        screen:
+            contains: conflict_retire=0
+contractHash: sha256:5cb71b04a5be58024cf1319c5b0b5f458b3b3585f0e6ed977f47edee1895fd7e
