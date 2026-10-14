@@ -92,7 +92,7 @@ func printWatchHeader(w io.Writer, message string) {
 // output. Manifest and recipe errors are printed inline so the loop can keep
 // watching.
 func printWatchPlan(w io.Writer, root string, showContent, conflictsOnly, showDiff bool) {
-	plan, err := loadPlan(root)
+	plan, err := loadPlan(root, engine.PlanOptions{})
 	if err != nil {
 		_, _ = fmt.Fprintf(w, "bob: %v\n", err)
 		_, _ = fmt.Fprintln(w, "next: fix bob.yaml and save to trigger a re-plan")

@@ -96,7 +96,7 @@ create     package.json
 create     scripts/run.sh
 lock       bob.lock
 
-2 create, 0 update, 0 adopt, 0 unchanged, 0 conflict
+2 create, 0 update, 0 adopt, 0 unchanged, 0 retire, 0 conflict
 ```
 
 Nothing is written yet. Apply it:
@@ -141,7 +141,7 @@ unchanged  package.json
 update     scripts/run.sh
 lock       bob.lock
 
-0 create, 1 update, 0 adopt, 1 unchanged, 0 conflict
+0 create, 1 update, 0 adopt, 1 unchanged, 0 retire, 0 conflict
 ```
 
 `plan --content --json` shows both sides of that update, bounded to 2048

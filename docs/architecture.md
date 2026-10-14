@@ -108,6 +108,7 @@ versioned plan projection with exactly one action per desired file:
 | `adopt` | An unmanaged regular file already matches exactly. |
 | `unchanged` | A managed file already matches the desired content. |
 | `update` | A managed file still matches its old lock hash and the recipe changed. |
+| `retire` | A lock-owned regular file is no longer declared and still matches its lock hash; deleted only with `--allow-retire`. |
 | `conflict` | Ownership is absent or stale, or the destination is unsafe. |
 
 The planner is read-only. A conflict blocks the complete apply.
@@ -377,9 +378,8 @@ Future work may add, driven by explicit demand:
 
 - additional recipe versions and languages, added as new versioned IDs because
   published recipe versions are immutable;
-- explicit deletion and migration plans: digest-gated `remove` and an upgrade
-  dry-run plan digest have shipped, and a first-class `retire` action stays
-  deferred until a recipe actually needs to drop a path.
+- explicit deletion and migration plans: digest-gated `remove`, an upgrade
+  dry-run plan digest, and the opt-in `retire` action have shipped.
 
 ## Deliberately not planned
 

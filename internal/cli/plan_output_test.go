@@ -36,7 +36,7 @@ func TestPrintPlanRendersCodeAndFamily(t *testing.T) {
 			},
 			want: []string{
 				planRow("conflict", "README.md", "unmanaged_differs", "unmanaged_divergence"),
-				"\n0 create, 0 update, 0 adopt, 0 unchanged, 1 conflict\n",
+				"\n0 create, 0 update, 0 adopt, 0 unchanged, 0 retire, 1 conflict\n",
 			},
 		},
 		{

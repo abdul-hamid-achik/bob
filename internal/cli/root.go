@@ -464,6 +464,7 @@ func applyDetectionToStackManifest(m *manifest.Manifest, detection detect.Result
 
 func newPlanCommand(opts *options) *cobra.Command {
 	var showContent, conflictsOnly, showDiff, watch bool
+	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "plan [path]",
 		Short: "Compare the recipe with the repository without writing",
@@ -479,7 +480,7 @@ func newPlanCommand(opts *options) *cobra.Command {
 				defer stop()
 				return runWatchLoop(ctx, cmd, root, showContent, conflictsOnly, showDiff)
 			}
-			plan, err := loadPlan(root)
+			plan, err := loadPlan(root, engine.PlanOptions{AllowRetire: allowRetire})
 			if err != nil {
 				return fmt.Errorf("plan: %w", err)
 			}
@@ -510,11 +511,13 @@ func newPlanCommand(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "show unified content diffs for create and update actions")
 	cmd.Flags().BoolVar(&watch, "watch", false, "watch bob.yaml and re-plan on change")
+	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "classify a lock-owned regular file the recipe dropped as a retire action instead of a conflict")
 	return cmd
 }
 
 func newApplyCommand(opts *options) *cobra.Command {
 	var expectedPlanDigest string
+	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "apply [path]",
 		Short: "Apply one complete conflict-free repository plan",
@@ -522,7 +525,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
-			result, err := engine.ApplyWorkspaceWithOptions(root, engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest})
+			result, err := engine.ApplyWorkspaceWithOptions(root, engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest, AllowRetire: allowRetire})
 			if result.Plan.Recipe.ID != "" {
 				captureWorkspaceMetrics(opts, root, result.Plan.Recipe.ID)
 			}
@@ -583,6 +586,7 @@ func newApplyCommand(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
+	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "delete lock-owned regular files the recipe dropped, and drop them from bob.lock")
 	return cmd
 }
 
@@ -738,6 +742,7 @@ func removeNextActions(result *engine.RemoveResult, workspace string) []string {
 func newUpgradeCommand(opts *options) *cobra.Command {
 	var expectedPlanDigest string
 	var dryRun bool
+	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "upgrade [path]",
 		Short: "Upgrade bob.lock to the current recipe version",
@@ -787,7 +792,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 				return err
 			}
 			result, err := engine.Upgrade(root, engine.UpgradeOptions{
-				ApplyOptions: engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest},
+				ApplyOptions: engine.ApplyOptions{ExpectedPlanDigest: expectedPlanDigest, AllowRetire: allowRetire},
 				DryRun:       dryRun,
 			})
 			if err != nil {
@@ -843,6 +848,7 @@ func newUpgradeCommand(opts *options) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&expectedPlanDigest, "expect-plan-digest", "", "apply only when a fresh plan matches this exact sha256:<64-lowercase-hex> digest")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would change without applying")
+	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "delete lock-owned regular files the recipe dropped, and drop them from bob.lock")
 	return cmd
 }
 
@@ -876,6 +882,7 @@ func upgradePlanDigestMismatchFailure(cmd *cobra.Command, opts *options, root st
 
 func newCheckCommand(opts *options) *cobra.Command {
 	var conflictsOnly bool
+	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "check [path]",
 		Short: "Fail when managed repository state would change",
@@ -883,7 +890,7 @@ func newCheckCommand(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := argumentPath(args)
 			opts.trackWorkspace(root)
-			plan, err := loadPlan(root)
+			plan, err := loadPlan(root, engine.PlanOptions{AllowRetire: allowRetire})
 			if err != nil {
 				return fmt.Errorf("check: %w", err)
 			}
@@ -933,6 +940,7 @@ func newCheckCommand(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
+	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "classify a lock-owned regular file the recipe dropped as a retire action instead of a conflict")
 	return cmd
 }
 
@@ -1302,7 +1310,7 @@ func argumentPath(args []string) string {
 	return "."
 }
 
-func loadPlan(root string) (engine.PlanResult, error) {
+func loadPlan(root string, options engine.PlanOptions) (engine.PlanResult, error) {
 	m, err := manifest.Load(root)
 	if err != nil {
 		return engine.PlanResult{}, classifyInvalidInput(err)
@@ -1311,7 +1319,7 @@ func loadPlan(root string) (engine.PlanResult, error) {
 	if err != nil {
 		return engine.PlanResult{}, classifyInvalidInput(err)
 	}
-	return engine.Plan(root, m, artifacts)
+	return engine.PlanWithOptions(root, m, artifacts, options)
 }
 
 // loadPlanDiff re-renders the recipe artifacts and computes presentation-layer
@@ -1379,7 +1387,7 @@ func printPlan(w io.Writer, plan engine.PlanResult, showContent, conflictsOnly b
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, "\n%d create, %d update, %d adopt, %d unchanged, %d conflict\n", counts[engine.ActionCreate], counts[engine.ActionUpdate], counts[engine.ActionAdopt], counts[engine.ActionUnchanged], counts[engine.ActionConflict])
+	_, err := fmt.Fprintf(w, "\n%d create, %d update, %d adopt, %d unchanged, %d retire, %d conflict\n", counts[engine.ActionCreate], counts[engine.ActionUpdate], counts[engine.ActionAdopt], counts[engine.ActionUnchanged], counts[engine.ActionRetire], counts[engine.ActionConflict])
 	return err
 }
 

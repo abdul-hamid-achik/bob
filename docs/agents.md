@@ -223,6 +223,7 @@ Non-conflict codes (safe to act on):
 | `in_sync` | `unchanged` | Managed file already matches desired content and mode. |
 | `identical_content` | `adopt` | Unmanaged file already byte-matches; Bob may adopt it without writing. |
 | `seed_exists` | `unchanged` | A seed-once file already exists; Bob never updates or owns it. |
+| `retired_unchanged` | `retire` | A lock-owned regular file the recipe no longer declares still matches `bob.lock`; `--allow-retire` deletes it and drops it from the lock. |
 
 Conflict codes (apply refuses the *entire* plan if any of these appear):
 

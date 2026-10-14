@@ -25,6 +25,7 @@ credentials, environment values, or execution history.
 | `adopt` | An unmanaged regular file already matches exactly. | Bob may record ownership without replacing it. |
 | `unchanged` | The managed file matches the recipe and lock. | No file write. |
 | `update` | The file still matches its old lock, but the recipe or mode changed. | Bob may replace it safely. |
+| `retire` | A lock-owned regular file is no longer declared and still matches its lock hash. | Bob may delete it only with `--allow-retire`. |
 | `conflict` | Ownership is absent, stale, or unsafe. | The complete apply is refused. |
 
 One conflict blocks every planned write. Bob never partially applies a plan it
@@ -95,6 +96,10 @@ removed.
   current Codemap may open tool-owned state and Vecgrep may contact its provider.
 - `apply` writes one conflict-free fresh plan. Optional `--expect-plan-digest`
   binds it to a freshly recomputed reviewed plan before staging or writing.
+  Optional `--allow-retire` authorizes deleting a dropped lock-owned regular
+  file; without it, such a path is a `retired_owned` conflict that blocks the
+  whole apply. A retired, lock-proven path may be deleted only with explicit
+  `--allow-retire`.
 - `upgrade` migrates an older same-recipe lock through the same planning and
   apply safety rules; dry-run is read-only and digest gating is available.
 - `remove` deletes only lock-owned files whose ownership is still proven,

@@ -56,6 +56,7 @@ var familyByCode = map[string]ActionFamily{
 	CodeInSync:               FamilyConvergence,
 	CodeIdenticalContent:     FamilyConvergence,
 	CodeSeedExists:           FamilyConvergence,
+	CodeRetiredUnchanged:     FamilyConvergence,
 }
 
 // Family classifies the action by its closed code vocabulary. An unknown code
@@ -70,6 +71,7 @@ type ActionCounts struct {
 	Adopt     int `json:"adopt"`
 	Unchanged int `json:"unchanged"`
 	Conflict  int `json:"conflict"`
+	Retire    int `json:"retire,omitempty"`
 }
 
 // ActionCounts tallies every action by kind.
@@ -87,6 +89,8 @@ func (p PlanResult) ActionCounts() ActionCounts {
 			counts.Unchanged++
 		case ActionConflict:
 			counts.Conflict++
+		case ActionRetire:
+			counts.Retire++
 		}
 	}
 	return counts

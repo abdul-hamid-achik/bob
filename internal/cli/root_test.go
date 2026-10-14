@@ -174,7 +174,7 @@ func TestPlanAndCheckJSONExposeSharedDigest(t *testing.T) {
 	if plan.Data.Version != 1 || plan.Data.Digest == "" || plan.Data.Digest != check.Data.Digest || check.Data.Digest != check.Data.Plan.Digest {
 		t.Fatalf("plan=%#v check=%#v", plan.Data, check.Data)
 	}
-	complete, err := loadPlan(target)
+	complete, err := loadPlan(target, engine.PlanOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

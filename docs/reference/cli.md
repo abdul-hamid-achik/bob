@@ -16,11 +16,11 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob context [path]` | Read-only, offline | Return the bounded repository contract; `--profile compact\|standard\|full` controls projection. |
 | `bob path <repository-relative-path> [workspace]` | Read-only, offline | Classify one exact path through Bob's planner, lock, and extension metadata. |
 | `bob playbook list\|show\|plan` | Read-only, offline | Inspect or resolve a closed, typed repository procedure without executing it. |
-| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, and `--watch` refreshes human output when `bob.yaml` changes. |
-| `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan. |
+| `bob plan [path]` | Read-only | Compare desired and observed state; `--content` adds bounded previews, `--conflicts-only` trims to conflicts, `--diff` shows unified content diffs, `--allow-retire` classifies dropped lock-owned files as retire actions, and `--watch` refreshes human output when `bob.yaml` changes. |
+| `bob apply [path]` | Writes | Apply one fresh, complete, conflict-free plan; `--expect-plan-digest` binds authority to a reviewed plan, `--allow-retire` deletes dropped lock-owned files. |
 | `bob remove [path]` | Writes | Remove lock-owned regular files and `bob.lock`; `--force` removes drifted files, `--dry-run` previews without writing and reports a removal digest, `--expect-removal-digest` binds removal to that reviewed decision. |
-| `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews (with `--json` it reports the `plan_digest` to review), `--expect-plan-digest` gates authority. |
-| `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only`. |
+| `bob upgrade [path]` | Writes | Upgrade `bob.lock` to the current recipe version; `--dry-run` previews (with `--json` it reports the `plan_digest` to review), `--expect-plan-digest` gates authority, `--allow-retire` deletes dropped lock-owned files. |
+| `bob check [path]` | Read-only | Exit non-zero when managed state or the lock would change; also accepts `--conflicts-only` and `--allow-retire`. |
 | `bob doctor [path]` | Runs bounded version probes | Check required and selected optional development tools. |
 | `bob inspect [path]` | Read-only by default | Summarize Bob state and binary availability. |
 | `bob config show` | Read-only | Show effective settings and resolved XDG paths. |
@@ -394,6 +394,20 @@ apply receipt when a migration ran. `--dry-run --json` also reports
 Upgrade holds the workspace apply lock for the full fresh-plan and mutation
 sequence. Conflicts exit `2`; a missing, invalid, cross-recipe, or future lock
 exits `4`; a digest mismatch exits `5`.
+
+## Retiring dropped files
+
+When a `files` manifest drops a path that `bob.lock` still owns, the plan
+reports a `retired_owned` conflict by default: the file blocks the entire apply
+until the human removes it by hand. `plan`, `check`, `apply`, and `upgrade`
+each accept `--allow-retire`, which reclassifies a dropped lock-owned regular
+file whose current content still matches its lock hash as a non-conflict
+`retire` action (`retired_unchanged`). With the flag set, `apply` deletes the
+file and drops it from `bob.lock` (which is still written last). A dropped
+file that drifted, or a symlink or special file, remains a conflict that blocks
+apply regardless of the flag. The default is unchanged: without
+`--allow-retire`, a dropped path stays a `retired_owned` conflict and the plan
+digest is identical.
 
 ## Plan diff preview
 

@@ -39,6 +39,7 @@ const (
 	ActionUpdate    ActionKind = "update"
 	ActionUnchanged ActionKind = "unchanged"
 	ActionAdopt     ActionKind = "adopt"
+	ActionRetire    ActionKind = "retire"
 	ActionConflict  ActionKind = "conflict"
 )
 
@@ -63,6 +64,10 @@ const (
 	CodeContentUpdate    = "content_update"
 	CodeInSync           = "in_sync"
 	CodeIdenticalContent = "identical_content"
+	// CodeRetiredUnchanged reports a lock-owned regular file the recipe no
+	// longer declares whose current content still matches bob.lock; with
+	// --allow-retire it is deleted and dropped from the lock.
+	CodeRetiredUnchanged = "retired_unchanged"
 	// CodeSeedExists reports a seed-once artifact whose destination already
 	// exists. Any existing destination satisfies a seed artifact; Bob never
 	// compares, updates, or lock-owns its content.
@@ -130,9 +135,26 @@ type desiredArtifact struct {
 	mode fs.FileMode
 }
 
+// PlanOptions adds optional behavior to planning without changing the default
+// output. The zero value reproduces the historical plan exactly.
+type PlanOptions struct {
+	// AllowRetire opts into the retire action: a lock-owned regular file the
+	// recipe no longer declares is classified as a non-conflict retire instead
+	// of a retired_owned conflict, so an explicit apply may delete it.
+	AllowRetire bool
+}
+
 // Plan compares a validated manifest and rendered artifact set with the
-// repository. It does not mutate the filesystem.
+// repository. It does not mutate the filesystem. It is PlanWithOptions with
+// the zero options, so retired paths remain retired_owned conflicts exactly as
+// before.
 func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanResult, error) {
+	return PlanWithOptions(root, m, artifacts, PlanOptions{})
+}
+
+// PlanWithOptions is Plan with optional behavior flags. With the zero options
+// it is byte-identical to Plan.
+func PlanWithOptions(root string, m manifest.Manifest, artifacts []recipe.Artifact, options PlanOptions) (PlanResult, error) {
 	var result PlanResult
 	if err := m.Validate(); err != nil {
 		return result, fmt.Errorf("plan: validate manifest: %w", err)
@@ -197,6 +219,20 @@ func Plan(root string, m manifest.Manifest, artifacts []recipe.Artifact) (PlanRe
 			return PlanResult{}, fmt.Errorf("plan: inspect retired path %q: %w", entry.Path, err)
 		}
 		if !observation.exists {
+			continue
+		}
+		if options.AllowRetire && observation.conflictCode == "" && observation.hash == entry.SHA256 {
+			action := Action{
+				Path:           entry.Path,
+				Kind:           ActionRetire,
+				Code:           CodeRetiredUnchanged,
+				CurrentSHA256:  observation.hash,
+				LockedSHA256:   entry.SHA256,
+				CurrentMode:    observation.mode,
+				Reason:         "bob.lock owns this file but the recipe no longer declares it; --allow-retire deletes it and drops it from the lock",
+				expectedExists: true,
+			}
+			result.Actions = append(result.Actions, action)
 			continue
 		}
 		action := Action{
@@ -389,7 +425,7 @@ func ApplyWithOptions(root string, m manifest.Manifest, artifacts []recipe.Artif
 }
 
 func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.Artifact, options ApplyOptions, manifestSource []byte) (ApplyResult, error) {
-	plan, err := Plan(canonicalRoot, m, artifacts)
+	plan, err := PlanWithOptions(canonicalRoot, m, artifacts, PlanOptions{AllowRetire: options.AllowRetire})
 	result := ApplyResult{Plan: plan}
 	if err != nil {
 		return result, err
@@ -460,6 +496,7 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 	}
 
 	published = true
+	var retired []string
 	for _, action := range plan.Actions {
 		switch action.Kind {
 		case ActionCreate, ActionUpdate:
@@ -472,7 +509,15 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 			result.Adopted = append(result.Adopted, action.Path)
 		case ActionUnchanged:
 			result.Unchanged = append(result.Unchanged, action.Path)
+		case ActionRetire:
+			if err := retirePath(canonicalRoot, action); err != nil {
+				return result, fmt.Errorf("apply: retire %q: %w", action.Path, err)
+			}
+			retired = append(retired, action.Path)
 		}
+	}
+	if len(retired) > 0 {
+		removeEmptyDirectories(canonicalRoot, retired)
 	}
 
 	lockData, err := encodeLock(plan.DesiredLock)
@@ -489,7 +534,7 @@ func applyLocked(canonicalRoot string, m manifest.Manifest, artifacts []recipe.A
 		}
 		result.LockWritten = true
 	}
-	convergedPlan, convergeErr := Plan(canonicalRoot, m, artifacts)
+	convergedPlan, convergeErr := PlanWithOptions(canonicalRoot, m, artifacts, PlanOptions{AllowRetire: options.AllowRetire})
 	result.finalizeReceipt(convergeErr == nil && convergedPlan.Clean())
 	return result, nil
 }
