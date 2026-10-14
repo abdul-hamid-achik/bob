@@ -75,7 +75,9 @@ go install github.com/abdul-hamid-achik/bob/cmd/bob@latest
 
 ## Quick start
 
-Prerequisites: macOS or Linux and Go 1.27.2 or newer. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
+Prerequisites: macOS or Linux. Go 1.27.2 or newer is needed only to build from
+source or to scaffold a `go-agent-tool` module; the Homebrew cask does not
+require a local Go toolchain. Task, GoReleaser, Codemap, Vecgrep, and Glyphrun
 are optional and reported by `bob doctor` when selected.
 
 ```bash

@@ -7,9 +7,11 @@ description: Three ways to bring Bob to any language — stack hygiene on an exi
 Bob is not a TypeScript, Python, or Rust app generator. It is an ownership
 ledger you can put on those repositories. There are three catalog paths:
 
-1. **Existing language repo** — `bob init` detects TypeScript, JavaScript,
-   Vue, Nuxt, Python, Ruby, Lua, Rust, Swift, Elixir, static HTML, or Go and
-   writes the matching stack hygiene recipe. Those recipes seed README,
+1. **Existing language or infrastructure repo** — `bob init` detects one of
+   27 stacks (Go, TypeScript, JavaScript, Vue, Nuxt, Deno, Python, Ruby, PHP,
+   Java, Kotlin, .NET, Rust, Swift, Elixir, Dart, Zig, Scala, Lua, C/C++,
+   Docker, Terraform, Nix, Ansible, Helm, Kubernetes, static HTML) and writes
+   the matching stack hygiene recipe. Those recipes seed README,
    AGENTS, SECURITY, `.gitignore`, `.editorconfig`, and optional CI once.
    They never own `src/` or application source. `bob new --write` refuses a
    stack recipe on an empty directory because that would create hygiene
@@ -92,8 +94,8 @@ bob plan .
 ```
 
 ```text
-create     package.json
-create     scripts/run.sh
+create     package.json                       [missing] scaffold
+create     scripts/run.sh                     [missing] scaffold
 lock       bob.lock
 
 2 create, 0 update, 0 adopt, 0 unchanged, 0 retire, 0 conflict

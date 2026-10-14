@@ -23,7 +23,7 @@ const transcript: Row[] = [
   { text: '0 create, 0 update, 0 adopt, 29 unchanged, 0 retire, 1 conflict', cls: 'meta', pause: 700 },
   { text: '$ bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
   { text: 'bob: apply: plan contains conflicts; run bob plan for details', cls: 'conflict', pause: 700 },
-  { text: '(exit 2 — the handled edit was not overwritten, nothing was written.)', cls: 'meta', pause: 1000 },
+  { text: '(exit 2 — your hand edit was not overwritten; nothing was written.)', cls: 'meta', pause: 1000 },
   { text: '$ git checkout internal/cli/root.go && bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
   { text: 'applied: 0 written, 0 adopted, 30 unchanged; lock written: false', cls: 'converged', pause: 900 },
   { text: 'run it again — same answer. that is the point.', cls: 'converged', pause: 3600 },
@@ -121,7 +121,7 @@ const ledger = [
     tag: 'DIGEST',
     kind: 'write',
     title: 'Reviewed, then refused unless it matches',
-    body: 'bob apply and bob remove take an expect digest. Bob fresh-plans while holding the lock and writes nothing unless the fresh result equals the plan you reviewed. A removal digest never authorizes an apply, and a plan digest never authorizes a removal. One mutation per workspace; a second fails fast as workspace_busy.',
+    body: 'bob apply, bob upgrade, and bob remove accept an optional expect digest (the MCP bob_apply tool requires one). Bob fresh-plans while holding the lock and, when a digest is given, writes nothing unless the fresh result equals the plan you reviewed. A removal digest never authorizes an apply, and a plan digest never authorizes a removal. One mutation per workspace at a time — a second concurrent one fails fast as workspace_busy.',
   },
   {
     tag: 'AGENT',
@@ -141,8 +141,8 @@ const refusals = [
   'Run a model or call a network (the one opt-in exception is bob inspect --probe-integrations).',
   'Overwrite a file it cannot prove it owns.',
   'Generate your Next.js, FastAPI, or Cargo app. Hygiene, not the product.',
-  'Touch .git, bob.yaml, or anything outside the workspace.',
-  'Write half a plan. One conflict, zero writes.',
+  'Let a recipe own .git, bob.yaml, bob.lock, or anything outside the workspace.',
+  'Apply a conflicted plan. One conflict, zero writes.',
   'Manage your secrets.',
   'Declare your feature “verified.” Bob builds; evidence tools judge.',
 ]
@@ -272,9 +272,12 @@ const refusals = [
             <h3>Six CLI scaffolds</h3>
             <p>
               Go/Cobra, Rust, Python, TypeScript, Java, and C#. Each owns its
-              <code>src/</code> tree, tests, CI, and release files, while its
-              living files (<code>README</code>, <code>CHANGELOG</code>, the
-              language manifest) seed once and stay in human hands.
+              command and library source — Go: <code>cmd/</code> and
+              <code>internal/</code>; the others: <code>src/</code> — plus tests,
+              CI, and release files, while its living files (<code>README</code>,
+              <code>CHANGELOG</code>, the language manifest, and for Go
+              <code>AGENTS.md</code>/<code>CLAUDE.md</code>/<code>go.sum</code>)
+              seed once and stay in human hands.
             </p>
           </a>
         </div>
@@ -358,8 +361,8 @@ const refusals = [
         <p class="body-copy">
           Two ownership classes: <strong>seed-once</strong> files (created if missing,
           never in the lock, never a conflict) and <strong>managed</strong> files
-          (hash-owned, so Bob can prove what is safe to change). Mark any path
-          <code>ownership.release</code> and Bob seeds it once and leaves it to you — your
+          (hash-owned, so Bob can prove what is safe to change). Mark a recipe-owned
+          path <code>ownership.release</code> and Bob seeds it once and leaves it to you — your
           hand-edit is never a permanent apply block. When a recipe stops declaring a file,
           Bob calls it <strong>retired</strong>: delete it deliberately with
           <code>--allow-retire</code>, or leave it as a conflict. It never silently discards
@@ -379,7 +382,7 @@ const refusals = [
             SARIF 2.1.0 log for code scanning or a JUnit XML report for your test
             reporter — no adapter, no wrapper.
           </p>
-          <pre class="snippet"><code>exit 0   bob check: clean (bob plan always exits 0 — a report, not a gate)
+          <pre class="snippet"><code>exit 0   bob check: clean (bob plan is a report, not a gate; invalid input is 4)
 exit 2   an ownership conflict · apply would refuse
 exit 3   drift, no conflict · apply would proceed
 exit 4   invalid input or manifest
@@ -521,7 +524,7 @@ exit 5   fresh plan ≠ reviewed digest · nothing written</code></pre>
         </div>
       </div>
       <p class="foot-line">Deterministic plans · Explicit authority · Honest integration boundaries</p>
-      <p class="foot-line">Proven, not asserted — CI runs the full Go test suite with <code>-race</code>, and the safety behavior is pinned by Glyphrun terminal-behavior specs.</p>
+      <p class="foot-line">Proven, not asserted — CI runs the full Go test suite with <code>-race</code>, and the safety behavior is pinned by Glyphrun terminal-behavior specs (<code>task specs</code>).</p>
     </section>
   </div>
 </template>

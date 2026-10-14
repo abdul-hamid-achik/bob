@@ -161,7 +161,7 @@ envelope above.
 
 | Code | Meaning |
 |---|---|
-| `0` | Success. `bob plan` always exits `0`, even with conflicts — plan is a read-only report, not a gate. |
+| `0` | Success. `bob plan` exits `0` for a valid plan, even with conflicts — plan is a read-only report, not a gate (an invalid input or manifest is exit `4`). |
 | `1` | Unclassified command failure (`command_failed`), an unresolvable workspace path (`workspace_invalid`), another mutating operation holding the workspace lock (`workspace_busy`), or `doctor` reporting required tools missing or unusable. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |

@@ -7,9 +7,10 @@ description: Bring Bob into a TypeScript, Python, Rust, Go, or HTML repository t
 Bob does not care that your directory already has a life. `bob init` writes
 the human-owned manifest first and waits for you to review the plan before
 it touches a generated file. On most existing repositories that plan is
-**stack hygiene**: docs, ignore files, and optional CI seeded once. Bob
-never owns `src/`, `internal/` application packages, or the rest of your
-code.
+**stack hygiene**: docs, ignore files, and optional CI seeded once. A hygiene
+recipe never owns `src/` or your application packages. (The Go *factory* is the
+exception: if the repo is already a Cobra CLI, `bob init` selects
+`go-agent-tool`, which lock-owns `cmd/` and `internal/cli/`.)
 
 It does not generate a better Next.js, FastAPI, or Cargo app. That work
 stays yours. What it adds is a contract an agent can read before editing.
@@ -18,9 +19,10 @@ stays yours. What it adds is a contract an agent can read before editing.
 
 ```bash
 cd path/to/existing-app
-bob init --write
-bob apply
-bob check
+bob init --write   # writes bob.yaml only
+bob plan           # review the seed files Bob would create
+bob apply          # create only what is missing
+bob check          # exit 0 = converged
 ```
 
 `--write` on `init` writes `bob.yaml` only. `apply` creates missing seeds.

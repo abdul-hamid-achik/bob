@@ -589,7 +589,7 @@ matching run.
 
 | Code | Meaning |
 |---|---|
-| `0` | Success. `bob plan` always exits `0`, even when it finds conflicts — plan is a read-only report, not a gate. |
+| `0` | Success. `bob plan` exits `0` for a valid plan, even when it finds conflicts — plan is a read-only report, not a gate (an invalid input or manifest is exit `4`). |
 | `1` | Unclassified command failure (`command_failed`), a workspace path that could not be resolved (`workspace_invalid`), another mutating operation holding the workspace apply lock (`workspace_busy`; retry once it finishes), or `doctor` reporting that required tools are missing or unusable — a determinate not-ready result, not a crash. |
 | `2` | `apply` or `upgrade` refused a conflicted plan, `check` found an ownership conflict, or `remove` skipped or conflicted on managed files. |
 | `3` | `check` found drift with no ownership conflict. |
