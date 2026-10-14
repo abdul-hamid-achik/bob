@@ -155,6 +155,8 @@ func ResolveMetadata(m manifest.Manifest) (Metadata, error) {
 		metadata = resolveRustToolMetadata(m, artifacts)
 	case m.Recipe == manifest.RecipePythonTool:
 		metadata = resolvePythonToolMetadata(m, artifacts)
+	case m.Recipe == manifest.RecipeTSTool:
+		metadata = resolveTSToolMetadata(m, artifacts)
 	case m.Recipe == manifest.RecipeFiles:
 		metadata = resolveFilesMetadata(m, artifacts)
 	case manifest.IsStackRecipe(m.Recipe):
@@ -449,6 +451,112 @@ func pythonToolArtifactID(path string) string {
 }
 
 func pythonToolPlaybooks() []PlaybookDefinition {
+	definitions := []PlaybookDefinition{conflictPlaybook(), upgradePlaybook()}
+	definitions[1].CapabilityIDs = []string{"repository.scaffold"}
+	return definitions
+}
+
+func resolveTSToolMetadata(m manifest.Manifest, artifacts []Artifact) Metadata {
+	metadata := Metadata{
+		SchemaVersion: MetadataSchemaVersion,
+		Recipe:        MetadataRecipeRef{ID: m.Recipe, Version: tsToolRecipeVersion},
+		Summary:       "TypeScript (Node) CLI repository scaffold with whole-file ownership, documentation, CI, an npm release workflow, and a process.argv entry point over a tested pure function.",
+		Capabilities: []CapabilityDefinition{
+			capability("repository.scaffold", "repository", "required", "Public-ready TypeScript (Node) CLI repository scaffold", []string{"recipe"}, ""),
+			capability("surface.cli", "surface", "required", "TypeScript command-line entry point", []string{"surfaces.cli"}, ""),
+			capability("surface.json", "surface", "required", "Machine-readable command output surface", []string{"surfaces.json"}, ""),
+		},
+		Invariants: []InvariantDefinition{
+			{ID: "cli.stdout.machine_clean", Statement: "Machine-readable stdout remains valid JSON; diagnostics belong on stderr."},
+			{ID: "repository.no_unmanaged_overwrite", Statement: "Bob never overwrites an unmanaged differing file."},
+			{ID: "repository.whole_file_updates", Statement: "A managed file updates only while its current hash matches bob.lock."},
+			{ID: "verification.not_implied", Statement: "Selection, materialization, and binary availability do not prove application behavior."},
+		},
+		ExtensionPoints: []ExtensionPointDefinition{},
+		Playbooks:       tsToolPlaybooks(),
+	}
+	byID := make(map[string]*CapabilityDefinition, len(metadata.Capabilities))
+	for i := range metadata.Capabilities {
+		byID[metadata.Capabilities[i].ID] = &metadata.Capabilities[i]
+	}
+	for _, artifact := range artifacts {
+		descriptor := describeTSToolArtifact(artifact)
+		metadata.Artifacts = append(metadata.Artifacts, descriptor)
+		for _, capabilityID := range descriptor.CapabilityIDs {
+			definition := byID[capabilityID]
+			definition.ArtifactIDs = append(definition.ArtifactIDs, descriptor.ID)
+		}
+	}
+	return metadata
+}
+
+func describeTSToolArtifact(artifact Artifact) ArtifactDescriptor {
+	path := artifact.Path
+	id := tsToolArtifactID(path)
+	roles := []string{"repository_support"}
+	capabilities := []string{"repository.scaffold"}
+	switch path {
+	case "AGENTS.md":
+		roles = []string{"agent_guidance"}
+	case "README.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "SECURITY.md":
+		roles = []string{"public_hygiene"}
+	case ".github/workflows/ci.yml":
+		roles = []string{"ci_workflow"}
+	case ".github/workflows/release.yml":
+		roles = []string{"release_workflow"}
+	case "docs/index.md":
+		roles = []string{"documentation"}
+	case "package.json":
+		roles = []string{"manifest"}
+		capabilities = append(capabilities, "surface.cli")
+	case "src/cli.ts":
+		roles = []string{"entrypoint"}
+		capabilities = append(capabilities, "surface.cli")
+	case "src/lib.ts":
+		roles = []string{"library", "core"}
+		capabilities = append(capabilities, "surface.cli")
+	case "tests/cli.test.ts":
+		roles = []string{"cli_test"}
+		capabilities = append(capabilities, "surface.cli")
+	}
+	ownership := "bob_whole_file"
+	if artifact.Seed {
+		ownership = "bob_seed_once"
+	}
+	return ArtifactDescriptor{ID: id, Path: path, Roles: uniqueSorted(roles), Ownership: ownership, CapabilityIDs: uniqueSorted(capabilities)}
+}
+
+func tsToolArtifactID(path string) string {
+	known := map[string]string{
+		".editorconfig":                 "repo.editorconfig",
+		".github/workflows/ci.yml":      "ci.workflow",
+		".github/workflows/release.yml": "release.workflow",
+		".gitignore":                    "repo.gitignore",
+		".prettierrc":                   "ts.prettier",
+		"AGENTS.md":                     "repo.agents",
+		"CHANGELOG.md":                  "repo.changelog",
+		"CODE_OF_CONDUCT.md":            "repo.code_of_conduct",
+		"CONTRIBUTING.md":               "repo.contributing",
+		"LICENSE":                       "repo.license",
+		"README.md":                     "repo.readme",
+		"SECURITY.md":                   "repo.security",
+		"Taskfile.yml":                  "repo.taskfile",
+		"docs/index.md":                 "docs.index",
+		"eslint.config.js":              "ts.eslint",
+		"package.json":                  "ts.manifest",
+		"src/cli.ts":                    "cli.entrypoint",
+		"src/lib.ts":                    "cli.library",
+		"tests/cli.test.ts":             "cli.tests",
+		"tsconfig.json":                 "ts.tsconfig",
+		"vitest.config.ts":              "ts.vitest",
+	}
+	if id, ok := known[path]; ok {
+		return id
+	}
+	return "artifact:" + path
+}
+
+func tsToolPlaybooks() []PlaybookDefinition {
 	definitions := []PlaybookDefinition{conflictPlaybook(), upgradePlaybook()}
 	definitions[1].CapabilityIDs = []string{"repository.scaffold"}
 	return definitions

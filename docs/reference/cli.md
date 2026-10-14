@@ -29,7 +29,7 @@ uses the current directory. Bob does not ask where you are; it checks.
 | `bob studio [path]` | Repository-read-only interactive UI | Monitor Overview, Plan, and aggregate Stats. |
 | `bob explain` | Read-only | Describe product ownership and ecosystem boundaries. |
 | `bob learn` | Read-only, no network | One-shot onboarding brief for coding agents. |
-| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@6`, `python-tool@1`, `rust-tool@1`, and the stack hygiene recipes). |
+| `bob recipe list` | Read-only | List embedded recipes (`files@1`, `go-agent-tool@6`, `python-tool@1`, `rust-tool@1`, `ts-tool@1`, and the stack hygiene recipes). |
 | `bob recipe show <id>` | Read-only | Describe one recipe; `files` includes its schema and a copyable example. |
 | `bob version` | Read-only | Print build version, commit, and date. |
 | `bob mcp serve` | Long-running stdio server | Expose nine typed repository-read-only tools plus `bob_apply`, a digest-gated mutation tool disabled unless `--allow-apply-workspace` names the exact workspace. |
@@ -63,6 +63,7 @@ rust-tool@1  Public-ready Rust CLI scaffold with docs, CI, and a thin binary ove
 static-web@2  Seed-once hygiene for a static web site: docs presence, .gitignore, and a validation CI stub; never owns site content
 swift-package@2  Seed-once hygiene for a Swift package: SwiftPM commands, ignores, and CI; never owns package source
 ts-app@2  Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source
+ts-tool@1  Public-ready TypeScript (Node) CLI scaffold with docs, CI, and a process.argv entry point over a tested pure function
 vue-app@2  Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source
 ```
 
@@ -81,7 +82,7 @@ first, then use `bob init --write` and `bob apply`. An explicit stack
 does not match the target's detected stack warns on preview and refuses
 `--write` (run `bob init --recipe <id> --force` to seed it anyway). For
 `bob new`, `--module` is required by `go-agent-tool`, optional repository
-identity for `python-tool` and `rust-tool`, and rejected by every other recipe.
+identity for `python-tool`, `rust-tool`, and `ts-tool`, and rejected by every other recipe.
 `bob init` detects the repository's stack (Go, TypeScript, JavaScript,
 Vue, Nuxt, Deno, Python, PHP, Ruby, Lua, Rust, Java, Kotlin, .NET, C/C++ with
 CMake, SwiftPM, Elixir/Mix, or a static web site) and defaults to the
@@ -98,7 +99,7 @@ byte-for-byte unchanged. When the chosen
 recipe does not match the detected stack, the preview prints a prominent
 warning and `--write` refuses with exit code `4` (`input_invalid`) unless
 `--force` is passed. `--module` is required only by `go-agent-tool`; for
-`python-tool`, `rust-tool`, and the stack hygiene recipes it is optional repository identity. `bob init --json`
+`python-tool`, `rust-tool`, `ts-tool`, and the stack hygiene recipes it is optional repository identity. `bob init --json`
 carries the full detection result in `data.detection` — `stacks` (each with
 its proving marker files), `primary`, `monorepo`, `kind_hint`,
 `package_manager`, and `signals` — alongside the previewed or written

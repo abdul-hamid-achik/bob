@@ -414,6 +414,13 @@ func recipeDescription(id string, version int) *RecipeDescription {
 			Surfaces:    []string{"cli", "json"},
 		}
 	}
+	if id == "ts-tool" {
+		return &RecipeDescription{
+			ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
+			Description: "Public-ready TypeScript (Node) CLI scaffold: a process.argv entry point over a tested pure function, with docs, CI, an npm release workflow, and TypeScript tooling configuration. package.json, README.md, AGENTS.md, and CHANGELOG.md are seeded once and left in human hands.",
+			Surfaces:    []string{"cli", "json"},
+		}
+	}
 	return &RecipeDescription{
 		ID: id, Version: version, ManifestSchemaVersion: manifest.SchemaVersion,
 		Description: "Public-ready Go and Cobra CLI with docs, CI, release plumbing, and optional ecosystem seams",

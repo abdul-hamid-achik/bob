@@ -35,6 +35,9 @@ const rustToolRecipeVersion = 1
 // pythonToolRecipeVersion is the current python-tool recipe contract version.
 const pythonToolRecipeVersion = 1
 
+// tsToolRecipeVersion is the current ts-tool recipe contract version.
+const tsToolRecipeVersion = 1
+
 // Version returns the current contract version for a built-in recipe id.
 func Version(recipeID string) (int, error) {
 	switch {
@@ -44,6 +47,8 @@ func Version(recipeID string) (int, error) {
 		return rustToolRecipeVersion, nil
 	case recipeID == "python-tool":
 		return pythonToolRecipeVersion, nil
+	case recipeID == "ts-tool":
+		return tsToolRecipeVersion, nil
 	case recipeID == "files":
 		return FilesRecipeVersion, nil
 	case manifest.IsStackRecipe(recipeID):
@@ -55,7 +60,7 @@ func Version(recipeID string) (int, error) {
 
 // IDs returns the sorted set of built-in recipe identifiers.
 func IDs() []string {
-	ids := append([]string{"files", "go-agent-tool", "python-tool", "rust-tool"}, manifest.StackRecipeIDs()...)
+	ids := append([]string{"files", "go-agent-tool", "python-tool", "rust-tool", "ts-tool"}, manifest.StackRecipeIDs()...)
 	sort.Strings(ids)
 	return ids
 }
@@ -120,6 +125,11 @@ func RenderVersion(m manifest.Manifest, version int) ([]Artifact, error) {
 			return nil, fmt.Errorf("unsupported python-tool recipe version %d", version)
 		}
 		artifacts, err = renderPythonTool(m, version)
+	case m.Recipe == "ts-tool":
+		if version != tsToolRecipeVersion {
+			return nil, fmt.Errorf("unsupported ts-tool recipe version %d", version)
+		}
+		artifacts, err = renderTSTool(m, version)
 	case m.Recipe == "files":
 		if version != FilesRecipeVersion {
 			return nil, fmt.Errorf("unsupported files recipe version %d", version)
