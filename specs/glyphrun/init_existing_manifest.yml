@@ -1,0 +1,104 @@
+version: 1
+name: bob_init_existing_manifest
+intent: |
+    bob init against a repository that already has bob.yaml previews cleanly:
+    it exits 0 with ok=true, warns that the manifest already exists, and its
+    next_actions point at bob plan instead of rerunning with --write. Running
+    init --write refuses with exit 4 (input_invalid), and the existing
+    bob.yaml stays byte-identical.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-initexisting.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          bin="$PWD/bin/bob"
+          repo="$root/acme"
+          mkdir -p "$repo"
+          cat > "$repo/bob.yaml" <<'EOF'
+          schema_version: 1
+          recipe: files
+          product:
+            name: acme
+            description: Init existing-manifest fixture.
+          files:
+            - path: notes.txt
+              content: |
+                hello
+          EOF
+          printf 'module example.com/acme\ngo 1.26\n' > "$repo/go.mod"
+          before="$(shasum -a 256 "$repo/bob.yaml" | awk '{print $1}')"
+          set +e
+          preview="$( "$bin" init "$repo" --json 2>/dev/null )"
+          preview_code=$?
+          set -e
+          printf 'preview_exit=%s\n' "$preview_code"
+          printf 'preview_ok=%s\n' "$(printf '%s' "$preview" | jq -r '.ok')"
+          printf 'warn_existing=%s\n' "$(printf '%s' "$preview" | jq -r '[.warnings[] | select(contains("already exists"))] | length > 0')"
+          printf 'next_omits_rerun=%s\n' "$(printf '%s' "$preview" | jq -r '[.next_actions[] | select(contains("rerun with --write"))] | length == 0')"
+          set +e
+          write_out="$( "$bin" init "$repo" --write --json 2>/dev/null )"
+          write_code=$?
+          set -e
+          printf 'write_exit=%s\n' "$write_code"
+          printf 'write_ok=%s\n' "$(printf '%s' "$write_out" | jq -r '.ok')"
+          printf 'write_error=%s\n' "$(printf '%s' "$write_out" | jq -r '.data.error.code')"
+          after="$(shasum -a 256 "$repo/bob.yaml" | awk '{print $1}')"
+          if [ "$before" = "$after" ]; then
+            printf 'manifest_unchanged=true\n'
+          fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: init_existing_manifest
+outcomes:
+    - id: preview_exits_zero
+      description: bob init preview against an existing manifest exits 0
+      verify:
+        screen:
+            contains: preview_exit=0
+    - id: preview_ok_true
+      description: the preview envelope reports ok=true
+      verify:
+        screen:
+            contains: preview_ok=true
+    - id: preview_warns_existing
+      description: the preview warns that bob.yaml already exists
+      verify:
+        screen:
+            contains: warn_existing=true
+    - id: preview_omits_rerun
+      description: preview next_actions do not suggest rerunning with --write
+      verify:
+        screen:
+            contains: next_omits_rerun=true
+    - id: write_exits_four
+      description: init --write refuses an existing manifest and exits 4
+      verify:
+        screen:
+            contains: write_exit=4
+    - id: write_ok_false
+      description: the refusal envelope reports ok=false
+      verify:
+        screen:
+            contains: write_ok=false
+    - id: write_error_input_invalid
+      description: the refusal is classified as input_invalid
+      verify:
+        screen:
+            contains: write_error=input_invalid
+    - id: manifest_unchanged
+      description: the existing bob.yaml stays byte-identical
+      verify:
+        screen:
+            contains: manifest_unchanged=true
+contractHash: sha256:05cb91e5dd8908eb09b5f6e0d4dad221c575ce9bded1565fd3a360e3aedf696b

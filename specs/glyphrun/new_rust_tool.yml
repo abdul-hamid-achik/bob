@@ -1,0 +1,84 @@
+version: 1
+name: bob_new_rust_tool
+intent: |
+    bob new --recipe rust-tool scaffolds a fresh Rust CLI repository end to
+    end: it reports the created managed file count, leaves the workspace
+    converged so bob check exits 0 and prints the clean line, produces the
+    core scaffold files (Cargo.toml, src/main.rs, .github/workflows/ci.yml),
+    and bob recipe show rust-tool describes the rust-tool@1 contract.
+target:
+    cmd:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          root="$(mktemp -d "/tmp/bob-glyph-newrust.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          bin="$PWD/bin/bob"
+          "$bin" new rustdemo --recipe rust-tool --module github.com/acme/rustdemo --dir "$root/rustdemo" --write > "$root/new.out" 2>/dev/null
+          printf 'new_exit=0\n'
+          if grep -q 'with [0-9][0-9]* managed files' "$root/new.out"; then
+            printf 'reports_managed_count=true\n'
+          fi
+          set +e
+          "$bin" check "$root/rustdemo" > "$root/check.out" 2>/dev/null
+          check_code=$?
+          set -e
+          printf 'check_exit=%s\n' "$check_code"
+          cat "$root/check.out"
+          if [ -f "$root/rustdemo/Cargo.toml" ] && [ -f "$root/rustdemo/src/main.rs" ] && [ -f "$root/rustdemo/.github/workflows/ci.yml" ]; then
+            printf 'scaffold_files_present=true\n'
+          fi
+          "$bin" recipe show rust-tool > "$root/show.out" 2>/dev/null
+          printf 'show_exit=0\n'
+          if grep -q 'rust-tool@1' "$root/show.out"; then
+            printf 'show_describes_rust_tool=true\n'
+          fi
+    cwd: .
+terminal:
+    cols: 180
+    rows: 80
+    profile: xterm-256color
+steps:
+    - wait:
+        process:
+            exitCode: 0
+        timeoutMs: 15000
+    - snapshot: new_rust_tool
+outcomes:
+    - id: new_succeeds
+      description: bob new --recipe rust-tool exits 0
+      verify:
+        screen:
+            contains: new_exit=0
+    - id: reports_managed_count
+      description: bob new reports the number of managed files it created
+      verify:
+        screen:
+            contains: reports_managed_count=true
+    - id: check_clean
+      description: the fresh rust-tool workspace is converged, so bob check exits 0
+      verify:
+        screen:
+            contains: check_exit=0
+    - id: check_prints_clean_line
+      description: bob check prints the clean reconciliation line
+      verify:
+        screen:
+            contains: "clean: repository matches bob.yaml and bob.lock"
+    - id: scaffold_files_exist
+      description: the rust-tool scaffold creates Cargo.toml, src/main.rs, and CI
+      verify:
+        screen:
+            contains: scaffold_files_present=true
+    - id: recipe_show_succeeds
+      description: bob recipe show rust-tool exits 0
+      verify:
+        screen:
+            contains: show_exit=0
+    - id: recipe_show_describes_contract
+      description: bob recipe show describes the rust-tool@1 contract
+      verify:
+        screen:
+            contains: show_describes_rust_tool=true
+contractHash: sha256:afa53f544e7b75642a706de825ff0426cd72c02568c7a38ff32ae88067d9965f
