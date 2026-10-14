@@ -489,6 +489,7 @@ func applyDetectionToStackManifest(m *manifest.Manifest, detection detect.Result
 func newPlanCommand(opts *options) *cobra.Command {
 	var showContent, conflictsOnly, showDiff, watch bool
 	var sarif bool
+	var junit bool
 	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "plan [path]",
@@ -500,12 +501,21 @@ func newPlanCommand(opts *options) *cobra.Command {
 			if sarif && opts.json {
 				return classifyInvalidInput(errors.New("plan: --sarif and --json are mutually exclusive"))
 			}
+			if junit && opts.json {
+				return classifyInvalidInput(errors.New("plan: --junit and --json are mutually exclusive"))
+			}
+			if junit && sarif {
+				return classifyInvalidInput(errors.New("plan: --junit and --sarif are mutually exclusive"))
+			}
 			if watch {
 				if opts.json {
 					return classifyInvalidInput(errors.New("plan: --watch and --json are mutually exclusive"))
 				}
 				if sarif {
 					return classifyInvalidInput(errors.New("plan: --watch and --sarif are mutually exclusive"))
+				}
+				if junit {
+					return classifyInvalidInput(errors.New("plan: --watch and --junit are mutually exclusive"))
 				}
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 				defer stop()
@@ -516,6 +526,9 @@ func newPlanCommand(opts *options) *cobra.Command {
 				return fmt.Errorf("plan: %w", err)
 			}
 			capturePlanMetrics(opts, root, plan)
+			if junit {
+				return emitJUnit(cmd.OutOrStdout(), "plan", plan)
+			}
 			if sarif {
 				return emitSARIF(cmd.OutOrStdout(), plan)
 			}
@@ -546,6 +559,7 @@ func newPlanCommand(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&showDiff, "diff", false, "show unified content diffs for create and update actions")
 	cmd.Flags().BoolVar(&watch, "watch", false, "watch bob.yaml and re-plan on change")
 	cmd.Flags().BoolVar(&sarif, "sarif", false, "write a SARIF 2.1.0 log to stdout")
+	cmd.Flags().BoolVar(&junit, "junit", false, "write a JUnit XML report to stdout")
 	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "classify a lock-owned regular file the recipe dropped as a retire action instead of a conflict")
 	return cmd
 }
@@ -918,6 +932,7 @@ func upgradePlanDigestMismatchFailure(cmd *cobra.Command, opts *options, root st
 func newCheckCommand(opts *options) *cobra.Command {
 	var conflictsOnly bool
 	var sarif bool
+	var junit bool
 	var allowRetire bool
 	cmd := &cobra.Command{
 		Use:   "check [path]",
@@ -928,6 +943,12 @@ func newCheckCommand(opts *options) *cobra.Command {
 			opts.trackWorkspace(root)
 			if sarif && opts.json {
 				return classifyInvalidInput(errors.New("check: --sarif and --json are mutually exclusive"))
+			}
+			if junit && opts.json {
+				return classifyInvalidInput(errors.New("check: --junit and --json are mutually exclusive"))
+			}
+			if junit && sarif {
+				return classifyInvalidInput(errors.New("check: --junit and --sarif are mutually exclusive"))
 			}
 			plan, err := loadPlan(root, engine.PlanOptions{AllowRetire: allowRetire})
 			if err != nil {
@@ -942,6 +963,15 @@ func newCheckCommand(opts *options) *cobra.Command {
 					code = ExitConflicts
 				}
 				failure = newExitError(code, errors.New("check: repository drift detected"))
+			}
+			if junit {
+				if err := emitJUnit(cmd.OutOrStdout(), "check", plan); err != nil {
+					return err
+				}
+				if failure != nil {
+					return failure
+				}
+				return nil
 			}
 			if sarif {
 				if err := emitSARIF(cmd.OutOrStdout(), plan); err != nil {
@@ -989,6 +1019,7 @@ func newCheckCommand(opts *options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&conflictsOnly, "conflicts-only", false, "show only conflicting actions (compact output for capped agent harnesses)")
 	cmd.Flags().BoolVar(&sarif, "sarif", false, "write a SARIF 2.1.0 log to stdout")
+	cmd.Flags().BoolVar(&junit, "junit", false, "write a JUnit XML report to stdout")
 	cmd.Flags().BoolVar(&allowRetire, "allow-retire", false, "classify a lock-owned regular file the recipe dropped as a retire action instead of a conflict")
 	return cmd
 }
