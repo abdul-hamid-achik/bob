@@ -13,10 +13,10 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
     "ok": true,
     "command": "version",
     "data": {
-      "commit": "3f8c271",
-      "date": "2026-09-28T12:12:56Z",
+      "commit": "837e6c4",
+      "date": "2026-10-14T06:27:09Z",
       "name": "bob",
-      "version": "v0.11.0"
+      "version": "v0.12.0-96-g837e6c4"
     },
     "warnings": [],
     "next_actions": []
@@ -49,20 +49,35 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
       ],
       "product": "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
       "recipe": [
+        "cpp-cmake",
+        "dart-app",
+        "deno-app",
+        "docker-app",
+        "dotnet-app",
         "elixir-app",
         "files",
         "go-agent-tool",
         "go-hygiene",
+        "java-app",
         "js-app",
+        "kotlin-app",
         "lua-lib",
+        "nix-app",
         "nuxt-app",
+        "php-app",
         "python-app",
+        "python-tool",
         "ruby-app",
         "rust-cli",
+        "rust-tool",
+        "scala-app",
         "static-web",
         "swift-package",
+        "terraform-app",
         "ts-app",
-        "vue-app"
+        "ts-tool",
+        "vue-app",
+        "zig-app"
       ],
       "schema_version": 1
     },
@@ -131,7 +146,7 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "json": true,
           "mutates": true,
           "name": "remove",
-          "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews"
+          "purpose": "remove lock-owned files and bob.lock while preserving unmanaged and seed-once files; --force removes drifted regular files, --dry-run previews, and --expect-removal-digest binds a real removal to a reviewed dry-run digest (a namespace separate from the plan digest)"
         },
         {
           "json": true,
@@ -217,16 +232,17 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "input_invalid": "a flag, argument, or recipe id was invalid",
         "manifest_invalid": "bob.yaml failed to parse or failed Validate; the message lists every problem",
         "missing_manifest": "no bob.yaml was found at the resolved workspace path",
-        "plan_digest_mismatch": "the fresh apply or upgrade plan differs from the explicitly reviewed plan digest; no repository writes occurred",
+        "plan_digest_mismatch": "the fresh apply or upgrade plan — or the reviewed removal decision — differs from the explicitly reviewed digest; no repository writes occurred",
+        "workspace_busy": "another mutating bob operation holds the workspace lock; no repository writes occurred; retry once it finishes",
         "workspace_invalid": "the workspace path could not be resolved safely"
       },
       "exit_codes": {
         "0": "success; bob plan always exits 0 even when it finds conflicts, because plan is a read-only report",
-        "1": "unclassified command failure, or doctor reporting required tools missing",
+        "1": "unclassified command failure (command_failed), an unresolvable workspace path (workspace_invalid), another mutating operation holding the workspace lock (workspace_busy), or doctor reporting required tools missing or unusable",
         "2": "apply or upgrade refused a conflicted plan, check found an ownership conflict, or remove skipped or conflicted on managed files",
         "3": "check found drift with no ownership conflict",
-        "4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, or missing/incompatible ownership state for remove or upgrade",
-        "5": "guarded apply or upgrade refused because the fresh plan differs from the reviewed plan digest"
+        "4": "invalid input: a missing or invalid manifest, a bad flag or argument, an unrecognized recipe id, bob init --write refusing an existing bob.yaml or a recipe that does not match the detected stack, or missing/incompatible ownership state for remove or upgrade",
+        "5": "guarded apply, upgrade, or remove refused because the fresh plan or removal decision differs from the reviewed digest"
       },
       "invariants": [
         "context, path, playbook, plan, check, plain inspect, stats, studio, explain, and learn never mutate repositories",
@@ -247,7 +263,7 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "next_actions"
         ],
         "flag": "--json",
-        "notes": "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Exceptions: check on drift and a not-ready doctor keep their normal data and carry no data.error; they signal through the exit code alone. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line."
+        "notes": "JSON stdout is machine-clean; diagnostics go to stderr. Every failure emits ok:false with data.error.code (see error_codes below), data.error.message, and next_actions holding concrete, copy-pasteable corrective commands. Two exceptions keep their normal data and carry no data.error: check on drift and doctor reporting a required tool missing or unusable; both emit ok:false and the non-zero exit code is the signal. Human (non-JSON) failures print the same corrective steps as \"next: ...\" lines on stderr after the error line."
       },
       "lifecycle": [
         "bob new|init previews by default; --write authorizes creation",
@@ -275,6 +291,31 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
       "product": "deterministic repository factory, contract compiler, guidance provider, and lifecycle reconciler",
       "recipes": [
         {
+          "description": "Seed-once hygiene for a C/C++ project: docs, .gitignore, and a CMake CI stub; never owns application source",
+          "id": "cpp-cmake",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a Dart/Flutter project: docs, .gitignore, and an analyze/test CI stub; never owns application source",
+          "id": "dart-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a Deno project: docs, .gitignore, and a Deno CI stub; never owns application source",
+          "id": "deno-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a Docker image: docs, .dockerignore, and a build CI stub; never owns application source",
+          "id": "docker-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a .NET application or library: docs, .gitignore, and a dotnet CI stub; never owns application source",
+          "id": "dotnet-app",
+          "version": 2
+        },
+        {
           "description": "Seed-once hygiene for an Elixir application or umbrella: Mix formatting, tests, ignores, and CI; never owns application source",
           "id": "elixir-app",
           "version": 2
@@ -295,8 +336,18 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "version": 2
         },
         {
+          "description": "Seed-once hygiene for a Java application or library: docs, .gitignore, and a Maven CI stub; never owns application source",
+          "id": "java-app",
+          "version": 2
+        },
+        {
           "description": "Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source",
           "id": "js-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a Kotlin application or library: docs, .gitignore, and a Gradle CI stub; never owns application source",
+          "id": "kotlin-app",
           "version": 2
         },
         {
@@ -305,14 +356,29 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "version": 2
         },
         {
+          "description": "Seed-once hygiene for a Nix flake or package: docs, .gitignore, and a flake-check CI stub; never owns application source",
+          "id": "nix-app",
+          "version": 2
+        },
+        {
           "description": "Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source",
           "id": "nuxt-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a PHP project: docs, .gitignore, and a PHPUnit CI stub; never owns application source",
+          "id": "php-app",
           "version": 2
         },
         {
           "description": "Seed-once hygiene for a Python project: docs, aligned Python tooling, and pytest CI; never owns application source",
           "id": "python-app",
           "version": 2
+        },
+        {
+          "description": "Public-ready Python CLI scaffold with docs, CI, and an argparse entry point over a tested pure function",
+          "id": "python-tool",
+          "version": 1
         },
         {
           "description": "Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source",
@@ -322,6 +388,16 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         {
           "description": "Seed-once hygiene for a Rust CLI, library, or workspace: Cargo checks and CI; never owns application source",
           "id": "rust-cli",
+          "version": 2
+        },
+        {
+          "description": "Public-ready Rust CLI scaffold with docs, CI, and a thin binary over a tested library core",
+          "id": "rust-tool",
+          "version": 1
+        },
+        {
+          "description": "Seed-once hygiene for a Scala sbt project: docs, .gitignore, and a test CI stub; never owns application source",
+          "id": "scala-app",
           "version": 2
         },
         {
@@ -335,13 +411,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "version": 2
         },
         {
+          "description": "Seed-once hygiene for Terraform/IaC: docs, .gitignore, and a validate CI stub; never owns application source",
+          "id": "terraform-app",
+          "version": 2
+        },
+        {
           "description": "Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source",
           "id": "ts-app",
           "version": 2
         },
         {
+          "description": "Public-ready TypeScript (Node) CLI scaffold with docs, CI, and a process.argv entry point over a tested pure function",
+          "id": "ts-tool",
+          "version": 1
+        },
+        {
           "description": "Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source",
           "id": "vue-app",
+          "version": 2
+        },
+        {
+          "description": "Seed-once hygiene for a Zig project: docs, .gitignore, and a build/test CI stub; never owns application source",
+          "id": "zig-app",
           "version": 2
         }
       ],
@@ -365,6 +456,117 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
     "ok": true,
     "command": "recipe list",
     "data": [
+      {
+        "description": "Seed-once hygiene for a C/C++ project: docs, .gitignore, and a CMake CI stub; never owns application source",
+        "id": "cpp-cmake",
+        "language": "C/C++ (CMake)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "cpp"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a Dart/Flutter project: docs, .gitignore, and an analyze/test CI stub; never owns application source",
+        "id": "dart-app",
+        "language": "Dart (Flutter or pure Dart)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "dart"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a Deno project: docs, .gitignore, and a Deno CI stub; never owns application source",
+        "id": "deno-app",
+        "language": "Deno (TypeScript)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "deno"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a Docker image: docs, .dockerignore, and a build CI stub; never owns application source",
+        "id": "docker-app",
+        "language": "Docker",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".dockerignore",
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "docker"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a .NET application or library: docs, .gitignore, and a dotnet CI stub; never owns application source",
+        "id": "dotnet-app",
+        "language": "C# / .NET",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "dotnet"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
       {
         "description": "Seed-once hygiene for an Elixir application or umbrella: Mix formatting, tests, ignores, and CI; never owns application source",
         "id": "elixir-app",
@@ -446,6 +648,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "version": 2
       },
       {
+        "description": "Seed-once hygiene for a Java application or library: docs, .gitignore, and a Maven CI stub; never owns application source",
+        "id": "java-app",
+        "language": "Java (Maven or Gradle)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "java"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
         "description": "Seed-once hygiene for a JavaScript Node app or workspace, using the declared package manager; never owns application source",
         "id": "js-app",
         "language": "JavaScript (Node)",
@@ -461,6 +685,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         ],
         "stacks": [
           "javascript"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a Kotlin application or library: docs, .gitignore, and a Gradle CI stub; never owns application source",
+        "id": "kotlin-app",
+        "language": "Kotlin (Gradle or Maven)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "kotlin"
         ],
         "surfaces": [
           "cli",
@@ -493,6 +739,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "version": 2
       },
       {
+        "description": "Seed-once hygiene for a Nix flake or package: docs, .gitignore, and a flake-check CI stub; never owns application source",
+        "id": "nix-app",
+        "language": "Nix (flake)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "nix"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
         "description": "Seed-once hygiene for a Nuxt application, preserving JavaScript or TypeScript and its package manager; never owns application source",
         "id": "nuxt-app",
         "language": "Nuxt (Vue)",
@@ -508,6 +776,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         ],
         "stacks": [
           "nuxt"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a PHP project: docs, .gitignore, and a PHPUnit CI stub; never owns application source",
+        "id": "php-app",
+        "language": "PHP",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "php"
         ],
         "surfaces": [
           "cli",
@@ -538,6 +828,15 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
           "json"
         ],
         "version": 2
+      },
+      {
+        "description": "Public-ready Python CLI scaffold with docs, CI, and an argparse entry point over a tested pure function",
+        "id": "python-tool",
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 1
       },
       {
         "description": "Seed-once hygiene for a Ruby app or gem with kind-aware Bundler defaults; never owns application source",
@@ -581,6 +880,37 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         ],
         "stacks": [
           "rust"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Public-ready Rust CLI scaffold with docs, CI, and a thin binary over a tested library core",
+        "id": "rust-tool",
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 1
+      },
+      {
+        "description": "Seed-once hygiene for a Scala sbt project: docs, .gitignore, and a test CI stub; never owns application source",
+        "id": "scala-app",
+        "language": "Scala (sbt)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "scala"
         ],
         "surfaces": [
           "cli",
@@ -634,6 +964,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "version": 2
       },
       {
+        "description": "Seed-once hygiene for Terraform/IaC: docs, .gitignore, and a validate CI stub; never owns application source",
+        "id": "terraform-app",
+        "language": "Terraform (HCL)",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "terraform"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
         "description": "Seed-once hygiene for a TypeScript app or workspace, using the declared package manager; never owns application source",
         "id": "ts-app",
         "language": "TypeScript (Bun or Node; app or workspace monorepo)",
@@ -658,6 +1010,15 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         "version": 2
       },
       {
+        "description": "Public-ready TypeScript (Node) CLI scaffold with docs, CI, and a process.argv entry point over a tested pure function",
+        "id": "ts-tool",
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 1
+      },
+      {
         "description": "Seed-once hygiene for a Vue application, preserving JavaScript or TypeScript and its package manager; never owns application source",
         "id": "vue-app",
         "language": "Vue (Vite)",
@@ -673,6 +1034,28 @@ export const DEMO_SAMPLES: Record<string, unknown> = {
         ],
         "stacks": [
           "vue"
+        ],
+        "surfaces": [
+          "cli",
+          "json"
+        ],
+        "version": 2
+      },
+      {
+        "description": "Seed-once hygiene for a Zig project: docs, .gitignore, and a build/test CI stub; never owns application source",
+        "id": "zig-app",
+        "language": "Zig",
+        "ownership_note": "Every artifact is a seed: created once when missing, never recorded in bob.lock, never updated or overwritten. Application source is never touched.",
+        "seeded_paths": [
+          ".editorconfig",
+          ".github/workflows/ci.yml",
+          ".gitignore",
+          "AGENTS.md",
+          "README.md",
+          "SECURITY.md"
+        ],
+        "stacks": [
+          "zig"
         ],
         "surfaces": [
           "cli",
