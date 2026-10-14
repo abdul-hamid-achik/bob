@@ -27,6 +27,11 @@ conflict-free plan.
   thin main entry point over a tested pure function, where `pom.xml`,
   `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
   human hands.
+- [`csharp-tool-minimal/bob.yaml`](csharp-tool-minimal/bob.yaml) uses the
+  `csharp-tool` factory recipe: a public-ready .NET (C#) CLI scaffold with a
+  thin top-level entry point over a tested pure function, where `global.json`,
+  the main `.csproj`, `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded
+  once and left in human hands.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.

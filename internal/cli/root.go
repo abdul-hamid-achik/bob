@@ -243,7 +243,7 @@ func newNewCommand(opts *options) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&module, "module", "", "module path; required by recipe go-agent-tool, optional repository identity for java-tool, python-tool, rust-tool, ts-tool, and stack recipes")
+	cmd.Flags().StringVar(&module, "module", "", "module path; required by recipe go-agent-tool, optional repository identity for csharp-tool, java-tool, python-tool, rust-tool, ts-tool, and stack recipes")
 	cmd.Flags().StringVar(&description, "description", "", "one-line product description")
 	cmd.Flags().StringVar(&target, "dir", "", "target directory (defaults to the project name)")
 	cmd.Flags().StringVar(&recipeID, "recipe", "", "recipe id (defaults to the recipe matching the target's detected stack, else go-agent-tool; see bob recipe list)")
@@ -281,8 +281,11 @@ func buildNewManifest(recipeID, name, module, description string, detection dete
 	if recipeID == manifest.RecipeJavaTool {
 		return manifest.DefaultJavaTool(name, module, description), nil
 	}
+	if recipeID == manifest.RecipeCSharpTool {
+		return manifest.DefaultCSharpTool(name, module, description), nil
+	}
 	if module != "" {
-		return manifest.Manifest{}, fmt.Errorf("--module is only used by recipe go-agent-tool, java-tool, python-tool, rust-tool, and ts-tool; recipe %s does not scaffold a module (drop --module)", recipeID)
+		return manifest.Manifest{}, fmt.Errorf("--module is only used by recipe go-agent-tool, csharp-tool, java-tool, python-tool, rust-tool, and ts-tool; recipe %s does not scaffold a module (drop --module)", recipeID)
 	}
 	if recipeID == manifest.RecipeFiles {
 		return defaultFilesManifest(name, description), nil
@@ -397,7 +400,7 @@ func newInitCommand(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "project name (defaults to directory name)")
-	cmd.Flags().StringVar(&module, "module", "", "module path; required by go-agent-tool, optional repository identity for java-tool, python-tool, rust-tool, ts-tool, and stack recipes")
+	cmd.Flags().StringVar(&module, "module", "", "module path; required by go-agent-tool, optional repository identity for csharp-tool, java-tool, python-tool, rust-tool, ts-tool, and stack recipes")
 	cmd.Flags().StringVar(&description, "description", "", "one-line product description")
 	cmd.Flags().StringVar(&recipeID, "recipe", "", "recipe id (defaults to the recipe matching the detected stack; see bob recipe list)")
 	cmd.Flags().BoolVar(&write, "write", false, "write bob.yaml")
@@ -464,6 +467,9 @@ func buildInitManifest(recipeID, name, module, description string, detection det
 	}
 	if recipeID == manifest.RecipeJavaTool {
 		return manifest.DefaultJavaTool(name, module, description), nil
+	}
+	if recipeID == manifest.RecipeCSharpTool {
+		return manifest.DefaultCSharpTool(name, module, description), nil
 	}
 	m, err := manifest.DefaultStack(recipeID, name, module, description, detectedRuntimeKind(recipeID, detection))
 	if err != nil {
@@ -1178,7 +1184,7 @@ func newLearnCommand(opts *options) *cobra.Command {
 			b.WriteString("On failure: every command emits a closed error code (missing_manifest, manifest_invalid, input_invalid, conflicts, workspace_invalid, plan_digest_mismatch, workspace_busy, command_failed) plus next_actions with runnable corrective commands, except check on drift and doctor with a missing or unusable required tool, which keep their normal data and signal through the exit code; the same steps print as \"next: ...\" lines on stderr without --json.\n")
 			b.WriteString("Compact output: add --conflicts-only to plan or check to see only conflicting actions, which is friendlier to a capped agent harness.\n")
 			b.WriteString("MCP: bob mcp serve <workspace> exposes nine read-only tools, including bob_context, bob_path, and bob_playbook, plus bob_apply, which is disabled unless --allow-apply-workspace names the workspace and then applies only an exact reviewed plan digest; otherwise repository mutation remains on the approved shell path.\n")
-			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), rust-tool (Rust CLI scaffold), python-tool (Python CLI scaffold), ts-tool (TypeScript/Node CLI scaffold), java-tool (Java/Maven CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, deno-app, python-app, php-app, ruby-app, lua-lib, rust-cli, java-app, kotlin-app, dotnet-app, cpp-cmake, docker-app, terraform-app, nix-app, swift-package, elixir-app, static-web, go-hygiene, dart-app, zig-app, scala-app, ansible-app, helm-app, kubernetes-app) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
+			b.WriteString("Recipes: run bob recipe list, or bob recipe show <id> for the full contract of go-agent-tool (Go/Cobra CLI scaffold), rust-tool (Rust CLI scaffold), python-tool (Python CLI scaffold), ts-tool (TypeScript/Node CLI scaffold), java-tool (Java/Maven CLI scaffold), csharp-tool (.NET/C# CLI scaffold), files (declare any file tree inline), or a stack hygiene recipe (ts-app, js-app, vue-app, nuxt-app, deno-app, python-app, php-app, ruby-app, lua-lib, rust-cli, java-app, kotlin-app, dotnet-app, cpp-cmake, docker-app, terraform-app, nix-app, swift-package, elixir-app, static-web, go-hygiene, dart-app, zig-app, scala-app, ansible-app, helm-app, kubernetes-app) that seeds docs/.gitignore/CI once and never touches application source. bob new and bob init auto-select the recipe matching the detected repository stack; bob new also accepts any catalog recipe via --recipe.\n")
 			b.WriteString("Out of scope: models, agent scheduling, secrets, verification claims, application business logic.\n")
 			b.WriteString("Docs: https://bobcli.dev (agents guide: https://bobcli.dev/agents). Start with: bob learn --json, then bob context --json.\n")
 			_, err := fmt.Fprint(cmd.OutOrStdout(), b.String())
@@ -1268,6 +1274,13 @@ func recipeCatalogEntry(id string) map[string]any {
 			"id":          "java-tool",
 			"version":     version,
 			"description": "Public-ready Java (Maven) CLI scaffold with docs, CI, and a thin main entry point over a tested pure function",
+			"surfaces":    []string{"cli", "json"},
+		}
+	case "csharp-tool":
+		return map[string]any{
+			"id":          "csharp-tool",
+			"version":     version,
+			"description": "Public-ready .NET (C#) CLI scaffold with docs, CI, and a thin top-level entry point over a tested pure function",
 			"surfaces":    []string{"cli", "json"},
 		}
 	default:
@@ -1360,6 +1373,10 @@ func newRecipeCommand(opts *options) *cobra.Command {
 				}
 				if args[0] == "java-tool" {
 					_, err := fmt.Fprintf(cmd.OutOrStdout(), "java-tool@%d\n  Generates a public-ready Java (Maven) CLI scaffold: a thin main entry point over a tested pure function, with docs, CI, a release workflow, and Maven tooling configuration. pom.xml, README.md, AGENTS.md, and CHANGELOG.md are seeded once and left in human hands.\n", entry["version"])
+					return err
+				}
+				if args[0] == "csharp-tool" {
+					_, err := fmt.Fprintf(cmd.OutOrStdout(), "csharp-tool@%d\n  Generates a public-ready .NET (C#) CLI scaffold: a thin top-level entry point over a tested pure function, with docs, CI, a release workflow, and .NET tooling configuration. global.json, the main .csproj, README.md, AGENTS.md, and CHANGELOG.md are seeded once and left in human hands.\n", entry["version"])
 					return err
 				}
 				info, _ := recipe.StackInfoFor(args[0])

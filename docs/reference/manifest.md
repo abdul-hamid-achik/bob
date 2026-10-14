@@ -51,10 +51,10 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `csharp-tool`, `java-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Seven kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
-`rust-tool@1`, `ts-tool@1`, and `java-tool@1`, the five
+Eight kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
+`rust-tool@1`, `ts-tool@1`, `java-tool@1`, and `csharp-tool@1`, the six
 factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes
 (`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
@@ -289,6 +289,46 @@ remains Bob-owned.
 repository; `bob init --recipe java-tool` previews a manifest for an existing
 directory. `--module` is optional repository identity for this recipe, and
 `java-tool` is never auto-detected: it must be selected explicitly.
+
+## The `csharp-tool` recipe
+
+`recipe: csharp-tool` is the .NET (C#) analogue of `go-agent-tool`: a
+public-ready C# CLI scaffold that owns a complete, reviewable repository. It
+renders a thin top-level entry point in `src/<App>/Program.cs` over a tested
+pure `Greet` function and CLI `Run` in `src/<App>/Cli.cs`, an xUnit suite in
+`tests/<App>.Tests/CliTests.cs`, .NET tooling configuration (`global.json`
+plus the main and test `.csproj` projects), repository hygiene,
+`docs/index.md`, a `Taskfile.yml`, and `.github/workflows/ci.yml` plus a
+release workflow that publishes on tags. `<App>` is the product name in
+PascalCase (for example `acme-tool` becomes `AcmeTool`) and is used as the
+assembly and namespace name.
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity — the same shape rules
+  as a Go module path when present, but it is not a .NET assembly name and is
+  never written into any `.csproj`.
+- `product.visibility` must be `public` or `private`, and `product.license`
+  must be `MIT`.
+- `runtime.language` must be `csharp` and `runtime.kind` must be `cli`.
+- `surfaces.cli` and `surfaces.json` must both be `true`.
+- `integrations` and `distribution` are unused and must stay zero-valued; the
+  recipe always renders its CI and release workflows.
+- `vars` and `files` are unsupported; `ownership.release` works as on
+  `go-agent-tool`.
+
+`csharp-tool@1` creates `global.json`, the main `src/<App>/<App>.csproj`,
+`README.md`, `AGENTS.md`, and `CHANGELOG.md` once and never lock-owns them:
+adding a `PackageReference` to the project file is a normal human edit that
+stays clean. Everything else the recipe renders — including
+`src/<App>/Program.cs`, `src/<App>/Cli.cs`, the test project, and
+`tests/<App>.Tests/CliTests.cs` — remains Bob-owned.
+
+`bob new <name> --recipe csharp-tool --module <repo> --write` scaffolds a
+fresh repository; `bob init --recipe csharp-tool` previews a manifest for an
+existing directory. `--module` is optional repository identity for this
+recipe, and `csharp-tool` is never auto-detected: it must be selected
+explicitly.
 
 ## The `files` recipe
 
