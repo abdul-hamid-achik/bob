@@ -272,7 +272,7 @@ probe boundary, follow the [MCPHub & local-agent guide](docs/guides/mcphub-local
 
 ## Documentation
 
-- [Documentation home](docs/index.md)
+- [Documentation home](https://bobcli.dev)
 - [Getting started](docs/getting-started.md)
 - [Ownership and safety](docs/ownership-and-safety.md)
 - [Configuration & local telemetry](docs/configuration.md)

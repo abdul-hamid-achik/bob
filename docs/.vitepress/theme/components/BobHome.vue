@@ -17,14 +17,14 @@ const transcript: Row[] = [
   { text: '30 create, 0 update, 0 adopt, 0 unchanged, 0 retire, 0 conflict', cls: 'meta', pause: 900 },
   { text: '$ bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
   { text: 'applied: 30 written, 0 adopted, 0 unchanged; lock written: true', cls: 'create', pause: 1000 },
-  { text: '$ echo "// hand edit" >> docs/index.md', cls: 'cmd', pause: 500 },
+  { text: '$ echo "// hand edit" >> internal/cli/root.go', cls: 'cmd', pause: 500 },
   { text: '$ bob plan ./payments-cli', cls: 'cmd', pause: 400 },
-  { text: 'conflict   docs/index.md                    [managed_hash_mismatch] contract_drift', cls: 'conflict', pause: 700 },
+  { text: 'conflict   internal/cli/root.go             [managed_hash_mismatch] contract_drift', cls: 'conflict', pause: 700 },
   { text: '0 create, 0 update, 0 adopt, 29 unchanged, 0 retire, 1 conflict', cls: 'meta', pause: 700 },
   { text: '$ bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
   { text: 'bob: apply: plan contains conflicts; run bob plan for details', cls: 'conflict', pause: 700 },
   { text: '(exit 2 — the handled edit was not overwritten, nothing was written.)', cls: 'meta', pause: 1000 },
-  { text: '$ git checkout docs/index.md && bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
+  { text: '$ git checkout internal/cli/root.go && bob apply ./payments-cli', cls: 'cmd mut', pause: 500 },
   { text: 'applied: 0 written, 0 adopted, 30 unchanged; lock written: false', cls: 'converged', pause: 900 },
   { text: 'run it again — same answer. that is the point.', cls: 'converged', pause: 3600 },
 ]
@@ -109,7 +109,7 @@ const ledger = [
     tag: 'HALT',
     kind: 'write',
     title: 'Conflicts stop the line',
-    body: 'One conflict means zero writes. Bob preflights the complete plan and refuses to half-apply anything, ever.',
+    body: 'One conflict means zero writes: Bob preflights the complete plan and refuses before it writes anything. (Multi-file apply is not one global transaction — a crash can leave a partial publish, and the next plan reports it honestly.)',
   },
   {
     tag: 'DRIFT',
@@ -138,7 +138,7 @@ const ledger = [
 ]
 
 const refusals = [
-  'Run a model, call a network, or guess.',
+  'Run a model or call a network (the one opt-in exception is bob inspect --probe-integrations).',
   'Overwrite a file it cannot prove it owns.',
   'Generate your Next.js, FastAPI, or Cargo app. Hygiene, not the product.',
   'Touch .git, bob.yaml, or anything outside the workspace.',
@@ -176,8 +176,8 @@ const refusals = [
           </button>
           <p class="badges">
             <span>Model-free</span><span>Local-first</span><span>MIT</span>
-            <span>Deterministic — the plan loops identically</span>
-            <span>Shipped with a Glyphrun behavior-spec suite</span>
+            <span>Deterministic — same plan, every run</span>
+            <span>Safety pinned by terminal behavior specs</span>
             <span class="alpha">Early alpha — read the plan. Bob insists.</span>
           </p>
         </div>
@@ -254,9 +254,9 @@ const refusals = [
             <span class="card-tag">STACK</span>
             <h3>Existing repo</h3>
             <p>
-              Go, TypeScript, Python, Rust, Java, C#/.NET, PHP, Ruby, and 20+
-              more stacks — plus Docker, Terraform, Nix, Helm, and Kubernetes.
-              Seed docs and ignores once. Never own <code>src/</code>.
+              Twenty-seven stacks — Go, TypeScript, Python, Rust, Java, C#/.NET,
+              PHP, Ruby, and 19 more, including Docker, Terraform, Nix, Helm, and
+              Kubernetes. Seed docs and ignores once; never own <code>src/</code>.
             </p>
           </a>
           <a class="card write path-card" href="/guides/any-repository">
@@ -271,9 +271,10 @@ const refusals = [
             <span class="card-tag">FACTORY</span>
             <h3>Six CLI scaffolds</h3>
             <p>
-              Go/Cobra, Rust, Python, TypeScript, Java, and C#. Public-ready
-              command structure, tests, CI, and release plumbing — living files
-              stay in human hands after seed.
+              Go/Cobra, Rust, Python, TypeScript, Java, and C#. Each owns its
+              <code>src/</code> tree, tests, CI, and release files, while its
+              living files (<code>README</code>, <code>CHANGELOG</code>, the
+              language manifest) seed once and stay in human hands.
             </p>
           </a>
         </div>
@@ -306,10 +307,11 @@ const refusals = [
             <p>
               Go, TypeScript, JavaScript, Vue, Nuxt, Deno, Python, Ruby, PHP, Java,
               Kotlin, .NET, Rust, Swift, Elixir, Dart, Zig, Scala, Lua, C/C++, plus
-              Docker, Terraform, Nix, Ansible, Helm, Kubernetes, and static web. Seeds
-              <code>README</code>, <code>AGENTS</code>, <code>SECURITY</code>, ignores,
-              and a CI stub once — then never touches them again, and never owns
-              <code>src/</code>.
+              Docker, Terraform, Nix, Ansible, Helm, Kubernetes, and static web.
+              Seeds <code>README</code>, <code>AGENTS</code>, <code>SECURITY</code>,
+              ignores, and a CI stub only when missing — never updated by Bob, and
+              never owning <code>src/</code>. (Delete a seed and the next apply
+              recreates it.)
             </p>
           </article>
           <article class="card read">
@@ -347,7 +349,7 @@ const refusals = [
           <li class="station read"><span class="station-tag">bob.yaml</span><strong>Intent</strong><p>Your recipe and product identity, in one small, strict file.</p></li>
           <li class="station read"><span class="station-tag">bob.lock</span><strong>Ownership</strong><p>A SHA-256 digest of every whole file Bob manages.</p></li>
           <li class="station write"><span class="station-tag">hash match</span><strong>Proof to update</strong><p>A managed file changes only while its current hash still matches the lock.</p></li>
-          <li class="station write"><span class="station-tag">atomic</span><strong>No half-write</strong><p>Staged as temp siblings, published by atomic rename, <code>bob.lock</code> written last.</p></li>
+          <li class="station write"><span class="station-tag">atomic</span><strong>Atomic per file</strong><p>Each file is staged as a temp sibling and published by atomic rename; <code>bob.lock</code> is written last.</p></li>
         </ol>
         <p class="legend">
           <span class="key read">Hand-edit a managed file and it becomes a conflict, not a silent overwrite.</span>
@@ -361,7 +363,7 @@ const refusals = [
           hand-edit is never a permanent apply block. When a recipe stops declaring a file,
           Bob calls it <strong>retired</strong>: delete it deliberately with
           <code>--allow-retire</code>, or leave it as a conflict. It never silently discards
-          ownership. [More on ownership &amp; safety](/ownership-and-safety)
+          ownership. <a href="/ownership-and-safety">More on ownership &amp; safety</a>
         </p>
       </div>
     </section>
@@ -377,7 +379,7 @@ const refusals = [
             SARIF 2.1.0 log for code scanning or a JUnit XML report for your test
             reporter — no adapter, no wrapper.
           </p>
-          <pre class="snippet"><code>exit 0   clean — plan always exits 0 (a report, not a gate)
+          <pre class="snippet"><code>exit 0   bob check: clean (bob plan always exits 0 — a report, not a gate)
 exit 2   an ownership conflict · apply would refuse
 exit 3   drift, no conflict · apply would proceed
 exit 4   invalid input or manifest
@@ -510,7 +512,8 @@ exit 5   fresh plan ≠ reviewed digest · nothing written</code></pre>
 <span class="c-cmd">$ bob new acme-tool --recipe go-agent-tool --module github.com/acme/acme-tool --write</span>
 <span class="c-cmd">$ bob check</span>
 <span class="c-meta"># existing repo instead:</span>
-<span class="c-cmd">$ bob init . --write</span></code></pre>
+<span class="c-cmd">$ bob init . --write</span>
+<span class="c-cmd">$ bob plan &amp;&amp; bob apply &amp;&amp; bob check</span></code></pre>
           <div class="cta-row">
             <a class="btn btn-safety" href="/getting-started">Build something reviewable</a>
             <a class="btn btn-draft" href="/guides/existing-repository">Bring Bob to an existing repo</a>

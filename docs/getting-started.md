@@ -88,13 +88,15 @@ time out of spite. It stays `0`. That is the feature.
 
 ## Existing repository
 
-For TypeScript, Python, Rust, Go, HTML, and the other detected stacks,
-`bob init` writes a hygiene recipe and never owns application source:
+For the 27 detected language and infrastructure stacks, `bob init` picks the
+matching hygiene recipe, writes only `bob.yaml`, and never owns application
+source. Then plan, review, and apply:
 
 ```bash
-bob init --write
-bob apply
-bob check
+bob init . --write   # writes bob.yaml only
+bob plan             # review the seed files Bob would create
+bob apply            # create only what is missing
+bob check            # exit 0 = converged
 ```
 
 The full detection table, the Go `go-hygiene` versus `go-agent-tool`

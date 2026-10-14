@@ -223,8 +223,8 @@ Identical to every other recipe, because it's the same engine underneath:
 
 ## For agents
 
-1. Run `bob learn --json` once, at session start. It lists both recipes
-   (`files@1`, `go-agent-tool@6`), the exit-code and error-code maps, and the
+1. Run `bob learn --json` once, at session start. It lists all thirty-four
+   recipes, the exit-code and error-code maps, and the
    action-code vocabulary — the brief you're about to need.
 2. Run `bob context --json` for the active `files@1` contract. Its generic
    capability and artifact metadata deliberately does not infer language,

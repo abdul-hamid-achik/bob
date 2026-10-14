@@ -20,8 +20,10 @@ bytes an old `bob.lock` depends on.
 ## Factory scaffolds
 
 Each factory recipe takes a `product.module` (repository identity) and a product
-name, and can be selected explicitly with `--recipe`. None of them is
-auto-detected: `bob init` never picks a factory on its own.
+name, and can be selected explicitly with `--recipe`. A greenfield directory
+defaults to `go-agent-tool`, and an existing Cobra layout
+(`cmd/` + `internal/cli/root.go` with `github.com/spf13/cobra` in `go.mod`)
+selects it in `bob init`; no other factory is auto-selected.
 
 | Recipe | Language / runtime | What it emits |
 |---|---|---|
