@@ -17,6 +17,11 @@ conflict-free plan.
   argparse entry point over a tested pure function, where `pyproject.toml`,
   `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
   human hands.
+- [`ts-tool-minimal/bob.yaml`](ts-tool-minimal/bob.yaml) uses the `ts-tool`
+  factory recipe: a public-ready TypeScript (Node) CLI scaffold with a
+  `process.argv` entry point over a tested pure function, where `package.json`,
+  `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
+  human hands.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.

@@ -1,0 +1,14 @@
+schema_version: 1
+recipe: ts-tool
+product:
+  name: ts-tool-demo
+  module: github.com/example/ts-tool-demo
+  description: A small TypeScript command-line tool
+  visibility: public
+  license: MIT
+runtime:
+  language: typescript
+  kind: cli
+surfaces:
+  cli: true
+  json: true

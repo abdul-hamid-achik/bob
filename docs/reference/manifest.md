@@ -51,10 +51,10 @@ distribution:
 | Field | Current value | Meaning |
 |---|---|---|
 | `schema_version` | `1` | Selects the strict manifest schema. |
-| `recipe` | `go-agent-tool`, `python-tool`, `rust-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
+| `recipe` | `go-agent-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe id | Selects the embedded repository recipe. |
 
-Five kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`, and
-`rust-tool@1`, the three
+Six kinds of recipe are embedded: `go-agent-tool@6`, `python-tool@1`,
+`rust-tool@1`, and `ts-tool@1`, the four
 factory recipes documented below; `files@1`, a plain file-tree recipe
 documented in its own section further down; and the stack hygiene recipes
 (`ts-app@2`, `js-app@2`, `vue-app@2`, `nuxt-app@2`, `deno-app@2`,
@@ -211,6 +211,41 @@ recipe renders — including `src/<pkg>/cli.py`, `src/<pkg>/__main__.py`, and
 repository; `bob init --recipe python-tool` previews a manifest for an existing
 directory. `--module` is optional repository identity for this recipe, and
 `python-tool` is never auto-detected: it must be selected explicitly.
+
+## The `ts-tool` recipe
+
+`recipe: ts-tool` is the TypeScript (Node) analogue of `go-agent-tool`: a
+public-ready TypeScript CLI scaffold that owns a complete, reviewable
+repository. It renders a thin `src/cli.ts` entry point over a tested pure
+`greet` function in `src/lib.ts`, a Vitest suite in `tests/cli.test.ts`,
+TypeScript tooling configuration (`tsconfig.json`, `eslint.config.js`,
+`vitest.config.ts`, `.prettierrc`), repository hygiene, `docs/index.md`, a
+`Taskfile.yml`, and `.github/workflows/ci.yml` plus an npm release workflow.
+
+Schema, relative to `go-agent-tool`:
+
+- `product.module` is **optional** repository identity — the same shape rules
+  as a Go module path when present, but it is not an npm package scope and is
+  never written into `package.json`.
+- `product.visibility` must be `public` or `private`, and `product.license`
+  must be `MIT`.
+- `runtime.language` must be `typescript` and `runtime.kind` must be `cli`.
+- `surfaces.cli` and `surfaces.json` must both be `true`.
+- `integrations` and `distribution` are unused and must stay zero-valued; the
+  recipe always renders its CI and release workflows.
+- `vars` and `files` are unsupported; `ownership.release` works as on
+  `go-agent-tool`.
+
+`ts-tool@1` creates `package.json`, `README.md`, `AGENTS.md`, and
+`CHANGELOG.md` once and never lock-owns them: adding a dependency to
+`package.json` is a normal human edit that stays clean. Everything else the
+recipe renders — including `src/cli.ts`, `src/lib.ts`, `tests/cli.test.ts`, and
+the workflows — remains Bob-owned.
+
+`bob new <name> --recipe ts-tool --module <repo> --write` scaffolds a fresh
+repository; `bob init --recipe ts-tool` previews a manifest for an existing
+directory. `--module` is optional repository identity for this recipe, and
+`ts-tool` is never auto-detected: it must be selected explicitly.
 
 ## The `files` recipe
 

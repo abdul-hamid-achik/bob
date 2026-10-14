@@ -131,6 +131,12 @@ func selectedTools(m manifest.Manifest) []tool {
 			{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
 		}
 	}
+	if m.Recipe == manifest.RecipeTSTool {
+		return []tool{
+			{name: "Node", command: "node", args: []string{"--version"}, required: true, note: "runs the generated project"},
+			{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},
+		}
+	}
 	tools := []tool{
 		{name: "Go", command: "go", args: []string{"version"}, required: true, note: "builds the generated project", minMajor: 1, minMinor: 26, minPatch: 5},
 		{name: "Git", command: "git", args: []string{"--version"}, required: true, note: "provides repository identity and release history"},

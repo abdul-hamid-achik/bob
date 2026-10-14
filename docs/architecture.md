@@ -42,7 +42,7 @@ unless `bob mcp serve` is started with `--allow-apply-workspace`.
 ### Manifest
 
 The human-owned `bob.yaml` declares project identity, an embedded recipe
-(`go-agent-tool`, `python-tool`, `rust-tool`, `files`, or a stack hygiene recipe), CLI/JSON
+(`go-agent-tool`, `python-tool`, `rust-tool`, `ts-tool`, `files`, or a stack hygiene recipe), CLI/JSON
 surfaces, optional integration seams, and distribution choices. Schema version
 1 is strict: unknown fields and unsupported combinations fail validation.
 `surfaces.mcp` and `surfaces.studio` on `go-agent-tool` are descriptive
@@ -51,12 +51,14 @@ product declarations; they do not generate or enable a server or UI.
 ### Embedded recipes
 
 Every recipe renders its complete desired artifact set in memory,
-deterministically and under a version. Five kinds are embedded: the three factory
+deterministically and under a version. Six kinds are embedded: the four factory
 recipes — `go-agent-tool@6` (a Go/Cobra CLI with a static human-owned command
 extension contract and a generated regression test that keeps a blank scaffold
 lint-clean), `rust-tool@1` (a Rust CLI with a thin binary over a tested
-library core), and `python-tool@1` (a Python CLI with an argparse entry point
-over a tested pure function) — plus `files@1`, which materializes an arbitrary
+library core), `python-tool@1` (a Python CLI with an argparse entry point
+over a tested pure function), and `ts-tool@1` (a TypeScript/Node CLI with a
+`process.argv` entry point over a tested pure function) — plus `files@1`,
+which materializes an arbitrary
 manifest-declared file tree, and the eighteen
 stack hygiene recipes (`ts-app@2` through `go-hygiene@2`, including Nuxt, SwiftPM,
 Elixir/Mix, Java, Kotlin, .NET, PHP, Deno, and C/C++ with CMake) that render only
@@ -182,7 +184,8 @@ action is `unchanged`. It is suitable for CI drift detection.
 ### Doctor
 
 `doctor` probes the recipe's required tools — Go and Git for `go-agent-tool`,
-Cargo and Git for `rust-tool`, Python and Git for `python-tool`, Git only for
+Cargo and Git for `rust-tool`, Python and Git for `python-tool`, Node and Git
+for `ts-tool`, Git only for
 `files` and the stack hygiene
 recipes — plus selected optional
 tools using bounded direct version commands. Missing required tools make the
