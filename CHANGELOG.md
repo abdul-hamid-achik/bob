@@ -69,6 +69,14 @@ and the project uses semantic versioning after the first tagged release.
   `src/` layout, an argparse entry point over a tested pure function, ruff +
   pytest CI, a release workflow, docs, and a Taskfile — the Python analogue of
   `go-agent-tool`.
+- `ts-tool@1`: a public-ready TypeScript (Node) CLI scaffold — an ESM project
+  with a `process.argv` entry point over a tested pure function, tsc/eslint/vitest
+  CI, an npm release workflow, docs, and a Taskfile — the TypeScript analogue of
+  `go-agent-tool`.
+- Glyphrun specs covering the `retire` JSON surface and the factory catalog
+  (`recipe show` / `recipe list`).
+- `bob context` now emits typed guidance (a notice, and for the opt-in retire
+  case an action) when a plan contains a dropped, lock-owned path.
 - Glyphrun specs covering `bob new --recipe rust-tool` and `bob init` against an
   existing `bob.yaml` (the `input_invalid` refusal).
 - Glyphrun specs covering `bob remove --force`, the `bob context` profiles, and
