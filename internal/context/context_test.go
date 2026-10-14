@@ -656,6 +656,136 @@ func TestMaterializationHandlesRetireAction(t *testing.T) {
 	}
 }
 
+// retiredWorkspace applies a two-file contract and then rewrites the manifest
+// to drop retire.txt, leaving it a lock-owned path the recipe no longer
+// declares. The caller decides whether to plan it as a retire action
+// (--allow-retire) or a retired_owned conflict (default).
+func retiredWorkspace(t *testing.T) string {
+	t.Helper()
+	withRetired := manifest.Manifest{
+		SchemaVersion: 1, Recipe: manifest.RecipeFiles,
+		Product: manifest.Product{Name: "files", Description: "retire"},
+		Files: []manifest.FileDecl{
+			{Path: "keep.txt", Content: "keep\n"},
+			{Path: "retire.txt", Content: "retire\n"},
+		},
+	}
+	root := contextWorkspace(t, withRetired, true)
+	retained := withRetired
+	retained.Files = []manifest.FileDecl{{Path: "keep.txt", Content: "keep\n"}}
+	if err := manifest.WriteFile(filepath.Join(root, manifest.Filename), retained, true); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestContextGuidesRetireAction proves a plan containing a retire action emits
+// both a retired_owned notice and an explicitly-authorized apply action, so an
+// agent reading context knows exactly how to remove the dropped lock-owned
+// path.
+func TestContextGuidesRetireAction(t *testing.T) {
+	t.Parallel()
+	root := retiredWorkspace(t)
+	m, err := manifest.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := recipe.Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := engine.PlanWithOptions(root, m, artifacts, engine.PlanOptions{AllowRetire: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := recipe.ResolveMetadata(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookPath := func(string) (string, error) { return "", errors.New("missing") }
+	result := compose(root, m, plan, metadata, lookPath)
+
+	notice := findNotice(t, result, "retired_owned")
+	if notice.ID != "retired_owned" || notice.Severity != "info" || !strings.Contains(notice.Message, "--allow-retire") {
+		t.Fatalf("retire notice = %#v", notice)
+	}
+	if !reflect.DeepEqual(notice.Paths, []string{"retire.txt"}) {
+		t.Fatalf("retire paths = %#v", notice.Paths)
+	}
+
+	action := findAction(t, result, "apply_retire")
+	if action.Effect != "repository_mutation" || !action.RequiresExplicitAuthority || action.ReasonCode != "retired_owned" || action.CWD != root {
+		t.Fatalf("apply action = %#v", action)
+	}
+	if want := []string{"bob", "apply", root, "--allow-retire", "--json"}; !reflect.DeepEqual(action.Argv, want) {
+		t.Fatalf("apply argv = %#v, want %#v", action.Argv, want)
+	}
+}
+
+// TestContextGuidesRetiredOwnedConflict proves the default plan (no
+// --allow-retire) turns a dropped lock-owned path into a retired_owned
+// conflict and emits a warning notice instead of an apply action, because
+// cleanup is a human decision (--allow-retire or remove by hand).
+func TestContextGuidesRetiredOwnedConflict(t *testing.T) {
+	t.Parallel()
+	root := retiredWorkspace(t)
+	lookPath := func(string) (string, error) { return "", errors.New("missing") }
+	result, err := Load(root, Options{Profile: ProfileCompact, LookPath: lookPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Repository.State != "conflicted" {
+		t.Fatalf("state = %q, want conflicted", result.Repository.State)
+	}
+	notice := findNotice(t, result, "retired_owned")
+	if notice.ID != "retired_owned_conflict" || notice.Severity != "warning" {
+		t.Fatalf("conflict notice = %#v", notice)
+	}
+	if !strings.Contains(notice.Message, "--allow-retire") || !strings.Contains(notice.Message, "by hand") {
+		t.Fatalf("conflict message = %q", notice.Message)
+	}
+	if !reflect.DeepEqual(notice.Paths, []string{"retire.txt"}) {
+		t.Fatalf("conflict paths = %#v", notice.Paths)
+	}
+	for _, action := range result.Actions {
+		if action.ID == "apply_retire" {
+			t.Fatalf("conflict plan emitted apply action: %#v", action)
+		}
+	}
+}
+
+// TestContextOmitsRetireGuidanceWithoutRetiredPaths proves a plan with no
+// retire actions and no retired_owned conflicts is unchanged: it carries the
+// ordinary review action and never emits retire guidance.
+func TestContextOmitsRetireGuidanceWithoutRetiredPaths(t *testing.T) {
+	t.Parallel()
+	root := contextWorkspace(t, maximalManifest(), false)
+	lookPath := func(string) (string, error) { return "", errors.New("missing") }
+	result, err := Load(root, Options{Profile: ProfileCompact, LookPath: lookPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, notice := range result.Notices {
+		if notice.Code == "retired_owned" {
+			t.Fatalf("unexpected retire notice: %#v", notice)
+		}
+	}
+	if len(result.Actions) != 1 || result.Actions[0].ID != "review_plan" {
+		t.Fatalf("actions = %#v", result.Actions)
+	}
+}
+
+func findAction(t *testing.T, result Result, id string) Action {
+	t.Helper()
+	for _, action := range result.Actions {
+		if action.ID == id {
+			return action
+		}
+	}
+	t.Fatalf("missing action with id %q: %#v", id, result.Actions)
+	return Action{}
+}
+
 type snapshotEntry struct {
 	Data    string
 	Mode    os.FileMode
