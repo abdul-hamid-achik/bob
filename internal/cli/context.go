@@ -14,7 +14,21 @@ type planJSON struct {
 	engine.PlanResult
 	PlanDigestVersion int               `json:"plan_digest_version"`
 	PlanDigest        string            `json:"plan_digest"`
+	ActionCounts      planActionCounts  `json:"action_counts"`
 	Diffs             []engine.FileDiff `json:"diffs,omitempty"`
+}
+
+// planActionCounts is the per-kind action tally projected into the plan and
+// check JSON surface. It mirrors engine.ActionCounts but always serializes all
+// six fields — including a zero retire — so machine consumers never branch on
+// key presence, unlike the engine type whose Retire field carries omitempty.
+type planActionCounts struct {
+	Create    int `json:"create"`
+	Update    int `json:"update"`
+	Adopt     int `json:"adopt"`
+	Unchanged int `json:"unchanged"`
+	Retire    int `json:"retire"`
+	Conflict  int `json:"conflict"`
 }
 
 // repositoryVerdict renders the single human verdict line for the repository
@@ -50,7 +64,23 @@ func repositoryVerdict(repo contextpkg.Repository) string {
 
 func planJSONProjection(displayed, complete engine.PlanResult) planJSON {
 	digest := engine.DigestPlan(complete)
-	return planJSON{PlanResult: displayed, PlanDigestVersion: digest.Version, PlanDigest: digest.Qualified()}
+	// Counts always reflect the complete plan that produced the digest, never
+	// the displayed (possibly --conflicts-only trimmed) copy, matching the
+	// human summary's "counts still report the full totals" rule.
+	counts := complete.ActionCounts()
+	return planJSON{
+		PlanResult:        displayed,
+		PlanDigestVersion: digest.Version,
+		PlanDigest:        digest.Qualified(),
+		ActionCounts: planActionCounts{
+			Create:    counts.Create,
+			Update:    counts.Update,
+			Adopt:     counts.Adopt,
+			Unchanged: counts.Unchanged,
+			Retire:    counts.Retire,
+			Conflict:  counts.Conflict,
+		},
+	}
 }
 
 func newContextCommand(opts *options) *cobra.Command {
