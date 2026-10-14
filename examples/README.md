@@ -22,6 +22,11 @@ conflict-free plan.
   `process.argv` entry point over a tested pure function, where `package.json`,
   `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
   human hands.
+- [`java-tool-minimal/bob.yaml`](java-tool-minimal/bob.yaml) uses the
+  `java-tool` factory recipe: a public-ready Java (Maven) CLI scaffold with a
+  thin main entry point over a tested pure function, where `pom.xml`,
+  `README.md`, `AGENTS.md`, and `CHANGELOG.md` are seeded once and left in
+  human hands.
 - [`files-minimal/bob.yaml`](files-minimal/bob.yaml) uses the `files` recipe
   to declare a tiny inline file tree, including a `0755` script and
   `${vars.*}` substitution.
